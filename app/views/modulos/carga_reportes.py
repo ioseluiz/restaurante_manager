@@ -11,103 +11,168 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt
+from app.controllers.report_parser import ReportParser
 
 
 class CargaReportesWidget(QWidget):
     def __init__(self, parent_callback_cancelar):
         super().__init__()
         self.callback_cancelar = parent_callback_cancelar
+        self.datos_parseados = []
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # 1. Sección de Selección de Archivo
+        # 1. Header y Selección
+        title = QLabel("<h2>Importación de Reporte de Ventas (CSV)</h2>")
+        layout.addWidget(title)
+
         file_layout = QHBoxLayout()
-        btn_select = QPushButton("Seleccionar Archivo (CSV/Excel)")
+        btn_select = QPushButton("Seleccionar Archivo CSV")
         btn_select.setStyleSheet(
             "background-color: #3498db; color: white; padding: 10px; font-weight: bold;"
         )
-        btn_select.clicked.connect(self.seleccionar_archivo_carga)
+        btn_select.clicked.connect(self.abrir_dialogo_archivo)
 
-        self.lbl_archivo_seleccionado = QLabel("Ningún archivo seleccionado")
-        self.lbl_archivo_seleccionado.setStyleSheet(
-            "color: #7f8c8d; font-style: italic;"
-        )
+        self.lbl_info_archivo = QLabel("Ningún archivo seleccionado")
+        self.lbl_info_archivo.setStyleSheet("color: #7f8c8d; font-style: italic;")
 
         file_layout.addWidget(btn_select)
-        file_layout.addWidget(self.lbl_archivo_seleccionado)
+        file_layout.addWidget(self.lbl_info_archivo)
         layout.addLayout(file_layout)
 
-        # 2. Sección de Previsualización (Tabla)
-        lbl_preview = QLabel("Previsualización de Datos:")
-        lbl_preview.setFont(QFont("Arial", 12, QFont.Bold))
-        layout.addWidget(lbl_preview)
+        # 2. Info de Metadatos (Fechas detectadas en el reporte)
+        meta_layout = QHBoxLayout()
+        self.lbl_desde = QLabel("<b>Desde:</b> --")
+        self.lbl_hasta = QLabel("<b>Hasta:</b> --")
+        meta_layout.addWidget(self.lbl_desde)
+        meta_layout.addWidget(self.lbl_hasta)
+        meta_layout.addStretch()
+        layout.addLayout(meta_layout)
 
-        self.tabla_preview_carga = QTableWidget()
-        self.tabla_preview_carga.setColumnCount(4)
-        self.tabla_preview_carga.setHorizontalHeaderLabels(
-            ["Fecha", "Producto", "Cantidad", "Total ($)"]
+        # 3. Tabla de Previsualización
+        self.tabla = QTableWidget()
+        # Ajustamos columnas a lo que devuelve el Parser: Code, Desc, Qty, Total
+        self.tabla.setColumnCount(4)
+        self.tabla.setHorizontalHeaderLabels(
+            ["Código", "Descripción", "Cantidad", "Total Ventas ($)"]
         )
-        self.tabla_preview_carga.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        layout.addWidget(self.tabla_preview_carga)
+        self.tabla.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )  # Descripción estirada
+        self.tabla.setAlternatingRowColors(True)
+        layout.addWidget(self.tabla)
 
-        # 3. Botones de Acción
+        # 4. Botones Acción
         action_layout = QHBoxLayout()
-        btn_cargar = QPushButton("Confirmar Carga")
-        btn_cargar.setStyleSheet(
+        self.btn_confirmar = QPushButton("Confirmar e Insertar en BD")
+        self.btn_confirmar.setStyleSheet(
             "background-color: #27ae60; color: white; padding: 10px; font-weight: bold;"
         )
-        btn_cargar.clicked.connect(self.procesar_carga)
+        self.btn_confirmar.setEnabled(
+            False
+        )  # Deshabilitado hasta que haya datos válidos
+        self.btn_confirmar.clicked.connect(self.guardar_en_bd)
 
-        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar = QPushButton("Cancelar / Volver")
         btn_cancelar.setStyleSheet(
-            "background-color: #c0392b; color: white; padding: 10px; font-weight: bold;"
+            "background-color: #c0392b; color: white; padding: 10px;"
         )
-        # Usamos el callback para volver al menú principal
         btn_cancelar.clicked.connect(self.callback_cancelar)
 
-        action_layout.addWidget(btn_cargar)
+        action_layout.addWidget(self.btn_confirmar)
         action_layout.addWidget(btn_cancelar)
         layout.addLayout(action_layout)
 
         self.setLayout(layout)
 
-    def seleccionar_archivo_carga(self):
+    def abrir_dialogo_archivo(self):
         options = QFileDialog.Options()
-        file_name, _ = QFileDialog.getOpenFileName(
+        file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Seleccionar Reporte",
+            "Seleccionar Reporte CSV",
             "",
-            "Archivos de Datos (*.csv *.xlsx);;Todos los archivos (*)",
+            "Archivos CSV (*.csv);;Todos los archivos (*)",
             options=options,
         )
-        if file_name:
-            self.lbl_archivo_seleccionado.setText(file_name)
-            self.simular_previsualizacion()
+        if file_path:
+            self.lbl_info_archivo.setText(file_path)
+            self.procesar_archivo(file_path)
 
-    def simular_previsualizacion(self):
-        # Datos ficticios para la demo
-        datos_simulados = [
-            ("2023-11-20", "Hamburguesa Especial", "15", "180.00"),
-            ("2023-11-20", "Refresco Cola", "30", "60.00"),
-            ("2023-11-21", "Papas Fritas", "25", "100.00"),
-            ("2023-11-21", "Ensalada César", "10", "120.00"),
-        ]
+    def procesar_archivo(self, file_path):
+        # Llamamos al Parser (Controlador)
+        metadata, records, error = ReportParser.parse_csv(file_path)
 
-        self.tabla_preview_carga.setRowCount(len(datos_simulados))
-        for row_idx, row_data in enumerate(datos_simulados):
-            for col_idx, data in enumerate(row_data):
-                self.tabla_preview_carga.setItem(
-                    row_idx, col_idx, QTableWidgetItem(data)
-                )
+        if error:
+            QMessageBox.critical(self, "Error de Lectura", error)
+            return
 
+        if not records:
+            QMessageBox.warning(
+                self,
+                "Aviso",
+                "El archivo no contiene registros válidos o el formato no coincide.",
+            )
+            return
+
+        # Actualizar UI
+        self.lbl_desde.setText(f"<b>Desde:</b> {metadata['desde']}")
+        self.lbl_hasta.setText(f"<b>Hasta:</b> {metadata['hasta']}")
+
+        # Guardamos en memoria para uso posterior
+        self.datos_parseados = records
+        self.btn_confirmar.setEnabled(True)
+
+        # Llenar Tabla
+        self.llenar_tabla(records)
         QMessageBox.information(
-            self, "Previsualización", "Datos cargados en vista previa (Simulación)"
+            self,
+            "Éxito",
+            f"Se detectaron {len(records)} registros. Revisa la tabla antes de confirmar.",
         )
 
-    def procesar_carga(self):
-        # Aquí iría la lógica de insertar en BD usando un Hilo
-        QMessageBox.information(self, "Info", "Iniciando procesamiento de archivo...")
+    def llenar_tabla(self, records):
+        self.tabla.setRowCount(0)
+        for row_idx, item in enumerate(records):
+            self.tabla.insertRow(row_idx)
+
+            # Código
+            self.tabla.setItem(row_idx, 0, QTableWidgetItem(str(item["code"])))
+
+            # Descripción
+            self.tabla.setItem(row_idx, 1, QTableWidgetItem(str(item["desc"])))
+
+            # Cantidad (Alineada derecha)
+            qty_item = QTableWidgetItem(str(item["qty"]))
+            qty_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tabla.setItem(row_idx, 2, qty_item)
+
+            # Total (Alineada derecha y formateada)
+            total_item = QTableWidgetItem(f"{item['total']:.2f}")
+            total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tabla.setItem(row_idx, 3, total_item)
+
+    def guardar_en_bd(self):
+        # Esta función será el siguiente paso: iterar self.datos_parseados e insertar en tabla 'ventas' o 'movimientos'
+        # Por ahora solo mostramos los datos que tenemos listos
+        cantidad_total = len(self.datos_parseados)
+        monto_total = sum(d["total"] for d in self.datos_parseados)
+
+        msg = (
+            f"¿Estás seguro de procesar estos {cantidad_total} registros?\n"
+            f"Monto total: ${monto_total:.2f}"
+        )
+
+        confirm = QMessageBox.question(
+            self, "Confirmar Carga", msg, QMessageBox.Yes | QMessageBox.No
+        )
+
+        if confirm == QMessageBox.Yes:
+            # TODO: Aquí llamaremos a self.db.insertar_venta_lote(...)
+            QMessageBox.information(
+                self,
+                "Procesando",
+                "Aquí se insertarán los datos en la base de datos (Lógica pendiente).",
+            )
