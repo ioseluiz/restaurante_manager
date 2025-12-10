@@ -24,10 +24,26 @@ class Dashboard(QWidget):
         btn_menu = self.create_btn("Gestion Menu", lambda: self.navigate("menu"))
         btn_users = self.create_btn("Usuarios", lambda: self.navigate("usuarios"))
 
+        # "Importar Ventas" o "Cargar Reportes"
+        btn_reportes = self.create_btn(
+            "Cargar Reportes Externos", lambda: self.navigate("reportes")
+        )
+        btn_reportes.setStyleSheet("""
+            QPushButton {
+                background-color: #8e44ad; 
+                color: white; 
+                font-size: 16px; 
+                border-radius: 10px;
+            }
+            QPushButton:hover { background-color: #732d91; }
+        """)
+
         grid.addWidget(btn_pos, 0, 0)
         grid.addWidget(btn_insumos, 0, 1)
         grid.addWidget(btn_menu, 1, 0)
         grid.addWidget(btn_users, 1, 1)
+
+        grid.addWidget(btn_reportes, 2, 0, 1, 2)
 
         layout.addLayout(grid)
         self.setLayout(layout)
