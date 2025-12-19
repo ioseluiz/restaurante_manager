@@ -24,16 +24,20 @@ class CargaReportesWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        # Márgenes consistentes
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
 
         # 1. Header y Selección
-        title = QLabel("<h2>Importación de Reporte de Ventas (CSV)</h2>")
+        title = QLabel("Importación de Reporte de Ventas (CSV)")
+        title.setProperty("class", "header-title")  # Estilo título global
         layout.addWidget(title)
 
         file_layout = QHBoxLayout()
+
         btn_select = QPushButton("Seleccionar Archivo CSV")
-        btn_select.setStyleSheet(
-            "background-color: #3498db; color: white; padding: 10px; font-weight: bold;"
-        )
+        btn_select.setCursor(Qt.PointingHandCursor)
+        btn_select.setProperty("class", "btn-primary")  # Estilo azul
         btn_select.clicked.connect(self.abrir_dialogo_archivo)
 
         self.lbl_info_archivo = QLabel("Ningún archivo seleccionado")
@@ -47,7 +51,15 @@ class CargaReportesWidget(QWidget):
         meta_layout = QHBoxLayout()
         self.lbl_desde = QLabel("<b>Desde:</b> --")
         self.lbl_hasta = QLabel("<b>Hasta:</b> --")
+
+        # Aumentar un poco la fuente de las fechas para legibilidad
+        font_dates = QFont()
+        font_dates.setPointSize(11)
+        self.lbl_desde.setFont(font_dates)
+        self.lbl_hasta.setFont(font_dates)
+
         meta_layout.addWidget(self.lbl_desde)
+        meta_layout.addSpacing(20)
         meta_layout.addWidget(self.lbl_hasta)
         meta_layout.addStretch()
         layout.addLayout(meta_layout)
@@ -63,23 +75,27 @@ class CargaReportesWidget(QWidget):
             1, QHeaderView.Stretch
         )  # Descripción estirada
         self.tabla.setAlternatingRowColors(True)
+
+        # Limpieza visual tabla
+        self.tabla.verticalHeader().setVisible(False)
+        self.tabla.setShowGrid(False)
+
         layout.addWidget(self.tabla)
 
         # 4. Botones Acción
         action_layout = QHBoxLayout()
+
         self.btn_confirmar = QPushButton("Confirmar e Insertar en BD")
-        self.btn_confirmar.setStyleSheet(
-            "background-color: #27ae60; color: white; padding: 10px; font-weight: bold;"
-        )
+        self.btn_confirmar.setCursor(Qt.PointingHandCursor)
+        self.btn_confirmar.setProperty("class", "btn-success")  # Estilo verde
         self.btn_confirmar.setEnabled(
             False
         )  # Deshabilitado hasta que haya datos válidos
         self.btn_confirmar.clicked.connect(self.guardar_en_bd)
 
         btn_cancelar = QPushButton("Cancelar / Volver")
-        btn_cancelar.setStyleSheet(
-            "background-color: #c0392b; color: white; padding: 10px;"
-        )
+        btn_cancelar.setCursor(Qt.PointingHandCursor)
+        btn_cancelar.setProperty("class", "btn-danger")  # Estilo rojo
         btn_cancelar.clicked.connect(self.callback_cancelar)
 
         action_layout.addWidget(self.btn_confirmar)
@@ -156,7 +172,6 @@ class CargaReportesWidget(QWidget):
 
     def guardar_en_bd(self):
         # Esta función será el siguiente paso: iterar self.datos_parseados e insertar en tabla 'ventas' o 'movimientos'
-        # Por ahora solo mostramos los datos que tenemos listos
         cantidad_total = len(self.datos_parseados)
         monto_total = sum(d["total"] for d in self.datos_parseados)
 
@@ -170,7 +185,7 @@ class CargaReportesWidget(QWidget):
         )
 
         if confirm == QMessageBox.Yes:
-            # TODO: Aquí llamaremos a self.db.insertar_venta_lote(...)
+            # TODO: Aquí llamarías a self.db.insertar_venta_lote(...) o similar
             QMessageBox.information(
                 self,
                 "Procesando",

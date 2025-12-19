@@ -10,56 +10,58 @@ class Dashboard(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        title = QLabel("Bienvenido al Sistema")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size:24px; font-weight:bold; margin: 20px;")
+        # Márgenes externos amplios para que se vea limpio
+        layout.setContentsMargins(40, 40, 40, 40)
+        layout.setSpacing(20)
+
+        # Título
+        title = QLabel("Panel de Control")
+        title.setProperty("class", "header-title")  # Usamos la clase del CSS global
+        title.setAlignment(Qt.AlignLeft)
         layout.addWidget(title)
 
         grid = QGridLayout()
-        # Botones del Menu Principal
-        btn_pos = self.create_btn("Ventas", lambda: self.navigate("ventas"))
-        btn_insumos = self.create_btn(
-            "Gestion de Insumos", lambda: self.navigate("insumos")
-        )
-        # --- NUEVO BOTÓN ---
-        btn_cats = self.create_btn(
-            "Categorías Insumos", lambda: self.navigate("categorias")
-        )
+        grid.setSpacing(20)  # Espacio entre tarjetas
 
-        btn_menu = self.create_btn("Gestion Menu", lambda: self.navigate("menu"))
-        btn_users = self.create_btn("Usuarios", lambda: self.navigate("usuarios"))
+        # Definimos los botones con sus etiquetas y claves de navegación
+        menu_items = [
+            ("Ventas (POS)", "ventas"),
+            ("Gestión de Insumos", "insumos"),
+            ("Gestión de Menú", "menu"),
+            ("Categorías Insumos", "categorias"),
+            ("Carga de Reportes", "reportes"),
+            ("Usuarios", "usuarios"),
+        ]
 
-        btn_reportes = self.create_btn(
-            "Cargar Reportes Externos", lambda: self.navigate("reportes")
-        )
-        btn_reportes.setStyleSheet("""
-            QPushButton {
-                background-color: #8e44ad; color: white; font-size: 16px; border-radius: 10px;
-            }
-            QPushButton:hover { background-color: #732d91; }
-        """)
+        # Posicionamiento en Grilla (2 columnas)
+        row = 0
+        col = 0
 
-        grid.addWidget(btn_pos, 0, 0)
-        grid.addWidget(btn_insumos, 0, 1)
-        grid.addWidget(btn_menu, 1, 0)
-        grid.addWidget(btn_cats, 1, 1)  # Ubicamos el nuevo botón
-        grid.addWidget(btn_users, 2, 0)
-        grid.addWidget(btn_reportes, 2, 1)
+        for text, key in menu_items:
+            # --- CORRECCIÓN AQUÍ ---
+            # Usamos 'ignore' para recibir el booleano del click y no usarlo.
+            # Usamos 'k=key' para capturar el valor actual de la iteración.
+            btn = self.create_dashboard_card(
+                text, lambda ignore, k=key: self.navigate(k)
+            )
+
+            grid.addWidget(btn, row, col)
+
+            # Lógica para avanzar columnas/filas
+            col += 1
+            if col > 1:  # 2 columnas por fila
+                col = 0
+                row += 1
 
         layout.addLayout(grid)
+        layout.addStretch()  # Empuja todo hacia arriba para que no se estiren los botones
         self.setLayout(layout)
 
-    def create_btn(self, text, callback):
+    def create_dashboard_card(self, text, callback):
         btn = QPushButton(text)
-        btn.setFixedSize(200, 150)
-        btn.setStyleSheet("""
-                          QPushButton {
-                              background-color: #007BFF;
-                              color: white;
-                              font-size: 16px;
-                              border-radius: 10px;
-                          }
-                          QPushButton: hover { background-color: #0056b3; }
-                          """)
+        btn.setFixedSize(250, 120)
+        btn.setCursor(Qt.PointingHandCursor)
+        # Asignamos la clase para que el CSS global lo estilice como tarjeta
+        btn.setProperty("class", "btn-dashboard")
         btn.clicked.connect(callback)
         return btn

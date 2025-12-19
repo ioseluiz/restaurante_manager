@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
     QMessageBox,
 )
 from PyQt5.QtCore import Qt
-
 import sqlite3
 
 
@@ -27,19 +26,30 @@ class MenuCRUD(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
+        # Margen uniforme con el resto de la app
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
 
         # --- HEADER (Titulo y Botones) ---
         action_layout = QHBoxLayout()
-        title = QLabel("<h2>Gestion del Menu</h2>")
-        btn_add = QPushButton("Nuevo Item")
-        btn_add.setStyleSheet("background-color: #28a745; color: white; padding:5px;")
+
+        # Título con clase CSS
+        title = QLabel("Gestión del Menú")
+        title.setProperty("class", "header-title")
+
+        # Botones de Acción
+        btn_add = QPushButton(" + Nuevo Item")
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.setProperty("class", "btn-success")  # Clase CSS: Verde
         btn_add.clicked.connect(self.abrir_form_crear)
 
         btn_edit = QPushButton("Editar Item")
+        btn_edit.setCursor(Qt.PointingHandCursor)
         btn_edit.clicked.connect(self.abrir_form_editar)
 
         btn_del = QPushButton("Eliminar Item")
-        btn_del.setStyleSheet("background-color: #dc3545; color: white padding: 5px;")
+        btn_del.setCursor(Qt.PointingHandCursor)
+        btn_del.setProperty("class", "btn-danger")  # Clase CSS: Rojo
         btn_del.clicked.connect(self.eliminar_registro)
 
         action_layout.addWidget(title)
@@ -53,15 +63,22 @@ class MenuCRUD(QWidget):
         # --- TABLA ---
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Codigo", "Nombre del Plato/Bebida", "Precio Venta", "Tipo"]
+            ["ID", "Código", "Nombre del Plato/Bebida", "Precio Venta", "Tipo"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
 
-        self.table.setAlternatingRowColors(True)  # Mejora visual
+        # Mejoras visuales de la tabla
+        self.table.verticalHeader().setVisible(
+            False
+        )  # Ocultar números de línea izquierda
+        self.table.setShowGrid(False)  # Grid más limpio (controlado por CSS)
+        self.table.setFocusPolicy(
+            Qt.NoFocus
+        )  # Quitar borde de foco azul al hacer click
+
         layout.addWidget(self.table)
 
         self.setLayout(layout)
@@ -100,7 +117,7 @@ class MenuCRUD(QWidget):
         row = self.table.currentRow()
         if row < 0:
             QMessageBox.warning(
-                self, "Alerta", "Selecciona un item del menu para editar"
+                self, "Alerta", "Selecciona un item del menú para editar"
             )
             return
 
@@ -108,8 +125,13 @@ class MenuCRUD(QWidget):
         id_item = self.table.item(row, 0).text()
         codigo = self.table.item(row, 1).text()
         nombre = self.table.item(row, 2).text()
-        # Limpiamos el simbolo de $ para obtener el numero
-        precio = float(self.table.item(row, 3).text().replace("$", ""))
+        # Limpiamos el símbolo de $ para obtener el numero
+        try:
+            precio_txt = self.table.item(row, 3).text().replace("$", "").strip()
+            precio = float(precio_txt)
+        except ValueError:
+            precio = 0.0
+
         # Recuperamos el booleano guardado en UserRole
         es_preparado = self.table.item(row, 4).data(Qt.UserRole)
 
@@ -131,31 +153,33 @@ class MenuCRUD(QWidget):
 
         confirm = QMessageBox.question(
             self,
-            "Confirmar Eliminacion",
-            "Borrar Item?",
+            "Confirmar Eliminación",
+            "¿Borrar Item?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if confirm == QMessageBox.Yes:
-            # Primero borramos recetas asociadas para mantener integridad (Si no hay CASCADE configurado)
+            # Primero borramos recetas asociadas para mantener integridad
             self.db.execute_query(
                 "DELETE FROM recetas WHERE menu_item_id=?", (id_item,)
             )
             # Luego borramos el item
-            self.db.execute_query("DELETE FROM menu_items WHERE id=?", (id_item))
+            self.db.execute_query("DELETE FROM menu_items WHERE id=?", (id_item,))
             self.cargar_datos()
 
     def mostrar_formulario(self, data=None):
-        print("Show form....")
         dialog = QDialog(self)
-        dialog.setWindowTitle("Detalle del Menu")
-        dialog.setFixedSize(400, 250)
+        dialog.setWindowTitle("Detalle del Menú")
+        dialog.setFixedSize(400, 300)  # Un poco más alto para que respire
+
+        # Layout del formulario
         form = QFormLayout(dialog)
+        form.setSpacing(15)  # Espaciado entre inputs
 
         # Campos
         inp_codigo = QLineEdit(data["codigo"] if data else "")
         inp_nombre = QLineEdit(data["nombre"] if data else "")
 
-        # Usamos el DoubleSpinBox para precios, es mas seguro qque QLineEdit
+        # Usamos el DoubleSpinBox para precios
         inp_precio = QDoubleSpinBox()
         inp_precio.setPrefix("$ ")
         inp_precio.setMaximum(10000.00)
@@ -163,62 +187,62 @@ class MenuCRUD(QWidget):
         if data:
             inp_precio.setValue(data["precio"])
 
-        chk_preparado = QCheckBox("Requiere preparacion en cocina?")
+        chk_preparado = QCheckBox("¿Requiere preparación en cocina?")
         chk_preparado.setToolTip(
             "Marcar si el producto usa una receta (ej. Combo de Pollo). Desmarcar si es un producto directo (ej. Soda)"
         )
         if data:
             chk_preparado.setChecked(bool(data["es_preparado"]))
         else:
-            chk_preparado.setChecked(True)  # Por defecto asumimos que es comida
+            chk_preparado.setChecked(True)
 
-        form.addRow("Codigo Unico:", inp_codigo)
+        form.addRow("Código Único:", inp_codigo)
         form.addRow("Nombre del Item:", inp_nombre)
         form.addRow("Precio de Venta:", inp_precio)
         form.addRow("", chk_preparado)
 
-        # Funcion interna de validacion
-        # Esta funcion se ejecutara antes de cerrar el dialogo
+        # Función interna de validación
         def validar_y_aceptar():
             codigo = inp_codigo.text().strip()
             nombre = inp_nombre.text().strip()
 
             if not codigo:
                 QMessageBox.warning(
-                    dialog, "Validacion", "El campo de Codigo es obligatorio."
+                    dialog, "Validación", "El campo de Código es obligatorio."
                 )
                 inp_codigo.setFocus()
                 return
 
             if not nombre:
                 QMessageBox.warning(
-                    dialog, "Validacion", "El campo de Nombre es obligatorio."
+                    dialog, "Validación", "El campo de Nombre es obligatorio."
                 )
                 inp_nombre.setFocus()
                 return
 
             dialog.accept()
 
-        # Boton de Guardar
-        btn_save = QPushButton("Guardar")
-        btn_save.setStyleSheet(
-            "background-color: #007BFF; color: white; font-weight: bold; padding: 8px;"
-        )
+        # Botón de Guardar
+        btn_save = QPushButton("Guardar Datos")
+        btn_save.setCursor(Qt.PointingHandCursor)
+        btn_save.setProperty("class", "btn-success")  # Estilo verde global
         btn_save.clicked.connect(validar_y_aceptar)
+
+        # Espaciador antes del botón
+        form.addRow(QLabel(""))
         form.addRow(btn_save)
 
         if dialog.exec_() == QDialog.Accepted:
-            print("Form Accepted...")
             # Recoger valores
             codigo_val = inp_codigo.text().strip()
             nombre_val = inp_nombre.text().strip()
             precio_val = inp_precio.value()
             es_preparado_val = 1 if chk_preparado.isChecked() else 0
 
-            # Validaciones basicas
+            # Validaciones básicas
             if not nombre_val or not codigo_val:
                 QMessageBox.warning(
-                    self, "Error", "El codigo y el nombre son obligatorios."
+                    self, "Error", "El código y el nombre son obligatorios."
                 )
                 return
 
@@ -235,19 +259,17 @@ class MenuCRUD(QWidget):
                     )
                 else:
                     # CREATE
-                    print("CREATE TEST...")
                     query = """INSERT INTO menu_items (codigo, nombre, precio_venta, es_preparado) VALUES (?,?,?,?)"""
                     params = (codigo_val, nombre_val, precio_val, es_preparado_val)
-                    print(query)
-                    print(params)
-                    self.db.execute_query(query, params)
-                    self.cargar_datos()
+
+                self.db.execute_query(query, params)
+                self.cargar_datos()
+
             except sqlite3.IntegrityError:
                 QMessageBox.critical(
                     self,
                     "Error",
-                    f"El codigo '{codigo_val}' ya existe. Usa uno diferente.",
+                    f"El código '{codigo_val}' ya existe. Usa uno diferente.",
                 )
             except Exception as e:
-                print(e)
                 QMessageBox.critical(self, "Error BD", str(e))
