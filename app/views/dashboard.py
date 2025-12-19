@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt
 class Dashboard(QWidget):
     def __init__(self, navigate_callback):
         super().__init__()
-        self.navigate = navigate_callback  # Funcion para cambiar de pantalla
+        self.navigate = navigate_callback
         self.init_ui()
 
     def init_ui(self):
@@ -19,21 +19,22 @@ class Dashboard(QWidget):
         # Botones del Menu Principal
         btn_pos = self.create_btn("Ventas", lambda: self.navigate("ventas"))
         btn_insumos = self.create_btn(
-            "Gestion de Insumos (CRUD)", lambda: self.navigate("insumos")
+            "Gestion de Insumos", lambda: self.navigate("insumos")
         )
+        # --- NUEVO BOTÓN ---
+        btn_cats = self.create_btn(
+            "Categorías Insumos", lambda: self.navigate("categorias")
+        )
+
         btn_menu = self.create_btn("Gestion Menu", lambda: self.navigate("menu"))
         btn_users = self.create_btn("Usuarios", lambda: self.navigate("usuarios"))
 
-        # "Importar Ventas" o "Cargar Reportes"
         btn_reportes = self.create_btn(
             "Cargar Reportes Externos", lambda: self.navigate("reportes")
         )
         btn_reportes.setStyleSheet("""
             QPushButton {
-                background-color: #8e44ad; 
-                color: white; 
-                font-size: 16px; 
-                border-radius: 10px;
+                background-color: #8e44ad; color: white; font-size: 16px; border-radius: 10px;
             }
             QPushButton:hover { background-color: #732d91; }
         """)
@@ -41,9 +42,9 @@ class Dashboard(QWidget):
         grid.addWidget(btn_pos, 0, 0)
         grid.addWidget(btn_insumos, 0, 1)
         grid.addWidget(btn_menu, 1, 0)
-        grid.addWidget(btn_users, 1, 1)
-
-        grid.addWidget(btn_reportes, 2, 0, 1, 2)
+        grid.addWidget(btn_cats, 1, 1)  # Ubicamos el nuevo botón
+        grid.addWidget(btn_users, 2, 0)
+        grid.addWidget(btn_reportes, 2, 1)
 
         layout.addLayout(grid)
         self.setLayout(layout)
@@ -58,9 +59,7 @@ class Dashboard(QWidget):
                               font-size: 16px;
                               border-radius: 10px;
                           }
-                          QPushButton: hover {
-                              background-color: #0056b3;
-                          }
+                          QPushButton: hover { background-color: #0056b3; }
                           """)
         btn.clicked.connect(callback)
         return btn

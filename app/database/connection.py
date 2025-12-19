@@ -9,32 +9,43 @@ class DatabaseManager:
         self.conn = sqlite3.connect(db_name)
         self.cursor = self.conn.cursor()
         self.initialize_tables()
+        self.check_schema_updates()  # Migración para DB existentes
         self.create_default_admin()
 
     def initialize_tables(self):
-        # Table de insumos (Inventario)
+        # --- NUEVA TABLA: Categorias de Insumos ---
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS categorias_insumos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT NOT NULL UNIQUE,
+                nombre TEXT NOT NULL
+            )
+        """)
+
+        # Tabla de insumos (Inventario)
+        # Nota: En SQLite agregar FK a tabla existente es complejo,
+        # se maneja en 'check_schema_updates' o en create para nuevas DB.
         self.cursor.execute("""
                             CREATE TABLE IF NOT EXISTS insumos (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                                 nombre TEXT NOT NULL,
-                                unidad_medida TEXT NOT NULL, --kg litros, unidad
+                                unidad_medida TEXT NOT NULL,
                                 stock_actual REAL DEFAULT 0,
-                                costo_unitario REAL DEFAULT 0
+                                costo_unitario REAL DEFAULT 0,
+                                categoria_id INTEGER REFERENCES categorias_insumos(id)
                             )
                             """)
-        # Tabla del Menu (Platos y Bebidas)
+
+        # ... (Resto de tablas menu_items, recetas, ventas, usuarios igual que antes) ...
         self.cursor.execute("""
                             CREATE TABLE IF NOT EXISTS menu_items (
                                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                                 codigo TEXT NOT NULL UNIQUE,
                                 nombre TEXT NOT NULL,
                                 precio_venta REAL NOT NULL,
-                                es_preparado BOOLEAN DEFAULT 1 -- 1=Plato (usa receta), 0=Bebida/Directo
+                                es_preparado BOOLEAN DEFAULT 1
                             )
                             """)
-
-        # Tabla de Recetas (Relacion Menu -> Insumos )
-        # Esto es lo que permite el presupuesto y descuento automatico de inventario
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS recetas (
@@ -46,8 +57,6 @@ class DatabaseManager:
             )
             """
         )
-
-        # Tabla de Ventas (Cabecera)
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS ventas (
@@ -57,8 +66,6 @@ class DatabaseManager:
             )
             """
         )
-
-        # Tabla de usuarios
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS usuarios (
@@ -69,18 +76,25 @@ class DatabaseManager:
             )
             """
         )
-
         self.conn.commit()
 
+    def check_schema_updates(self):
+        """Revisa si existen las columnas nuevas en tablas viejas"""
+        try:
+            # Intentamos agregar la columna categoria_id si no existe
+            self.cursor.execute(
+                "ALTER TABLE insumos ADD COLUMN categoria_id INTEGER REFERENCES categorias_insumos(id)"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            # La columna ya existe, ignoramos el error
+            pass
+
     def create_default_admin(self):
-        # Crear usuario 'admin' con clave 'admin123' si no existe
         check = self.cursor.execute(
-            """
-            SELECT * FROM usuarios WHERE username='admin'
-            """
+            "SELECT * FROM usuarios WHERE username='admin'"
         ).fetchone()
         if not check:
-            # En produccion usa brypt, para este demo usamos sha256
             pwd_hash = hashlib.sha256("admin123".encode()).hexdigest()
             self.cursor.execute(
                 "INSERT INTO usuarios (username, password_hash, rol) VALUES (?,?,?)",

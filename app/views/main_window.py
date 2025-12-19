@@ -2,8 +2,10 @@ from PyQt5.QtWidgets import QMainWindow, QStackedWidget, QAction, QToolBar, QLab
 from app.views.dashboard import Dashboard
 from app.views.modulos.insumos_crud import InsumosCRUD
 from app.views.modulos.menu_crud import MenuCRUD
-
 from app.views.modulos.carga_reportes import CargaReportesWidget
+
+# --- IMPORTAR NUEVA VISTA ---
+from app.views.modulos.categorias_crud import CategoriasCRUD
 
 
 class MainWindow(QMainWindow):
@@ -14,18 +16,14 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Restaurante Italos - Administracion")
         self.setGeometry(100, 100, 1024, 768)
-        # Contenedor Central que cambia pantallas
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
-        # Inicializar vistas
         self.init_views()
 
-        # Barra de herramientas (boton volver al inicio)
         self.toolbar = QToolBar("Navegacion")
         self.addToolBar(self.toolbar)
         self.action_home = QAction("Inicio / Dashboard", self)
-
         self.action_home.triggered.connect(lambda: self.stack.setCurrentIndex(0))
         self.toolbar.addAction(self.action_home)
 
@@ -38,19 +36,15 @@ class MainWindow(QMainWindow):
         self.view_insumos = InsumosCRUD(self.db)
         self.stack.addWidget(self.view_insumos)
 
-        # Index 2: Gestion de Menu (Nuevo)
+        # Index 2: Gestion de Menu
         self.view_menu = MenuCRUD(self.db)
         self.stack.addWidget(self.view_menu)
 
-        # Index 3: POS (Pendiente)
-        # self.view_pos = VentasView(self.db)
-        # self.stack.addWidget(self.view_pos)
-        self.stack.addWidget(
-            QLabel("Módulo POS en construcción")
-        )  # Placeholder para que no falle index 3
+        # Index 3: Categorias CRUD (Ocupamos un espacio o reordenamos)
+        self.view_categorias = CategoriasCRUD(self.db)
+        self.stack.addWidget(self.view_categorias)
 
-        # Index 4: Carga de Reportes (NUEVO)
-        # Pasamos una lambda que dice: "Al cancelar, vuelve al index 0 (Dashboard)"
+        # Index 4: Carga de Reportes
         self.view_reportes = CargaReportesWidget(
             parent_callback_cancelar=lambda: self.stack.setCurrentIndex(0)
         )
@@ -59,12 +53,14 @@ class MainWindow(QMainWindow):
     def navigate_to(self, screen_name):
         if screen_name == "insumos":
             self.view_insumos.cargar_datos()
-            # Refrescar al entrar
             self.stack.setCurrentIndex(1)
         elif screen_name == "menu":
             self.view_menu.cargar_datos()
             self.stack.setCurrentIndex(2)
-        elif screen_name == "users":
-            print("Navegando a Gestion de Usuarios..")
-        elif screen_name == "reportes":  # --- NUEVA OPCIÓN ---
+        elif screen_name == "categorias":  # --- NUEVA NAVEGACIÓN ---
+            self.view_categorias.cargar_datos()
+            self.stack.setCurrentIndex(3)
+        elif screen_name == "reportes":
             self.stack.setCurrentIndex(4)
+        elif screen_name == "usuarios":
+            print("Navegando a usuarios...")
