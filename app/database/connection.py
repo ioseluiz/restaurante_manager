@@ -23,31 +23,44 @@ class DatabaseManager:
         """)
 
         # Tabla de insumos (Inventario)
-        # Nota: En SQLite agregar FK a tabla existente es complejo,
-        # se maneja en 'check_schema_updates' o en create para nuevas DB.
         self.cursor.execute("""
-                            CREATE TABLE IF NOT EXISTS insumos (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                nombre TEXT NOT NULL,
-                                unidad_medida TEXT NOT NULL,
-                                stock_actual REAL DEFAULT 0,
-                                costo_unitario REAL DEFAULT 0,
-                                categoria_id INTEGER REFERENCES categorias_insumos(id)
-                            )
-                            """)
+            CREATE TABLE IF NOT EXISTS insumos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                unidad_medida TEXT NOT NULL,
+                stock_actual REAL DEFAULT 0,
+                costo_unitario REAL DEFAULT 0,
+                categoria_id INTEGER REFERENCES categorias_insumos(id)
+            )
+        """)
 
-        # ... (Resto de tablas menu_items, recetas, ventas, usuarios igual que antes) ...
+        # --- TABLA ACTUALIZADA: Detalle de Reportes de Ventas ---
+        # Ahora incluye promedio_medida
         self.cursor.execute("""
-                            CREATE TABLE IF NOT EXISTS menu_items (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                codigo TEXT NOT NULL UNIQUE,
-                                nombre TEXT NOT NULL,
-                                precio_venta REAL NOT NULL,
-                                es_preparado BOOLEAN DEFAULT 1
-                            )
-                            """)
-        self.cursor.execute(
-            """
+            CREATE TABLE IF NOT EXISTS ventas_reporte_semanal (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_producto TEXT,
+                nombre_producto TEXT,
+                dia_semana TEXT,
+                cantidad REAL,
+                promedio_medida REAL,
+                total_venta REAL,
+                fecha_inicio_reporte TEXT,
+                fecha_fin_reporte TEXT,
+                fecha_carga DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS menu_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo TEXT NOT NULL UNIQUE,
+                nombre TEXT NOT NULL,
+                precio_venta REAL NOT NULL,
+                es_preparado BOOLEAN DEFAULT 1
+            )
+        """)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS recetas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 menu_item_id INTEGER,
@@ -55,39 +68,42 @@ class DatabaseManager:
                 cantidad_necesaria REAL,
                 FOREIGN KEY(menu_item_id) REFERENCES insumos(id)
             )
-            """
-        )
-        self.cursor.execute(
-            """
+        """)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
                 total REAL
             )
-            """
-        )
-        self.cursor.execute(
-            """
+        """)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 rol TEXT DEFAULT 'empleado'
             )
-            """
-        )
+        """)
         self.conn.commit()
 
     def check_schema_updates(self):
-        """Revisa si existen las columnas nuevas en tablas viejas"""
+        """Revisa y aplica actualizaciones de estructura en tablas existentes."""
         try:
-            # Intentamos agregar la columna categoria_id si no existe
+            # Intentar agregar categoria_id a insumos
             self.cursor.execute(
                 "ALTER TABLE insumos ADD COLUMN categoria_id INTEGER REFERENCES categorias_insumos(id)"
             )
             self.conn.commit()
         except sqlite3.OperationalError:
-            # La columna ya existe, ignoramos el error
+            pass
+
+        try:
+            # Intentar agregar promedio_medida a ventas_reporte_semanal
+            self.cursor.execute(
+                "ALTER TABLE ventas_reporte_semanal ADD COLUMN promedio_medida REAL"
+            )
+            self.conn.commit()
+        except sqlite3.OperationalError:
             pass
 
     def create_default_admin(self):
@@ -110,3 +126,35 @@ class DatabaseManager:
     def fetch_all(self, query, params=()):
         self.cursor.execute(query, params)
         return self.cursor.fetchall()
+
+    def insert_report_batch(self, records, fecha_inicio, fecha_fin):
+        """
+        Inserta un lote de registros provenientes del ReportParser.
+        """
+        query = """
+            INSERT INTO ventas_reporte_semanal 
+            (codigo_producto, nombre_producto, dia_semana, cantidad, promedio_medida, total_venta, fecha_inicio_reporte, fecha_fin_reporte)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        data = []
+        for r in records:
+            data.append(
+                (
+                    r["code"],
+                    r["desc"],
+                    r["day"],
+                    r["qty"],
+                    r.get("prom", 0.0),  # Nuevo campo Promedio
+                    r["total"],
+                    fecha_inicio,
+                    fecha_fin,
+                )
+            )
+
+        try:
+            self.cursor.executemany(query, data)
+            self.conn.commit()
+            return True, f"{self.cursor.rowcount} registros insertados correctamente."
+        except Exception as e:
+            self.conn.rollback()
+            return False, str(e)

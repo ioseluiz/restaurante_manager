@@ -13,31 +13,36 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
 from app.controllers.report_parser import ReportParser
+from app.database.connection import DatabaseManager
 
 
 class CargaReportesWidget(QWidget):
     def __init__(self, parent_callback_cancelar):
         super().__init__()
         self.callback_cancelar = parent_callback_cancelar
+        self.db = DatabaseManager()
         self.datos_parseados = []
+        self.metadata_actual = {}
         self.init_ui()
 
     def init_ui(self):
+        # Aumentar un poco el tamaño sugerido si la ventana es flotante
+        self.setMinimumSize(900, 600)
+
         layout = QVBoxLayout()
-        # Márgenes consistentes
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
 
-        # 1. Header y Selección
-        title = QLabel("Importación de Reporte de Ventas (CSV)")
-        title.setProperty("class", "header-title")  # Estilo título global
+        # 1. Header
+        title = QLabel("Importación de Ventas Semanales (CSV)")
+        title.setProperty("class", "header-title")
         layout.addWidget(title)
 
+        # Selector de archivo
         file_layout = QHBoxLayout()
-
         btn_select = QPushButton("Seleccionar Archivo CSV")
         btn_select.setCursor(Qt.PointingHandCursor)
-        btn_select.setProperty("class", "btn-primary")  # Estilo azul
+        btn_select.setProperty("class", "btn-primary")
         btn_select.clicked.connect(self.abrir_dialogo_archivo)
 
         self.lbl_info_archivo = QLabel("Ningún archivo seleccionado")
@@ -47,12 +52,10 @@ class CargaReportesWidget(QWidget):
         file_layout.addWidget(self.lbl_info_archivo)
         layout.addLayout(file_layout)
 
-        # 2. Info de Metadatos (Fechas detectadas en el reporte)
+        # Info de Fechas
         meta_layout = QHBoxLayout()
         self.lbl_desde = QLabel("<b>Desde:</b> --")
         self.lbl_hasta = QLabel("<b>Hasta:</b> --")
-
-        # Aumentar un poco la fuente de las fechas para legibilidad
         font_dates = QFont()
         font_dates.setPointSize(11)
         self.lbl_desde.setFont(font_dates)
@@ -64,38 +67,42 @@ class CargaReportesWidget(QWidget):
         meta_layout.addStretch()
         layout.addLayout(meta_layout)
 
-        # 3. Tabla de Previsualización
+        # --- TABLA CONFIGURACIÓN ---
         self.tabla = QTableWidget()
-        # Ajustamos columnas a lo que devuelve el Parser: Code, Desc, Qty, Total
-        self.tabla.setColumnCount(4)
+        # Columnas: Código, Descripción, Día, Cantidad, Prom/Med, Total
+        self.tabla.setColumnCount(6)
         self.tabla.setHorizontalHeaderLabels(
-            ["Código", "Descripción", "Cantidad", "Total Ventas ($)"]
+            ["Código", "Descripción", "Día", "Cant.", "Prom/Med", "Total ($)"]
         )
-        self.tabla.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Stretch
-        )  # Descripción estirada
-        self.tabla.setAlternatingRowColors(True)
 
-        # Limpieza visual tabla
+        # Ajuste de ancho de columnas para lectura correcta
+        header = self.tabla.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Código
+        header.setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )  # Descripción (ocupa lo que sobre)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Día
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Cantidad
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Prom/Med
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Total
+
+        self.tabla.setAlternatingRowColors(True)
         self.tabla.verticalHeader().setVisible(False)
-        self.tabla.setShowGrid(False)
+        self.tabla.setShowGrid(False)  # Estilo más limpio
 
         layout.addWidget(self.tabla)
 
-        # 4. Botones Acción
+        # Botones Acción
         action_layout = QHBoxLayout()
-
         self.btn_confirmar = QPushButton("Confirmar e Insertar en BD")
         self.btn_confirmar.setCursor(Qt.PointingHandCursor)
-        self.btn_confirmar.setProperty("class", "btn-success")  # Estilo verde
-        self.btn_confirmar.setEnabled(
-            False
-        )  # Deshabilitado hasta que haya datos válidos
+        self.btn_confirmar.setProperty("class", "btn-success")
+        self.btn_confirmar.setEnabled(False)
         self.btn_confirmar.clicked.connect(self.guardar_en_bd)
 
         btn_cancelar = QPushButton("Cancelar / Volver")
         btn_cancelar.setCursor(Qt.PointingHandCursor)
-        btn_cancelar.setProperty("class", "btn-danger")  # Estilo rojo
+        btn_cancelar.setProperty("class", "btn-danger")
         btn_cancelar.clicked.connect(self.callback_cancelar)
 
         action_layout.addWidget(self.btn_confirmar)
@@ -118,7 +125,6 @@ class CargaReportesWidget(QWidget):
             self.procesar_archivo(file_path)
 
     def procesar_archivo(self, file_path):
-        # Llamamos al Parser (Controlador)
         metadata, records, error = ReportParser.parse_csv(file_path)
 
         if error:
@@ -126,22 +132,16 @@ class CargaReportesWidget(QWidget):
             return
 
         if not records:
-            QMessageBox.warning(
-                self,
-                "Aviso",
-                "El archivo no contiene registros válidos o el formato no coincide.",
-            )
+            QMessageBox.warning(self, "Aviso", "No se encontraron registros válidos.")
             return
 
-        # Actualizar UI
         self.lbl_desde.setText(f"<b>Desde:</b> {metadata['desde']}")
         self.lbl_hasta.setText(f"<b>Hasta:</b> {metadata['hasta']}")
 
-        # Guardamos en memoria para uso posterior
         self.datos_parseados = records
+        self.metadata_actual = metadata
         self.btn_confirmar.setEnabled(True)
 
-        # Llenar Tabla
         self.llenar_tabla(records)
         QMessageBox.information(
             self,
@@ -154,24 +154,32 @@ class CargaReportesWidget(QWidget):
         for row_idx, item in enumerate(records):
             self.tabla.insertRow(row_idx)
 
-            # Código
+            # 0. Código
             self.tabla.setItem(row_idx, 0, QTableWidgetItem(str(item["code"])))
-
-            # Descripción
+            # 1. Descripción
             self.tabla.setItem(row_idx, 1, QTableWidgetItem(str(item["desc"])))
+            # 2. Día
+            self.tabla.setItem(row_idx, 2, QTableWidgetItem(str(item["day"])))
 
-            # Cantidad (Alineada derecha)
+            # 3. Cantidad
             qty_item = QTableWidgetItem(str(item["qty"]))
             qty_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.tabla.setItem(row_idx, 2, qty_item)
+            self.tabla.setItem(row_idx, 3, qty_item)
 
-            # Total (Alineada derecha y formateada)
+            # 4. Promedio (Nuevo)
+            prom_item = QTableWidgetItem(f"{item.get('prom', 0.0):.2f}")
+            prom_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self.tabla.setItem(row_idx, 4, prom_item)
+
+            # 5. Total
             total_item = QTableWidgetItem(f"{item['total']:.2f}")
             total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.tabla.setItem(row_idx, 3, total_item)
+            self.tabla.setItem(row_idx, 5, total_item)
 
     def guardar_en_bd(self):
-        # Esta función será el siguiente paso: iterar self.datos_parseados e insertar en tabla 'ventas' o 'movimientos'
+        if not self.datos_parseados:
+            return
+
         cantidad_total = len(self.datos_parseados)
         monto_total = sum(d["total"] for d in self.datos_parseados)
 
@@ -185,9 +193,16 @@ class CargaReportesWidget(QWidget):
         )
 
         if confirm == QMessageBox.Yes:
-            # TODO: Aquí llamarías a self.db.insertar_venta_lote(...) o similar
-            QMessageBox.information(
-                self,
-                "Procesando",
-                "Aquí se insertarán los datos en la base de datos (Lógica pendiente).",
+            success, message = self.db.insert_report_batch(
+                self.datos_parseados,
+                self.metadata_actual.get("desde", ""),
+                self.metadata_actual.get("hasta", ""),
             )
+
+            if success:
+                QMessageBox.information(self, "Éxito", message)
+                self.btn_confirmar.setEnabled(False)
+                self.tabla.setRowCount(0)
+                self.lbl_info_archivo.setText("Carga completada.")
+            else:
+                QMessageBox.critical(self, "Error BD", f"No se pudo guardar: {message}")

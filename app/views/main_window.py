@@ -1,117 +1,216 @@
+import sys
+import os
 from PyQt5.QtWidgets import (
     QMainWindow,
-    QStackedWidget,
-    QToolBar,
-    QPushButton,
     QWidget,
-    QSizePolicy,
+    QVBoxLayout,
+    QPushButton,
+    QToolButton,  # <--- Importante: Se agregó QToolButton
     QLabel,
+    QStackedWidget,
+    QGridLayout,
 )
-from PyQt5.QtCore import Qt
-from app.views.dashboard import Dashboard
-from app.views.modulos.insumos_crud import InsumosCRUD
-from app.views.modulos.menu_crud import MenuCRUD
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt, QSize
+
+# Importamos las vistas (descomentar a medida que las vayas arreglando/creando)
+# from app.views.modulos.ventas_pos import VentasPOSWidget
+# from app.views.modulos.insumos_crud import InsumosCRUD
+# from app.views.modulos.menu_crud import MenuCRUD
+# from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
-from app.views.modulos.categorias_crud import CategoriasCRUD
+# from app.views.modulos.usuarios import UsuariosWidget
 
 
 class MainWindow(QMainWindow):
     def __init__(self, db_manager, auth_controller):
+        """
+        Inicializa la ventana principal.
+        :param db_manager: Instancia del gestor de base de datos.
+        :param auth_controller: Controlador de autenticación.
+        """
         super().__init__()
+
         self.db = db_manager
         self.auth = auth_controller
 
-        self.setWindowTitle("Restaurante Italos - Administración")
-        self.setGeometry(100, 100, 1024, 768)
+        self.setWindowTitle("Sistema de Gestión de Restaurante")
+        self.setMinimumSize(1200, 800)
 
-        # Stacked Widget para las vistas
+        # Configuración de rutas para assets
+        # Se busca la carpeta assets relativa a la ejecución o al archivo
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        # Ajustamos la ruta para salir de app/views y buscar assets en la raiz
+        # Estructura esperada: root/assets/icons
+        # Si base_dir es .../app/views, subimos dos niveles
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(base_dir)))
+
+        # Intento robusto de encontrar la carpeta assets
+        posibles_rutas = [
+            os.path.join(os.getcwd(), "assets", "icons"),
+            os.path.join(root_dir, "assets", "icons"),
+            os.path.join(base_dir, "..", "..", "assets", "icons"),  # fallback relativo
+        ]
+
+        self.icons_path = ""
+        for ruta in posibles_rutas:
+            if os.path.exists(ruta):
+                self.icons_path = ruta
+                break
+
+        # Si no la encuentra, usa la del cwd por defecto para evitar crash inmediato
+        if not self.icons_path:
+            self.icons_path = os.path.join(os.getcwd(), "assets", "icons")
+
+        # Widget central
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        # --- Header ---
+        self.header_label = QLabel("Dashboard Principal")
+        self.header_label.setAlignment(Qt.AlignCenter)
+        self.header_label.setStyleSheet("""
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        """)
+        self.main_layout.addWidget(self.header_label)
+
+        # --- Stack de Vistas ---
         self.stack = QStackedWidget()
-        self.setCentralWidget(self.stack)
+        self.main_layout.addWidget(self.stack)
 
-        # Inicializar UI
-        self.init_toolbar()  # Creamos la barra superior primero
-        self.init_views()
+        # Inicializamos el Dashboard (Índice 0)
+        self.dashboard_widget = self.create_dashboard_menu()
+        self.stack.addWidget(self.dashboard_widget)
 
-        # Configurar lógica de navegación inicial
-        self.stack.currentChanged.connect(self.actualizar_toolbar)
-        self.actualizar_toolbar(0)  # Forzar estado inicial
+        # Diccionario para carga perezosa de módulos
+        self.modules = {}
 
-    def init_toolbar(self):
-        self.toolbar = QToolBar("Navegación")
-        self.toolbar.setMovable(False)  # Evitar que el usuario la mueva
-        self.toolbar.setFloatable(False)
-        self.toolbar.setContextMenuPolicy(
-            Qt.PreventContextMenu
-        )  # Click derecho deshabilitado
-        self.addToolBar(Qt.TopToolBarArea, self.toolbar)
+    def create_dashboard_menu(self):
+        """Crea el menú principal con botones grandes e iconos."""
+        menu_widget = QWidget()
+        grid_layout = QGridLayout(menu_widget)
+        grid_layout.setContentsMargins(50, 50, 50, 50)
+        grid_layout.setSpacing(30)
 
-        # --- BOTÓN DE INICIO PERSONALIZADO ---
-        self.btn_home = QPushButton("  Volver al Menú Principal")
-        # Usamos un emoji como ícono rápido, o podrías usar QIcon con un archivo .png
-        self.btn_home.setText(" 🏠  Inicio / Menú ")
-        self.btn_home.setCursor(Qt.PointingHandCursor)
-        self.btn_home.setProperty("class", "btn-navbar")  # Clase CSS para estilo
-        self.btn_home.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        buttons_config = [
+            ("Ventas (POS)", self.show_pos, "icon01.png"),
+            ("Gestión de Insumos", self.show_insumos, "icon02.png"),
+            ("Gestión de Menú", self.show_menu, "icon03.png"),
+            ("Categorías de Insumos", self.show_categorias, "icon04.png"),
+            ("Carga de Reportes", self.show_reportes, "icon05.png"),
+            ("Usuarios", self.show_usuarios, "icon06.png"),
+        ]
 
-        # Añadimos un espaciador o widget vacío si quisieras alinear a la derecha,
-        # pero por defecto a la izquierda está bien.
-        self.toolbar.addWidget(self.btn_home)
+        row, col = 0, 0
+        for text, slot, icon_file in buttons_config:
+            full_icon_path = os.path.join(self.icons_path, icon_file)
 
-        # Widget espaciador para empujar info de usuario a la derecha (Opcional)
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.toolbar.addWidget(spacer)
+            btn = self.create_dashboard_button(text, slot, icon_path=full_icon_path)
+            grid_layout.addWidget(btn, row, col)
 
-        # Etiqueta de Usuario (Visualmente útil)
-        lbl_user = QLabel(
-            f"Usuario: {self.auth.current_user[1] if self.auth.current_user else 'Admin'} "
-        )
-        lbl_user.setStyleSheet("color: #7f8c8d; font-weight: bold; margin-right: 15px;")
-        self.toolbar.addWidget(lbl_user)
+            col += 1
+            if col > 2:  # 3 columnas
+                col = 0
+                row += 1
 
-    def init_views(self):
-        # Index 0: Dashboard
-        self.dashboard = Dashboard(self.navigate_to)
-        self.stack.addWidget(self.dashboard)
+        return menu_widget
 
-        # Index 1: Insumos CRUD
-        self.view_insumos = InsumosCRUD(self.db)
-        self.stack.addWidget(self.view_insumos)
+    def create_dashboard_button(self, text, slot_func, icon_path=None):
+        # CAMBIO: Usamos QToolButton en lugar de QPushButton
+        btn = QToolButton()
+        btn.setText(text)
+        btn.setFixedSize(220, 180)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.clicked.connect(slot_func)
 
-        # Index 2: Gestión de Menu
-        self.view_menu = MenuCRUD(self.db)
-        self.stack.addWidget(self.view_menu)
-
-        # Index 3: Categorías
-        self.view_categorias = CategoriasCRUD(self.db)
-        self.stack.addWidget(self.view_categorias)
-
-        # Index 4: Carga de Reportes
-        self.view_reportes = CargaReportesWidget(
-            parent_callback_cancelar=lambda: self.stack.setCurrentIndex(0)
-        )
-        self.stack.addWidget(self.view_reportes)
-
-    def navigate_to(self, screen_name):
-        if screen_name == "insumos":
-            self.view_insumos.cargar_datos()
-            self.stack.setCurrentIndex(1)
-        elif screen_name == "menu":
-            self.view_menu.cargar_datos()
-            self.stack.setCurrentIndex(2)
-        elif screen_name == "categorias":
-            self.view_categorias.cargar_datos()
-            self.stack.setCurrentIndex(3)
-        elif screen_name == "reportes":
-            self.stack.setCurrentIndex(4)
-        elif screen_name == "usuarios":
-            print("Navegando a usuarios (Pendiente)...")
-
-    def actualizar_toolbar(self, index):
-        """
-        Muestra la barra de navegación solo si NO estamos en el Dashboard (index 0).
-        """
-        if index == 0:
-            self.toolbar.hide()
+        # Configuración del Icono
+        if icon_path and os.path.exists(icon_path):
+            btn.setIcon(QIcon(icon_path))
+            btn.setIconSize(QSize(80, 80))
+            # Esto ahora funcionará porque es un QToolButton
+            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         else:
-            self.toolbar.show()
+            print(f"Aviso: Icono no encontrado en {icon_path}")
+
+        # Estilo: Fondo blanco, Icono y Texto azul (#3498db)
+        # Aplicamos estilo a QToolButton
+        btn.setStyleSheet("""
+            QToolButton {
+                background-color: #ffffff;
+                color: #3498db;
+                border: 2px solid #3498db;
+                border-radius: 15px;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QToolButton:hover {
+                background-color: #f0f8ff; /* Azul muy pálido */
+                border: 2px solid #2980b9;
+            }
+            QToolButton:pressed {
+                background-color: #d6eaf8;
+            }
+        """)
+        return btn
+
+    def go_home(self):
+        """Regresa al dashboard principal."""
+        self.header_label.setText("Dashboard Principal")
+        self.stack.setCurrentIndex(0)
+
+    def load_module(self, name, widget_class, title, needs_db=False):
+        """
+        Carga un módulo en el stack si no existe.
+        """
+        if name not in self.modules:
+            try:
+                # Intenta instanciar según si requiere DB o callback
+                if needs_db:
+                    # Ajustar según tus constructores reales
+                    # widget = widget_class(self.db)
+                    # Por ahora usaremos try/except genérico
+                    widget = widget_class(self.db)
+                else:
+                    widget = widget_class(parent_callback_cancelar=self.go_home)
+            except TypeError:
+                # Fallback simple
+                widget = widget_class()
+
+            self.modules[name] = widget
+            self.stack.addWidget(widget)
+
+        self.stack.setCurrentWidget(self.modules[name])
+        self.header_label.setText(title)
+
+    # --- Slots de Navegación ---
+
+    def show_pos(self):
+        print("Navegando a POS...")
+        # self.load_module("pos", VentasPOSWidget, "Punto de Venta", needs_db=True)
+
+    def show_insumos(self):
+        print("Navegando a Insumos...")
+        # self.load_module("insumos", InsumosCRUD, "Gestión de Insumos", needs_db=True)
+
+    def show_menu(self):
+        print("Navegando a Menú...")
+        # self.load_module("menu", MenuCRUD, "Gestión del Menú", needs_db=True)
+
+    def show_categorias(self):
+        print("Navegando a Categorías...")
+        # self.load_module("categorias", CategoriasCRUD, "Categorías de Insumos", needs_db=True)
+
+    def show_reportes(self):
+        self.load_module("reportes", CargaReportesWidget, "Carga de Reportes")
+
+    def show_usuarios(self):
+        print("Navegando a Usuarios...")
+        # self.load_module("usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True)
