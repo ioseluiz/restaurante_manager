@@ -70,7 +70,7 @@ class MainWindow(QMainWindow):
         self.main_layout.setSpacing(0)
 
         # --- Header ---
-        self.header_label = QLabel("Dashboard Principal")
+        self.header_label = QLabel("Menu Principal")
         self.header_label.setAlignment(Qt.AlignCenter)
         self.header_label.setStyleSheet("""
             background-color: #2c3e50;
@@ -100,12 +100,12 @@ class MainWindow(QMainWindow):
         grid_layout.setSpacing(30)
 
         buttons_config = [
-            ("Ventas (POS)", self.show_pos, "icon01.png"),
-            ("Gestión de Insumos", self.show_insumos, "icon02.png"),
-            ("Gestión de Menú", self.show_menu, "icon03.png"),
-            ("Categorías de Insumos", self.show_categorias, "icon04.png"),
-            ("Carga de Reportes", self.show_reportes, "icon05.png"),
-            ("Usuarios", self.show_usuarios, "icon06.png"),
+            ("Ventas (POS)", self.show_pos, "icon_pos_ventas.png"),
+            ("Gestión de Insumos", self.show_insumos, "icon_chicken.png"),
+            ("Gestión de Menú", self.show_menu, "icon_gestion_menu.png"),
+            ("Categorías de Insumos", self.show_categorias, "icon_insumos_meat.png"),
+            ("Carga de Reportes", self.show_reportes, "icon_upload_reports.png"),
+            ("Usuarios", self.show_usuarios, "icon_user.png"),
         ]
 
         row, col = 0, 0
@@ -163,7 +163,7 @@ class MainWindow(QMainWindow):
 
     def go_home(self):
         """Regresa al dashboard principal."""
-        self.header_label.setText("Dashboard Principal")
+        self.header_label.setText("Menu Principal")
         self.stack.setCurrentIndex(0)
 
     def load_module(self, name, widget_class, title, needs_db=False):
