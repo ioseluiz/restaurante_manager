@@ -1,18 +1,22 @@
-# app/views/modulos/insumos_crud.py
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
+    QTabWidget,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QPushButton,
-    QLabel,
-    QLineEdit,
+    QHeaderView,
     QDialog,
     QFormLayout,
-    QMessageBox,
-    QHeaderView,
+    QLineEdit,
     QComboBox,
+    QMessageBox,
+    QLabel,
+    QDoubleSpinBox,
+    QCheckBox,
+    QGroupBox,
+    QSpinBox,
 )
 from PyQt5.QtCore import Qt
 
@@ -24,167 +28,537 @@ class InsumosCRUD(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+
+        # Título General
+        header = QLabel("<h2>Gestión de Insumos y Costos</h2>")
+        header.setAlignment(Qt.AlignCenter)
+        main_layout.addWidget(header)
+
+        # Contenedor de Pestañas
+        self.tabs = QTabWidget()
+
+        # Inicializar las pestañas
+        self.tab_insumos = TabInsumos(self.db)
+        self.tab_presentaciones = TabPresentaciones(self.db)
+        self.tab_unidades = TabUnidades(self.db)
+
+        # Añadir pestañas
+        self.tabs.addTab(self.tab_insumos, "1. Catálogo de Insumos")
+        self.tabs.addTab(self.tab_presentaciones, "2. Presentaciones de Compra")
+        self.tabs.addTab(self.tab_unidades, "3. Configuración Unidades")
+
+        # Conectar cambio de pestaña
+        self.tabs.currentChanged.connect(self.on_tab_change)
+
+        main_layout.addWidget(self.tabs)
+        self.setLayout(main_layout)
+
+    def cargar_datos(self):
+        """
+        Método 'puente' para compatibilidad con MainWindow.
+        Recarga los datos de la pestaña que esté activa en ese momento.
+        """
+        self.on_tab_change(self.tabs.currentIndex())
+
+    def on_tab_change(self, index):
+        # Recargar datos de la pestaña activa
+        if index == 0:
+            self.tab_insumos.cargar_datos()
+        elif index == 1:
+            self.tab_presentaciones.cargar_datos()
+        elif index == 2:
+            self.tab_unidades.cargar_datos()
+
+
+# =============================================================================
+# PESTAÑA 1: INSUMOS (Catálogo Base)
+# =============================================================================
+class TabInsumos(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.init_ui()
+
+    def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(20, 20, 20, 20)  # Espaciado uniforme
 
-        # --- HEADER ---
-        header_layout = QHBoxLayout()
+        # Toolbar
+        btn_layout = QHBoxLayout()
+        btn_add = QPushButton("Nuevo Insumo")
+        btn_add.setStyleSheet(
+            "background-color: #28a745; color: white; font-weight: bold;"
+        )
+        btn_add.clicked.connect(self.abrir_crear)
 
-        lbl_title = QLabel("Inventario de Insumos")
-        lbl_title.setProperty("class", "header-title")
-
-        header_layout.addWidget(lbl_title)
-        header_layout.addStretch()
-
-        # Botones de Acción
-        btn_add = QPushButton(" + Nuevo Insumo")
-        btn_add.setProperty("class", "btn-success")  # CSS Class
-        btn_add.setCursor(Qt.PointingHandCursor)
-        btn_add.clicked.connect(self.abrir_form_crear)
-
-        btn_edit = QPushButton("Editar")
-        btn_edit.setCursor(Qt.PointingHandCursor)
-        btn_edit.clicked.connect(self.abrir_form_editar)
+        btn_edit = QPushButton("Editar Seleccionado")
+        btn_edit.clicked.connect(self.abrir_editar)
 
         btn_del = QPushButton("Eliminar")
-        btn_del.setProperty("class", "btn-danger")  # CSS Class
-        btn_del.setCursor(Qt.PointingHandCursor)
-        btn_del.clicked.connect(self.eliminar_registro)
+        btn_del.setStyleSheet("background-color: #dc3545; color: white;")
+        btn_del.clicked.connect(self.eliminar)
 
-        header_layout.addWidget(btn_add)
-        header_layout.addWidget(btn_edit)
-        header_layout.addWidget(btn_del)
+        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_edit)
+        btn_layout.addWidget(btn_del)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
 
-        layout.addLayout(header_layout)
-
-        # --- TABLA ---
+        # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Nombre", "Unidad", "Stock", "Costo", "Categoría"]
+            ["ID", "Nombre", "Unidad Base", "Categoría", "Stock"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setVisible(
-            False
-        )  # Ocultar numeros de linea izquierda
-        self.table.setShowGrid(False)  # Estilo más limpio, gridlines sutiles por CSS
-
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
+
         self.setLayout(layout)
         self.cargar_datos()
 
-    # ... [El resto de métodos cargar_datos, abrir_form, etc. se mantienen igual, la lógica no cambia] ...
-    # Solo asegúrate que en mostrar_formulario, los inputs ya se estilizarán solos por el CSS global.
-
     def cargar_datos(self):
-        # ... (código existente sin cambios) ...
         query = """
-            SELECT i.id, i.nombre, i.unidad_medida, i.stock_actual, i.costo_unitario, c.nombre, i.categoria_id
+            SELECT i.id, i.nombre, u.nombre, c.nombre, i.stock_actual
             FROM insumos i
+            LEFT JOIN unidades_medida u ON i.unidad_base_id = u.id
             LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
+            ORDER BY i.nombre ASC
         """
         rows = self.db.fetch_all(query)
         self.table.setRowCount(0)
-        for row_idx, row_data in enumerate(rows):
-            self.table.insertRow(row_idx)
-            for col_idx in range(6):
-                val = (
-                    row_data[col_idx]
-                    if row_data[col_idx] is not None
-                    else "Sin Categoría"
-                )
-                self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(val)))
+        for r_idx, row in enumerate(rows):
+            self.table.insertRow(r_idx)
+            for c_idx, val in enumerate(row):
+                val_str = str(val) if val is not None else "-"
+                self.table.setItem(r_idx, c_idx, QTableWidgetItem(val_str))
 
-            # Guardamos ID oculto
-            cat_id = row_data[6]
-            if cat_id:
-                self.table.item(row_idx, 5).setData(Qt.UserRole, cat_id)
+    def abrir_crear(self):
+        dlg = InsumoDialog(self.db, parent=self)
+        if dlg.exec_():
+            self.cargar_datos()
 
-    def abrir_form_crear(self):
-        self.mostrar_formulario()
-
-    def abrir_form_editar(self):
+    def abrir_editar(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.warning(self, "Alerta", "Selecciona un registro para editar")
-            return
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un insumo para editar."
+            )
 
-        data = {
-            "id": self.table.item(row, 0).text(),
-            "nombre": self.table.item(row, 1).text(),
-            "unidad": self.table.item(row, 2).text(),
-            "stock": self.table.item(row, 3).text(),
-            "costo": self.table.item(row, 4).text(),
-            "categoria_id": self.table.item(row, 5).data(Qt.UserRole),
-        }
-        self.mostrar_formulario(data)
+        id_insumo = int(self.table.item(row, 0).text())
+        dlg = InsumoDialog(self.db, insumo_id=id_insumo, parent=self)
+        if dlg.exec_():
+            self.cargar_datos()
 
-    def eliminar_registro(self):
-        # ... (código existente sin cambios) ...
+    def eliminar(self):
         row = self.table.currentRow()
         if row < 0:
             return
         id_insumo = self.table.item(row, 0).text()
+
         if (
-            QMessageBox.question(
-                self, "Confirmar", "¿Eliminar insumo?", QMessageBox.Yes | QMessageBox.No
-            )
+            QMessageBox.question(self, "Confirmar", "¿Eliminar este insumo?")
             == QMessageBox.Yes
         ):
-            self.db.execute_query("DELETE FROM insumos WHERE id=?", (id_insumo,))
-            self.cargar_datos()
+            try:
+                self.db.execute_query("DELETE FROM insumos WHERE id=?", (id_insumo,))
+                self.cargar_datos()
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"No se puede eliminar (¿Tiene compras asociadas?)\n{e}",
+                )
 
-    def mostrar_formulario(self, data=None):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Gestión de Insumo")
-        dialog.setMinimumWidth(300)  # Un poco más ancho
-        form = QFormLayout(dialog)
-        form.setSpacing(10)
 
-        inp_nombre = QLineEdit(data["nombre"] if data else "")
-        inp_unidad = QLineEdit(data["unidad"] if data else "")
-        inp_stock = QLineEdit(data["stock"] if data else "0")
-        inp_costo = QLineEdit(data["costo"] if data else "0")
+# Dialogo Formulario Insumo
+class InsumoDialog(QDialog):
+    def __init__(self, db, insumo_id=None, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.insumo_id = insumo_id
+        self.setWindowTitle("Detalle de Insumo")
+        self.setMinimumWidth(400)
 
-        cmb_categoria = QComboBox()
-        cmb_categoria.addItem("Seleccione Categoría...", None)
-        cats = self.db.fetch_all("SELECT id, codigo, nombre FROM categorias_insumos")
-        for c in cats:
-            display_text = f"{c[1]} - {c[2]}"
-            cmb_categoria.addItem(display_text, c[0])
+        layout = QFormLayout()
 
-        if data and data.get("categoria_id"):
-            index = cmb_categoria.findData(data["categoria_id"])
-            if index >= 0:
-                cmb_categoria.setCurrentIndex(index)
+        self.txt_nombre = QLineEdit()
+        self.cmb_unidad = QComboBox()
+        self.cmb_categoria = QComboBox()
 
-        form.addRow("Nombre:", inp_nombre)
-        form.addRow("Categoría:", cmb_categoria)
-        form.addRow("Unidad:", inp_unidad)
-        form.addRow("Stock Inicial:", inp_stock)
-        form.addRow("Costo Unitario:", inp_costo)
+        # Cargar Combos
+        unidades = self.db.fetch_all(
+            "SELECT id, nombre, abreviatura FROM unidades_medida"
+        )
+        for u in unidades:
+            self.cmb_unidad.addItem(f"{u[1]} ({u[2]})", u[0])
 
-        btn_save = QPushButton("Guardar Datos")
-        btn_save.setProperty("class", "btn-success")  # Estilo verde
-        btn_save.clicked.connect(dialog.accept)
-        form.addRow(btn_save)
+        categorias = self.db.fetch_all("SELECT id, nombre FROM categorias_insumos")
+        self.cmb_categoria.addItem("Sin Categoría", None)
+        for c in categorias:
+            self.cmb_categoria.addItem(c[1], c[0])
 
-        if dialog.exec_() == QDialog.Accepted:
-            # ... (logica de guardado igual que antes) ...
-            nombre = inp_nombre.text()
-            unidad = inp_unidad.text()
-            stock = float(inp_stock.text())
-            costo = float(inp_costo.text())
-            cat_id = cmb_categoria.currentData()
+        layout.addRow("Nombre Insumo:", self.txt_nombre)
+        layout.addRow("Unidad de Inventario:", self.cmb_unidad)
+        layout.addRow("Categoría:", self.cmb_categoria)
 
-            if data:
-                query = "UPDATE insumos SET nombre=?, unidad_medida=?, stock_actual=?, costo_unitario=?, categoria_id=? WHERE id=?"
-                params = (nombre, unidad, stock, costo, cat_id, data["id"])
+        btn_save = QPushButton("Guardar")
+        btn_save.setStyleSheet("background-color: #28a745; color: white; padding: 5px;")
+        btn_save.clicked.connect(self.guardar)
+        layout.addRow(btn_save)
+        self.setLayout(layout)
+
+        if self.insumo_id:
+            self.cargar_datos_edicion()
+
+    def cargar_datos_edicion(self):
+        rows = self.db.fetch_all(
+            "SELECT nombre, unidad_base_id, categoria_id FROM insumos WHERE id=?",
+            (self.insumo_id,),
+        )
+        if rows:
+            row = rows[0]
+            self.txt_nombre.setText(row[0])
+            idx_u = self.cmb_unidad.findData(row[1])
+            if idx_u >= 0:
+                self.cmb_unidad.setCurrentIndex(idx_u)
+            idx_c = self.cmb_categoria.findData(row[2])
+            if idx_c >= 0:
+                self.cmb_categoria.setCurrentIndex(idx_c)
+
+    def guardar(self):
+        nom = self.txt_nombre.text().strip()
+        uid = self.cmb_unidad.currentData()
+        cid = self.cmb_categoria.currentData()
+
+        if not nom or not uid:
+            return QMessageBox.warning(
+                self, "Error", "Nombre y Unidad son obligatorios"
+            )
+
+        try:
+            if self.insumo_id:
+                self.db.execute_query(
+                    "UPDATE insumos SET nombre=?, unidad_base_id=?, categoria_id=? WHERE id=?",
+                    (nom, uid, cid, self.insumo_id),
+                )
             else:
-                query = "INSERT INTO insumos (nombre, unidad_medida, stock_actual, costo_unitario, categoria_id) VALUES (?,?,?,?,?)"
-                params = (nombre, unidad, stock, costo, cat_id)
+                self.db.execute_query(
+                    "INSERT INTO insumos (nombre, unidad_base_id, categoria_id) VALUES (?,?,?)",
+                    (nom, uid, cid),
+                )
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
-            self.db.execute_query(query, params)
+
+# =============================================================================
+# PESTAÑA 2: PRESENTACIONES (Cajas, Bultos, etc.)
+# =============================================================================
+class TabPresentaciones(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        btn_layout = QHBoxLayout()
+        btn_add = QPushButton("Definir Presentación")
+        btn_add.clicked.connect(self.add)
+        btn_del = QPushButton("Eliminar")
+        btn_del.setStyleSheet("color: red;")
+        btn_del.clicked.connect(self.delete)
+        btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_del)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(7)
+        self.table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Insumo Base",
+                "Nombre Presentación",
+                "Precio Ref.",
+                "Contenido",
+                "Unidad",
+                "Costo Calc.",
+            ]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        layout.addWidget(self.table)
+        self.setLayout(layout)
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        query = """
+            SELECT p.id, i.nombre, p.nombre, p.precio_compra, p.cantidad_contenido, u.abreviatura, p.costo_unitario_calculado
+            FROM presentaciones_compra p
+            JOIN insumos i ON p.insumo_id = i.id
+            JOIN unidades_medida u ON i.unidad_base_id = u.id
+            ORDER BY i.nombre
+        """
+        rows = self.db.fetch_all(query)
+        self.table.setRowCount(0)
+        for r, row in enumerate(rows):
+            self.table.insertRow(r)
+            self.table.setItem(r, 0, QTableWidgetItem(str(row[0])))
+            self.table.setItem(r, 1, QTableWidgetItem(row[1]))
+            self.table.setItem(r, 2, QTableWidgetItem(row[2]))
+            self.table.setItem(r, 3, QTableWidgetItem(f"${row[3]:.2f}"))
+            self.table.setItem(r, 4, QTableWidgetItem(str(row[4])))
+            self.table.setItem(r, 5, QTableWidgetItem(row[5]))
+            self.table.setItem(r, 6, QTableWidgetItem(f"${row[6]:.4f}"))
+
+    def add(self):
+        if PresentacionDialog(self.db, parent=self).exec_():
             self.cargar_datos()
+
+    def delete(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        pid = self.table.item(row, 0).text()
+        if (
+            QMessageBox.question(self, "Eliminar", "¿Borrar esta presentación?")
+            == QMessageBox.Yes
+        ):
+            self.db.execute_query(
+                "DELETE FROM presentaciones_compra WHERE id=?", (pid,)
+            )
+            self.cargar_datos()
+
+
+class PresentacionDialog(QDialog):
+    def __init__(self, db, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Nueva Presentación de Compra")
+        self.resize(500, 450)
+
+        layout = QVBoxLayout()
+
+        # Formulario Básico
+        form = QFormLayout()
+        self.cmb_insumo = QComboBox()
+        self.cargar_insumos()
+        self.cmb_insumo.currentIndexChanged.connect(self.update_labels)
+
+        self.txt_nombre = QLineEdit()
+        self.txt_nombre.setPlaceholderText("Ej: Caja x12, Bulto 50lb")
+
+        self.spin_precio = QDoubleSpinBox()
+        self.spin_precio.setMaximum(99999.99)
+        self.spin_precio.setPrefix("$ ")
+
+        form.addRow("Insumo Base:", self.cmb_insumo)
+        form.addRow("Nombre Empaque:", self.txt_nombre)
+        form.addRow("Precio Compra:", self.spin_precio)
+        layout.addLayout(form)
+
+        # Detalle Composición
+        self.chk_detalle = QCheckBox("Es un empaque compuesto (Ej: Caja con botellas)")
+        self.chk_detalle.toggled.connect(self.toggle_detalle)
+        layout.addWidget(self.chk_detalle)
+
+        self.grp_det = QGroupBox("Contenido Interno")
+        f_det = QFormLayout()
+        self.txt_sub_nom = QLineEdit()
+        self.txt_sub_nom.setPlaceholderText("Ej: Botella")
+        self.spin_cant = QSpinBox()
+        self.spin_cant.setRange(1, 1000)
+        self.spin_cant.valueChanged.connect(self.calc_total)
+
+        self.spin_peso_uni = QDoubleSpinBox()
+        self.spin_peso_uni.setRange(0.001, 9999)
+        self.spin_peso_uni.setDecimals(3)
+        self.spin_peso_uni.valueChanged.connect(self.calc_total)
+
+        self.lbl_u1 = QLabel("Peso/Vol Unitario:")
+
+        f_det.addRow("Nombre Unidad Interna:", self.txt_sub_nom)
+        f_det.addRow("Cantidad:", self.spin_cant)
+        f_det.addRow(self.lbl_u1, self.spin_peso_uni)
+        self.grp_det.setLayout(f_det)
+        layout.addWidget(self.grp_det)
+
+        # Totales
+        self.grp_tot = QGroupBox("Total para Inventario")
+        f_tot = QFormLayout()
+        self.spin_total = QDoubleSpinBox()
+        self.spin_total.setRange(0.01, 99999)
+        self.spin_total.setDecimals(3)
+        self.lbl_u2 = QLabel("Contenido Neto Total:")
+        f_tot.addRow(self.lbl_u2, self.spin_total)
+        self.grp_tot.setLayout(f_tot)
+        layout.addWidget(self.grp_tot)
+
+        btn = QPushButton("Guardar Definición")
+        btn.clicked.connect(self.guardar)
+        layout.addWidget(btn)
+
+        self.setLayout(layout)
+        self.toggle_detalle(False)
+        self.update_labels()  # Update labels on init
+
+    def cargar_insumos(self):
+        # Cargar insumo y su unidad de medida
+        query = "SELECT i.id, i.nombre, u.abreviatura FROM insumos i JOIN unidades_medida u ON i.unidad_base_id = u.id ORDER BY i.nombre"
+        rows = self.db.fetch_all(query)
+        for r in rows:
+            self.cmb_insumo.addItem(f"{r[1]} ({r[2]})", {"id": r[0], "u": r[2]})
+
+    def update_labels(self):
+        data = self.cmb_insumo.currentData()
+        if data:
+            u = data["u"]
+            self.lbl_u1.setText(f"Peso/Vol Unitario ({u}):")
+            self.lbl_u2.setText(f"Contenido Neto Total ({u}):")
+
+    def toggle_detalle(self, checked):
+        self.grp_det.setVisible(checked)
+        self.spin_total.setReadOnly(checked)
+        if checked:
+            self.calc_total()
+
+    def calc_total(self):
+        if self.chk_detalle.isChecked():
+            total = self.spin_cant.value() * self.spin_peso_uni.value()
+            self.spin_total.setValue(total)
+
+    def guardar(self):
+        data_ins = self.cmb_insumo.currentData()
+        if not data_ins:
+            return
+
+        ins_id = data_ins["id"]
+        nom = self.txt_nombre.text()
+        precio = self.spin_precio.value()
+        total = self.spin_total.value()
+
+        if total <= 0:
+            return QMessageBox.warning(
+                self, "Error", "El contenido total debe ser mayor a 0"
+            )
+
+        costo_u = precio / total
+
+        try:
+            # Insertar Presentación
+            cur = self.db.execute_query(
+                "INSERT INTO presentaciones_compra (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado) VALUES (?,?,?,?,?)",
+                (ins_id, nom, total, precio, costo_u),
+            )
+            pid = cur.lastrowid
+
+            # Insertar Detalle si aplica
+            if self.chk_detalle.isChecked():
+                self.db.execute_query(
+                    "INSERT INTO composicion_empaque (presentacion_id, nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario) VALUES (?,?,?,?)",
+                    (
+                        pid,
+                        self.txt_sub_nom.text(),
+                        self.spin_cant.value(),
+                        self.spin_peso_uni.value(),
+                    ),
+                )
+
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
+# =============================================================================
+# PESTAÑA 3: UNIDADES (Configuración)
+# =============================================================================
+class TabUnidades(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QHBoxLayout()
+
+        # Panel Izquierdo: Lista
+        left_panel = QVBoxLayout()
+
+        hl = QHBoxLayout()
+        btn_add = QPushButton("Nueva Unidad")
+        btn_add.clicked.connect(self.add)
+        btn_del = QPushButton("Eliminar")
+        btn_del.setStyleSheet("color: red;")
+        btn_del.clicked.connect(self.delete)
+        hl.addWidget(btn_add)
+        hl.addWidget(btn_del)
+        left_panel.addLayout(hl)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Abrev."])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        left_panel.addWidget(self.table)
+
+        layout.addLayout(left_panel)
+        self.setLayout(layout)
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        rows = self.db.fetch_all(
+            "SELECT id, nombre, abreviatura FROM unidades_medida ORDER BY id"
+        )
+        self.table.setRowCount(0)
+        for r, row in enumerate(rows):
+            self.table.insertRow(r)
+            self.table.setItem(r, 0, QTableWidgetItem(str(row[0])))
+            self.table.setItem(r, 1, QTableWidgetItem(row[1]))
+            self.table.setItem(r, 2, QTableWidgetItem(row[2]))
+
+    def add(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Nueva Unidad")
+        f = QFormLayout(dlg)
+        t_nom = QLineEdit()
+        t_abr = QLineEdit()
+        f.addRow("Nombre (ej. Kilogramo):", t_nom)
+        f.addRow("Abreviatura (ej. kg):", t_abr)
+        btn = QPushButton("Guardar")
+        btn.clicked.connect(dlg.accept)
+        f.addRow(btn)
+
+        if dlg.exec_() and t_nom.text():
+            try:
+                self.db.execute_query(
+                    "INSERT INTO unidades_medida (nombre, abreviatura) VALUES (?,?)",
+                    (t_nom.text(), t_abr.text()),
+                )
+                self.cargar_datos()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+
+    def delete(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        uid = self.table.item(row, 0).text()
+        try:
+            self.db.execute_query("DELETE FROM unidades_medida WHERE id=?", (uid,))
+            self.cargar_datos()
+        except:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No se puede eliminar: Esta unidad está en uso por uno o más insumos.",
+            )

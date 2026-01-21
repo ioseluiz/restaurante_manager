@@ -40,14 +40,15 @@ class DatabaseManager:
             );
         """)
 
-        # --- 3. Insumos (ACTUALIZADO - Ahora relacional) ---
-        # Nota: Se ha cambiado unidad_medida (TEXT) por unidad_base_id (INTEGER FK)
+        # --- 3. Insumos (CORREGIDO - Se agregaron stock_actual y costo_unitario) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
                 unidad_base_id INTEGER NOT NULL,
-                categoria_id INTEGER, -- Mantenemos esto por compatibilidad si usas categorias_insumos
+                categoria_id INTEGER, 
+                stock_actual REAL DEFAULT 0.0,    -- <--- AGREGADO
+                costo_unitario REAL DEFAULT 0.0,  -- <--- AGREGADO (Para futuros cálculos de recetas)
                 FOREIGN KEY (unidad_base_id) REFERENCES unidades_medida(id)
             );
         """)
@@ -79,7 +80,7 @@ class DatabaseManager:
 
         # --- MÓDULOS EXISTENTES (COMPATIBILIDAD) ---
 
-        # Categorías de Insumos (Opcional, mantenida de tu versión anterior)
+        # Categorías de Insumos
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS categorias_insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +116,7 @@ class DatabaseManager:
             )
         """)
 
-        # Recetas (Podría requerir actualización futura para usar unidades_medida)
+        # Recetas
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS recetas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,7 +162,6 @@ class DatabaseManager:
                 )
                 self.conn.commit()
         except sqlite3.OperationalError:
-            # Manejo de error si la tabla usuarios no está lista
             pass
 
     def execute_query(self, query, params=()):
@@ -190,7 +190,7 @@ class DatabaseManager:
                     r["desc"],
                     r["day"],
                     r["qty"],
-                    r.get("prom", 0.0),  # Campo Promedio
+                    r.get("prom", 0.0),
                     r["total"],
                     fecha_inicio,
                     fecha_fin,

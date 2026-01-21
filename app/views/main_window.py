@@ -4,19 +4,21 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,  # <--- Agregado para el header horizontal
+    QHBoxLayout,
     QPushButton,
     QToolButton,
     QLabel,
     QStackedWidget,
     QGridLayout,
+    QSizePolicy,  # <--- IMPORTANTE: Agregado para manejar políticas de tamaño
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
 
-# Importamos las vistas (descomentar a medida que las vayas arreglando/creando)
+# --- IMPORTACIÓN DE VISTAS ---
 # from app.views.modulos.ventas_pos import VentasPOSWidget
-# from app.views.modulos.insumos_crud import InsumosCRUD
+from app.views.modulos.insumos_crud import InsumosCRUD
+
 # from app.views.modulos.menu_crud import MenuCRUD
 # from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
@@ -43,186 +45,183 @@ class MainWindow(QMainWindow):
 
         # Configuración de rutas para assets
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(base_dir)))
+        project_root = os.path.dirname(os.path.dirname(base_dir))
+        self.assets_dir = os.path.join(project_root, "assets")
 
-        # Intento robusto de encontrar la carpeta assets
-        posibles_rutas = [
-            os.path.join(os.getcwd(), "assets", "icons"),
-            os.path.join(root_dir, "assets", "icons"),
-            os.path.join(base_dir, "..", "..", "assets", "icons"),
-        ]
-
-        self.icons_path = ""
-        for ruta in posibles_rutas:
-            if os.path.exists(ruta):
-                self.icons_path = ruta
-                break
-
-        if not self.icons_path:
-            self.icons_path = os.path.join(os.getcwd(), "assets", "icons")
-
-        # Widget central
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
+        # Widget Central Principal
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        self.main_layout = QHBoxLayout(central_widget)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        # --- Header (Barra Superior) ---
-        # Creamos un widget contenedor para la barra superior
+        # Inicializar UI
+        self.setup_ui()
+
+    def setup_ui(self):
+        # 1. Sidebar (Menú Lateral)
+        self.sidebar = self.create_sidebar()
+        self.main_layout.addWidget(self.sidebar)
+
+        # 2. Área Principal (Contenido)
+        content_area = QWidget()
+        content_layout = QVBoxLayout(content_area)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header Superior (Título de la sección actual)
         header_widget = QWidget()
-        header_widget.setStyleSheet("background-color: #2c3e50;")
-
-        # Layout horizontal para el header: Titulo a la izquierda, Botón a la derecha
         header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(20, 15, 20, 15)
+        header_layout.setContentsMargins(0, 0, 0, 10)
 
-        # Etiqueta del Título
-        self.header_label = QLabel("Menu Principal")
-        self.header_label.setStyleSheet("""
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            border: none;
-            background: transparent;
-        """)
-
-        # Botón de Cerrar Sesión
-        self.btn_logout = QPushButton("Cerrar Sesión")
-        self.btn_logout.setCursor(Qt.PointingHandCursor)
-        # Estilo rojo (danger) para indicar salida, acorde a la paleta
-        self.btn_logout.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c; 
-                color: white; 
-                border: none;
-                border-radius: 5px; 
-                padding: 8px 15px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #c0392b; 
-            }
-            QPushButton:pressed {
-                background-color: #a93226;
-            }
-        """)
-        self.btn_logout.clicked.connect(self.logout)
-
-        # Añadimos widgets al layout del header
+        self.header_label = QLabel("Bienvenido")
+        self.header_label.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: #333;"
+        )
         header_layout.addWidget(self.header_label)
-        header_layout.addStretch()  # Espaciador flexible
-        header_layout.addWidget(self.btn_logout)
+        header_layout.addStretch()
 
-        # Añadimos el header al layout principal
-        self.main_layout.addWidget(header_widget)
+        content_layout.addWidget(header_widget)
 
-        # --- Stack de Vistas ---
+        # Stacked Widget para cambiar vistas
         self.stack = QStackedWidget()
-        self.main_layout.addWidget(self.stack)
+        content_layout.addWidget(self.stack)
 
-        # Inicializamos el Dashboard (Índice 0)
-        self.dashboard_widget = self.create_dashboard_menu()
-        self.stack.addWidget(self.dashboard_widget)
+        self.main_layout.addWidget(content_area)
 
-        # Diccionario para carga perezosa de módulos
+        # Crear página de bienvenida vacía o Dashboard
+        welcome = QLabel("Seleccione una opción del menú")
+        welcome.setAlignment(Qt.AlignCenter)
+        self.stack.addWidget(welcome)
+
+        # Diccionario para guardar referencias a los módulos cargados
         self.modules = {}
 
-    def logout(self):
-        """Gestiona el cierre de sesión."""
-        self.logout_requested = True
-        self.close()
+    def create_sidebar(self):
+        sidebar = QWidget()
+        sidebar.setFixedWidth(250)
+        sidebar.setStyleSheet("background-color: #2c3e50; color: white;")
 
-    def create_dashboard_menu(self):
-        """Crea el menú principal con botones grandes e iconos."""
-        menu_widget = QWidget()
-        grid_layout = QGridLayout(menu_widget)
-        grid_layout.setContentsMargins(50, 50, 50, 50)
-        grid_layout.setSpacing(30)
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        buttons_config = [
-            ("Ventas (POS)", self.show_pos, "icon_pos_ventas.png"),
-            ("Gestión de Insumos", self.show_insumos, "icon_chicken.png"),
-            ("Gestión de Menú", self.show_menu, "icon_gestion_menu.png"),
-            ("Categorías de Insumos", self.show_categorias, "icon_insumos_meat.png"),
-            ("Carga de Reportes", self.show_reportes, "icon_upload_reports.png"),
-            ("Usuarios", self.show_usuarios, "icon_user.png"),
+        # Título App en Sidebar
+        app_title = QLabel("Restaurante\nManager")
+        app_title.setAlignment(Qt.AlignCenter)
+        app_title.setStyleSheet(
+            "font-size: 20px; font-weight: bold; padding: 20px; background-color: #1a252f;"
+        )
+        layout.addWidget(app_title)
+
+        # Botones del Menú
+        buttons = [
+            ("Punto de Venta", "icon_pos_ventas.png", self.show_pos),
+            ("Gestión de Insumos", "icon_insumos.png", self.show_insumos),
+            ("Gestión del Menú", "icon_gestion_menu.png", self.show_menu),
+            ("Categorías", "icon04.png", self.show_categorias),
+            ("Carga de Reportes", "icon_upload_reports.png", self.show_reportes),
+            ("Usuarios", "icon_user.png", self.show_usuarios),
         ]
 
-        row, col = 0, 0
-        for text, slot, icon_file in buttons_config:
-            full_icon_path = os.path.join(self.icons_path, icon_file)
+        for text, icon_name, callback in buttons:
+            btn = self.create_nav_button(text, icon_name, callback)
+            layout.addWidget(btn)
 
-            btn = self.create_dashboard_button(text, slot, icon_path=full_icon_path)
-            grid_layout.addWidget(btn, row, col)
+        layout.addStretch()
 
-            col += 1
-            if col > 2:  # 3 columnas
-                col = 0
-                row += 1
+        # Botón Salir
+        btn_exit = self.create_nav_button("Cerrar Sesión", None, self.logout)
+        btn_exit.setStyleSheet("""
+            QToolButton {
+                background-color: #c0392b; 
+                color: white; 
+                border: none; 
+                padding: 15px; 
+                text-align: left; 
+                font-size: 14px;
+            }
+            QToolButton:hover { background-color: #e74c3c; }
+        """)
+        layout.addWidget(btn_exit)
 
-        return menu_widget
+        return sidebar
 
-    def create_dashboard_button(self, text, slot_func, icon_path=None):
+    def create_nav_button(self, text, icon_name, callback):
         btn = QToolButton()
-        btn.setText(text)
-        btn.setFixedSize(220, 180)
+        btn.setText(f"  {text}")
+        btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        btn.setFixedHeight(50)
         btn.setCursor(Qt.PointingHandCursor)
-        btn.clicked.connect(slot_func)
 
-        # Configuración del Icono
-        if icon_path and os.path.exists(icon_path):
-            btn.setIcon(QIcon(icon_path))
-            btn.setIconSize(QSize(80, 80))
-            btn.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        else:
-            print(f"Aviso: Icono no encontrado en {icon_path}")
-
-        # Estilo: Fondo blanco, Icono y Texto azul (#3498db)
+        # Estilo Base
         btn.setStyleSheet("""
             QToolButton {
-                background-color: #ffffff;
-                color: #3498db;
-                border: 2px solid #3498db;
-                border-radius: 15px;
-                font-size: 16px;
-                font-weight: bold;
-                padding: 10px;
+                background-color: transparent; 
+                color: white; 
+                border: none; 
+                padding-left: 20px; 
+                text-align: left; 
+                font-size: 14px;
             }
-            QToolButton:hover {
-                background-color: #f0f8ff;
-                border: 2px solid #2980b9;
-            }
-            QToolButton:pressed {
-                background-color: #d6eaf8;
-            }
+            QToolButton:hover { background-color: #34495e; }
+            QToolButton:pressed { background-color: #1abc9c; }
         """)
-        return btn
 
-    def go_home(self):
-        """Regresa al dashboard principal."""
-        self.header_label.setText("Menu Principal")
-        self.stack.setCurrentIndex(0)
+        # Icono (Si existe)
+        if icon_name:
+            icon_path = os.path.join(self.assets_dir, "icons", icon_name)
+            if os.path.exists(icon_path):
+                btn.setIcon(QIcon(icon_path))
+                btn.setIconSize(QSize(24, 24))
+
+        btn.clicked.connect(callback)
+
+        # --- CORRECCIÓN AQUÍ ---
+        # Usamos QSizePolicy.Expanding (Horizontal) y QSizePolicy.Fixed (Vertical)
+        btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        return btn
 
     def load_module(self, name, widget_class, title, needs_db=False):
         """
         Carga un módulo en el stack si no existe.
+        Maneja inteligentemente dependencias de DB y Callbacks.
         """
         if name not in self.modules:
-            try:
-                if needs_db:
-                    widget = widget_class(self.db)
-                else:
+            widget = None
+
+            # Intento 1: Si necesita DB, probamos inyectar DB + Callback (Para widgets complejos como CargaReportes)
+            if needs_db:
+                try:
+                    widget = widget_class(
+                        self.db, parent_callback_cancelar=self.go_home
+                    )
+                except TypeError:
+                    # Si falla (ej. InsumosCRUD no acepta callback), intentamos solo con DB
+                    try:
+                        widget = widget_class(self.db)
+                    except TypeError:
+                        print(
+                            f"Error cargando {name}: El constructor no acepta 'db_manager'"
+                        )
+
+            # Intento 2: Si no necesita DB (o falló lo anterior y widget sigue None)
+            if widget is None:
+                try:
                     widget = widget_class(parent_callback_cancelar=self.go_home)
-            except TypeError:
-                widget = widget_class()
+                except TypeError:
+                    # Último recurso: Constructor vacío
+                    widget = widget_class()
 
             self.modules[name] = widget
             self.stack.addWidget(widget)
 
         self.stack.setCurrentWidget(self.modules[name])
         self.header_label.setText(title)
+
+        # Si el módulo tiene un método cargar_datos, lo llamamos para refrescar
+        if hasattr(self.modules[name], "cargar_datos"):
+            self.modules[name].cargar_datos()
 
     # --- Slots de Navegación ---
 
@@ -232,7 +231,7 @@ class MainWindow(QMainWindow):
 
     def show_insumos(self):
         print("Navegando a Insumos...")
-        # self.load_module("insumos", InsumosCRUD, "Gestión de Insumos", needs_db=True)
+        self.load_module("insumos", InsumosCRUD, "Gestión de Insumos", needs_db=True)
 
     def show_menu(self):
         print("Navegando a Menú...")
@@ -243,8 +242,21 @@ class MainWindow(QMainWindow):
         # self.load_module("categorias", CategoriasCRUD, "Categorías de Insumos", needs_db=True)
 
     def show_reportes(self):
-        self.load_module("reportes", CargaReportesWidget, "Carga de Reportes")
+        self.load_module(
+            "reportes",
+            CargaReportesWidget,
+            "Carga y Procesamiento de Reportes",
+            needs_db=True,
+        )
 
     def show_usuarios(self):
         print("Navegando a Usuarios...")
         # self.load_module("usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True)
+
+    def go_home(self):
+        self.stack.setCurrentIndex(0)
+        self.header_label.setText("Bienvenido")
+
+    def logout(self):
+        self.logout_requested = True
+        self.close()
