@@ -20,14 +20,30 @@ def main():
     db = DatabaseManager()
     auth = AuthController(db)
 
-    # 2. Flujo de Login
-    login = LoginWindow(auth)
-    if login.exec_() == QDialog.Accepted:
-        window = MainWindow(db, auth)
-        window.show()
-        sys.exit(app.exec_())
-    else:
-        sys.exit()
+    # 2. Flujo de Login con bucle para permitir Cerrar Sesión
+    while True:
+        login = LoginWindow(auth)
+
+        # Si el login es exitoso
+        if login.exec_() == QDialog.Accepted:
+            window = MainWindow(db, auth)
+            window.show()
+
+            # Ejecuta la aplicación hasta que se cierre la ventana principal
+            app.exec_()
+
+            # Al cerrarse la ventana, verificamos si fue por logout
+            if getattr(window, "logout_requested", False):
+                # Si fue logout, el bucle continúa y vuelve a mostrar el Login
+                continue
+            else:
+                # Si se cerró normalmente (X), rompemos el bucle para salir
+                break
+        else:
+            # Si cancela el login, salimos
+            break
+
+    sys.exit()
 
 
 if __name__ == "__main__":
