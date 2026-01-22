@@ -33,12 +33,14 @@ restaurante_manager/
 ├── requirements.txt       # Dependencias del proyecto
 └── README.md              # Documentación del proyecto
 
-🗃️ Modelo de Base de Datos
+
+```
+## 🗃️ Modelo de Base de Datos
 El sistema utiliza SQLite como motor de base de datos. A continuación se presenta el Diagrama Entidad-Relación (ER) que describe las tablas y sus relaciones:
 
 Nota: El diagrama muestra las relaciones clave entre Insumos, Recetas, Menús y las tablas de conversiones de unidades.
 
-🚀 Instalación y Requisitos
+## 🚀 Instalación y Requisitos
 Para ejecutar este proyecto en tu máquina local, sigue estos pasos:
 
 1. Prerrequisitos
@@ -83,7 +85,7 @@ Usuario: admin
 
 Contraseña: admin123 (Se recomienda cambiarla en producción)
 
-🛠️ Tecnologías Utilizadas
+## 🛠️ Tecnologías Utilizadas
 Lenguaje: Python 3
 
 Interfaz Gráfica (GUI): PyQt5
