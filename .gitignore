@@ -5,3 +5,4 @@ __pycache__/
 *.db
 *.sqlite3
 prompt.md
+datos_db/

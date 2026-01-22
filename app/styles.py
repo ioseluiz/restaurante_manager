@@ -118,11 +118,13 @@ GLOBAL_STYLES = f"""
         border: 1px solid {COLORS["border"]};
         border-radius: 4px;
     }}
+    
+    /* MODIFICACIÓN: Encabezado claro para ver las flechas de ordenamiento */
     QHeaderView::section {{
-        background-color: #34495e;
-        color: white;
+        background-color: {COLORS["background"]}; /* Fondo gris claro */
+        color: {COLORS["text"]};                  /* Texto oscuro */
         padding: 8px;
-        border: none;
+        border: 1px solid {COLORS["border"]};     /* Borde suave */
         font-weight: bold;
     }}
 

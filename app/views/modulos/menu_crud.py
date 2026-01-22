@@ -13,34 +13,57 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QHeaderView,
     QMessageBox,
+    QFileDialog,
+    QTextEdit,
 )
 from PyQt5.QtCore import Qt
 import sqlite3
+import csv
+
+
+# --- CLASE PERSONALIZADA PARA ORDENAR NÚMEROS ---
+class NumericItem(QTableWidgetItem):
+    """
+    Permite que la tabla ordene la columna por valor numérico
+    y no por orden alfabético.
+    """
+
+    def __lt__(self, other):
+        try:
+            return float(self.text()) < float(other.text())
+        except ValueError:
+            return super().__lt__(other)
 
 
 class MenuCRUD(QWidget):
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
+        self.filtros = {}
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
-        # Margen uniforme con el resto de la app
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setSpacing(10)
 
-        # --- HEADER (Titulo y Botones) ---
+        # --- 1. HEADER Y BOTONES ---
         action_layout = QHBoxLayout()
 
-        # Título con clase CSS
         title = QLabel("Gestión del Menú")
         title.setProperty("class", "header-title")
 
-        # Botones de Acción
+        # Botones
+        btn_import = QPushButton(" Importar CSV")
+        btn_import.setCursor(Qt.PointingHandCursor)
+        btn_import.setStyleSheet(
+            "background-color: #3498db; color: white; font-weight: bold;"
+        )
+        btn_import.clicked.connect(self.importar_csv)
+
         btn_add = QPushButton(" + Nuevo Item")
         btn_add.setCursor(Qt.PointingHandCursor)
-        btn_add.setProperty("class", "btn-success")  # Clase CSS: Verde
+        btn_add.setProperty("class", "btn-success")
         btn_add.clicked.connect(self.abrir_form_crear)
 
         btn_edit = QPushButton("Editar Item")
@@ -49,35 +72,57 @@ class MenuCRUD(QWidget):
 
         btn_del = QPushButton("Eliminar Item")
         btn_del.setCursor(Qt.PointingHandCursor)
-        btn_del.setProperty("class", "btn-danger")  # Clase CSS: Rojo
+        btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.eliminar_registro)
 
         action_layout.addWidget(title)
         action_layout.addStretch()
+        action_layout.addWidget(btn_import)
         action_layout.addWidget(btn_add)
         action_layout.addWidget(btn_edit)
         action_layout.addWidget(btn_del)
 
         layout.addLayout(action_layout)
 
-        # --- TABLA ---
+        # --- 2. FILTROS DE BÚSQUEDA ---
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(5)
+
+        # CAMBIO: Placeholders ajustados a nombres de BD
+        config_filtros = [
+            (0, "Filtro id"),
+            (1, "Filtro codigo"),
+            (2, "Filtro nombre"),
+            (3, "Filtro precio_venta"),
+            (4, "Filtro es_preparado"),
+        ]
+
+        for col_idx, placeholder in config_filtros:
+            inp = QLineEdit()
+            inp.setPlaceholderText(placeholder)
+            inp.setClearButtonEnabled(True)
+            inp.textChanged.connect(self.aplicar_filtros)
+
+            self.filtros[col_idx] = inp
+            filter_layout.addWidget(inp)
+
+        layout.addLayout(filter_layout)
+
+        # --- 3. TABLA ---
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(
-            ["ID", "Código", "Nombre del Plato/Bebida", "Precio Venta", "Tipo"]
-        )
+
+        # CAMBIO SOLICITADO: Nombres exactos de la base de datos
+        headers = ["id", "codigo", "nombre", "precio_venta", "es_preparado"]
+        self.table.setHorizontalHeaderLabels(headers)
+
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
-
-        # Mejoras visuales de la tabla
-        self.table.verticalHeader().setVisible(
-            False
-        )  # Ocultar números de línea izquierda
-        self.table.setShowGrid(False)  # Grid más limpio (controlado por CSS)
-        self.table.setFocusPolicy(
-            Qt.NoFocus
-        )  # Quitar borde de foco azul al hacer click
+        self.table.verticalHeader().setVisible(False)
+        self.table.setShowGrid(False)
+        self.table.setFocusPolicy(Qt.NoFocus)
+        self.table.setSortingEnabled(True)
 
         layout.addWidget(self.table)
 
@@ -85,54 +130,80 @@ class MenuCRUD(QWidget):
         self.cargar_datos()
 
     def cargar_datos(self):
-        "Consulta la base de datos y rellena la tabla"
+        """Consulta la BD y rellena la tabla"""
+        self.table.setSortingEnabled(False)
+
         query = "SELECT id, codigo, nombre, precio_venta, es_preparado FROM menu_items"
         rows = self.db.fetch_all(query)
 
         self.table.setRowCount(0)
         for row_idx, row_data in enumerate(rows):
             self.table.insertRow(row_idx)
-            # ID
-            self.table.setItem(row_idx, 0, QTableWidgetItem(str(row_data[0])))
-            # Codigo
-            codigo_val = row_data[1] if row_data[1] else ""
-            self.table.setItem(row_idx, 1, QTableWidgetItem(str(codigo_val)))
-            # Nombre
+
+            # 0. id
+            self.table.setItem(row_idx, 0, NumericItem(str(row_data[0])))
+
+            # 1. codigo
+            codigo = row_data[1] if row_data[1] else ""
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(codigo)))
+
+            # 2. nombre
             self.table.setItem(row_idx, 2, QTableWidgetItem(str(row_data[2])))
-            # Precio formateado con 2 decimales
-            self.table.setItem(row_idx, 3, QTableWidgetItem(f"${row_data[3]:.2f}"))
-            # Tipo (Convertir booleano a texto legible)
-            es_preparado = row_data[4]
-            tipo_txt = "Plato (Cocina)" if es_preparado else "Bebida/Directo"
-            self.table.setItem(row_idx, 4, QTableWidgetItem(tipo_txt))
 
-            # Guardamos el valor booleano real en el item para usarlo al editar
-            self.table.item(row_idx, 4).setData(Qt.UserRole, es_preparado)
+            # 3. precio_venta
+            precio_fmt = f"{row_data[3]:.2f}"
+            self.table.setItem(row_idx, 3, NumericItem(precio_fmt))
 
-    # --- Logica CRUD ---
+            # 4. es_preparado (CAMBIO SOLICITADO: Valor crudo de BD)
+            # Mostramos 1 o 0 (o True/False según devuelva el driver, generalmente 1/0 en SQLite)
+            es_preparado_val = row_data[4]
+            item_es_preparado = QTableWidgetItem(str(es_preparado_val))
+
+            # Guardamos el dato como UserRole por si acaso se necesita lógica interna,
+            # pero el texto visible es el valor directo.
+            item_es_preparado.setData(Qt.UserRole, es_preparado_val)
+            self.table.setItem(row_idx, 4, item_es_preparado)
+
+        self.table.setSortingEnabled(True)
+        self.aplicar_filtros()
+
+    def aplicar_filtros(self):
+        rows = self.table.rowCount()
+        for row in range(rows):
+            mostrar = True
+            for col, inp in self.filtros.items():
+                texto_filtro = inp.text().lower().strip()
+                if not texto_filtro:
+                    continue
+
+                item = self.table.item(row, col)
+                if item:
+                    texto_celda = item.text().lower()
+                    if texto_filtro not in texto_celda:
+                        mostrar = False
+                        break
+            self.table.setRowHidden(row, not mostrar)
+
+    # --- Lógica CRUD ---
+
     def abrir_form_crear(self):
         self.mostrar_formulario()
 
     def abrir_form_editar(self):
         row = self.table.currentRow()
         if row < 0:
-            QMessageBox.warning(
-                self, "Alerta", "Selecciona un item del menú para editar"
-            )
+            QMessageBox.warning(self, "Alerta", "Selecciona un item para editar")
             return
 
-        # Recuperar datos de la tabla para prellenar el formulario
         id_item = self.table.item(row, 0).text()
         codigo = self.table.item(row, 1).text()
         nombre = self.table.item(row, 2).text()
-        # Limpiamos el símbolo de $ para obtener el numero
+
         try:
-            precio_txt = self.table.item(row, 3).text().replace("$", "").strip()
-            precio = float(precio_txt)
+            precio = float(self.table.item(row, 3).text())
         except ValueError:
             precio = 0.0
 
-        # Recuperamos el booleano guardado en UserRole
         es_preparado = self.table.item(row, 4).data(Qt.UserRole)
 
         data = {
@@ -153,33 +224,28 @@ class MenuCRUD(QWidget):
 
         confirm = QMessageBox.question(
             self,
-            "Confirmar Eliminación",
-            "¿Borrar Item?",
+            "Confirmar",
+            "¿Eliminar este item permanentemente?",
             QMessageBox.Yes | QMessageBox.No,
         )
         if confirm == QMessageBox.Yes:
-            # Primero borramos recetas asociadas para mantener integridad
             self.db.execute_query(
                 "DELETE FROM recetas WHERE menu_item_id=?", (id_item,)
             )
-            # Luego borramos el item
             self.db.execute_query("DELETE FROM menu_items WHERE id=?", (id_item,))
             self.cargar_datos()
 
     def mostrar_formulario(self, data=None):
         dialog = QDialog(self)
-        dialog.setWindowTitle("Detalle del Menú")
-        dialog.setFixedSize(400, 300)  # Un poco más alto para que respire
+        dialog.setWindowTitle("Detalle del Item")
+        dialog.setFixedSize(400, 300)
 
-        # Layout del formulario
         form = QFormLayout(dialog)
-        form.setSpacing(15)  # Espaciado entre inputs
+        form.setSpacing(15)
 
-        # Campos
         inp_codigo = QLineEdit(data["codigo"] if data else "")
         inp_nombre = QLineEdit(data["nombre"] if data else "")
 
-        # Usamos el DoubleSpinBox para precios
         inp_precio = QDoubleSpinBox()
         inp_precio.setPrefix("$ ")
         inp_precio.setMaximum(10000.00)
@@ -187,68 +253,46 @@ class MenuCRUD(QWidget):
         if data:
             inp_precio.setValue(data["precio"])
 
-        chk_preparado = QCheckBox("¿Requiere preparación en cocina?")
-        chk_preparado.setToolTip(
-            "Marcar si el producto usa una receta (ej. Combo de Pollo). Desmarcar si es un producto directo (ej. Soda)"
-        )
+        # Mantenemos el CheckBox en el formulario para que sea amigable editar,
+        # aunque la tabla muestre el valor crudo.
+        chk_preparado = QCheckBox("es_preparado (1=Sí, 0=No)")
         if data:
             chk_preparado.setChecked(bool(data["es_preparado"]))
         else:
             chk_preparado.setChecked(True)
 
-        form.addRow("Código Único:", inp_codigo)
-        form.addRow("Nombre del Item:", inp_nombre)
-        form.addRow("Precio de Venta:", inp_precio)
+        form.addRow("codigo:", inp_codigo)
+        form.addRow("nombre:", inp_nombre)
+        form.addRow("precio_venta:", inp_precio)
         form.addRow("", chk_preparado)
 
-        # Función interna de validación
-        def validar_y_aceptar():
+        def guardar():
             codigo = inp_codigo.text().strip()
             nombre = inp_nombre.text().strip()
 
-            if not codigo:
+            if not codigo or not nombre:
                 QMessageBox.warning(
-                    dialog, "Validación", "El campo de Código es obligatorio."
+                    dialog, "Error", "Código y Nombre son obligatorios."
                 )
-                inp_codigo.setFocus()
                 return
-
-            if not nombre:
-                QMessageBox.warning(
-                    dialog, "Validación", "El campo de Nombre es obligatorio."
-                )
-                inp_nombre.setFocus()
-                return
-
             dialog.accept()
 
-        # Botón de Guardar
-        btn_save = QPushButton("Guardar Datos")
+        btn_save = QPushButton("Guardar")
         btn_save.setCursor(Qt.PointingHandCursor)
-        btn_save.setProperty("class", "btn-success")  # Estilo verde global
-        btn_save.clicked.connect(validar_y_aceptar)
+        btn_save.setProperty("class", "btn-success")
+        btn_save.clicked.connect(guardar)
 
-        # Espaciador antes del botón
         form.addRow(QLabel(""))
         form.addRow(btn_save)
 
         if dialog.exec_() == QDialog.Accepted:
-            # Recoger valores
             codigo_val = inp_codigo.text().strip()
             nombre_val = inp_nombre.text().strip()
             precio_val = inp_precio.value()
             es_preparado_val = 1 if chk_preparado.isChecked() else 0
 
-            # Validaciones básicas
-            if not nombre_val or not codigo_val:
-                QMessageBox.warning(
-                    self, "Error", "El código y el nombre son obligatorios."
-                )
-                return
-
             try:
                 if data:
-                    # UPDATE
                     query = "UPDATE menu_items SET codigo=?, nombre=?, precio_venta=?, es_preparado=? WHERE id=?"
                     params = (
                         codigo_val,
@@ -258,8 +302,7 @@ class MenuCRUD(QWidget):
                         data["id"],
                     )
                 else:
-                    # CREATE
-                    query = """INSERT INTO menu_items (codigo, nombre, precio_venta, es_preparado) VALUES (?,?,?,?)"""
+                    query = "INSERT INTO menu_items (codigo, nombre, precio_venta, es_preparado) VALUES (?,?,?,?)"
                     params = (codigo_val, nombre_val, precio_val, es_preparado_val)
 
                 self.db.execute_query(query, params)
@@ -267,9 +310,91 @@ class MenuCRUD(QWidget):
 
             except sqlite3.IntegrityError:
                 QMessageBox.critical(
-                    self,
-                    "Error",
-                    f"El código '{codigo_val}' ya existe. Usa uno diferente.",
+                    self, "Error", f"El código '{codigo_val}' ya existe."
                 )
             except Exception as e:
                 QMessageBox.critical(self, "Error BD", str(e))
+
+    def importar_csv(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Importar Menú CSV", "", "Archivos CSV (*.csv);;Todos (*.*)"
+        )
+
+        if not file_path:
+            return
+
+        agregados = 0
+        omitidos = []
+
+        try:
+            with open(file_path, mode="r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+
+                if not rows:
+                    return
+
+                start = 0
+                try:
+                    float(rows[0][2].replace("$", "").replace(",", ""))
+                except:
+                    start = 1
+
+                for i in range(start, len(rows)):
+                    row = rows[i]
+                    if len(row) < 3:
+                        continue
+
+                    codigo = row[0].strip()
+                    nombre = row[1].strip()
+                    precio_str = row[2].strip().replace("$", "").replace(",", "")
+
+                    try:
+                        precio = float(precio_str)
+                    except ValueError:
+                        omitidos.append((codigo, nombre, "Precio inválido"))
+                        continue
+
+                    existe = self.db.fetch_all(
+                        "SELECT 1 FROM menu_items WHERE codigo=?", (codigo,)
+                    )
+                    if existe:
+                        omitidos.append((codigo, nombre, "Código duplicado"))
+                        continue
+
+                    es_prep = 1
+                    if len(row) > 3 and row[3].strip().lower() in [
+                        "0",
+                        "no",
+                        "false",
+                        "f",
+                    ]:
+                        es_prep = 0
+
+                    try:
+                        self.db.execute_query(
+                            "INSERT INTO menu_items (codigo, nombre, precio_venta, es_preparado) VALUES (?,?,?,?)",
+                            (codigo, nombre, precio, es_prep),
+                        )
+                        agregados += 1
+                    except Exception as e:
+                        omitidos.append((codigo, nombre, str(e)))
+
+            self.cargar_datos()
+
+            msg = f"Importación finalizada.\nAgregados: {agregados}\nOmitidos: {len(omitidos)}"
+            if omitidos:
+                dialog = QDialog(self)
+                dialog.setWindowTitle("Reporte de Errores")
+                dialog.resize(400, 300)
+                vbox = QVBoxLayout(dialog)
+                vbox.addWidget(QLabel(msg))
+                txt = QTextEdit()
+                txt.setPlainText("\n".join([f"{c} - {n}: {r}" for c, n, r in omitidos]))
+                vbox.addWidget(txt)
+                dialog.exec_()
+            else:
+                QMessageBox.information(self, "Éxito", msg)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error leyendo archivo:\n{e}")

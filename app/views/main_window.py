@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QStackedWidget,
     QGridLayout,
-    QSizePolicy,  # <--- IMPORTANTE: Agregado para manejar políticas de tamaño
+    QSizePolicy,
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
@@ -18,8 +18,8 @@ from PyQt5.QtCore import Qt, QSize
 # --- IMPORTACIÓN DE VISTAS ---
 # from app.views.modulos.ventas_pos import VentasPOSWidget
 from app.views.modulos.insumos_crud import InsumosCRUD
+from app.views.modulos.menu_crud import MenuCRUD  # <--- DESCOMENTADO
 
-# from app.views.modulos.menu_crud import MenuCRUD
 # from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
 # from app.views.modulos.usuarios import UsuariosWidget
@@ -36,8 +36,6 @@ class MainWindow(QMainWindow):
 
         self.db = db_manager
         self.auth = auth_controller
-
-        # Bandera para controlar el cierre de sesión
         self.logout_requested = False
 
         self.setWindowTitle("Sistema de Gestión de Restaurante")
@@ -55,7 +53,6 @@ class MainWindow(QMainWindow):
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
 
-        # Inicializar UI
         self.setup_ui()
 
     def setup_ui(self):
@@ -68,7 +65,7 @@ class MainWindow(QMainWindow):
         content_layout = QVBoxLayout(content_area)
         content_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Header Superior (Título de la sección actual)
+        # Header Superior
         header_widget = QWidget()
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 10)
@@ -88,12 +85,11 @@ class MainWindow(QMainWindow):
 
         self.main_layout.addWidget(content_area)
 
-        # Crear página de bienvenida vacía o Dashboard
+        # Página de bienvenida
         welcome = QLabel("Seleccione una opción del menú")
         welcome.setAlignment(Qt.AlignCenter)
         self.stack.addWidget(welcome)
 
-        # Diccionario para guardar referencias a los módulos cargados
         self.modules = {}
 
     def create_sidebar(self):
@@ -153,7 +149,6 @@ class MainWindow(QMainWindow):
         btn.setFixedHeight(50)
         btn.setCursor(Qt.PointingHandCursor)
 
-        # Estilo Base
         btn.setStyleSheet("""
             QToolButton {
                 background-color: transparent; 
@@ -167,7 +162,6 @@ class MainWindow(QMainWindow):
             QToolButton:pressed { background-color: #1abc9c; }
         """)
 
-        # Icono (Si existe)
         if icon_name:
             icon_path = os.path.join(self.assets_dir, "icons", icon_name)
             if os.path.exists(icon_path):
@@ -175,29 +169,19 @@ class MainWindow(QMainWindow):
                 btn.setIconSize(QSize(24, 24))
 
         btn.clicked.connect(callback)
-
-        # --- CORRECCIÓN AQUÍ ---
-        # Usamos QSizePolicy.Expanding (Horizontal) y QSizePolicy.Fixed (Vertical)
         btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         return btn
 
     def load_module(self, name, widget_class, title, needs_db=False):
-        """
-        Carga un módulo en el stack si no existe.
-        Maneja inteligentemente dependencias de DB y Callbacks.
-        """
         if name not in self.modules:
             widget = None
-
-            # Intento 1: Si necesita DB, probamos inyectar DB + Callback (Para widgets complejos como CargaReportes)
             if needs_db:
                 try:
                     widget = widget_class(
                         self.db, parent_callback_cancelar=self.go_home
                     )
                 except TypeError:
-                    # Si falla (ej. InsumosCRUD no acepta callback), intentamos solo con DB
                     try:
                         widget = widget_class(self.db)
                     except TypeError:
@@ -205,12 +189,10 @@ class MainWindow(QMainWindow):
                             f"Error cargando {name}: El constructor no acepta 'db_manager'"
                         )
 
-            # Intento 2: Si no necesita DB (o falló lo anterior y widget sigue None)
             if widget is None:
                 try:
                     widget = widget_class(parent_callback_cancelar=self.go_home)
                 except TypeError:
-                    # Último recurso: Constructor vacío
                     widget = widget_class()
 
             self.modules[name] = widget
@@ -219,7 +201,6 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.modules[name])
         self.header_label.setText(title)
 
-        # Si el módulo tiene un método cargar_datos, lo llamamos para refrescar
         if hasattr(self.modules[name], "cargar_datos"):
             self.modules[name].cargar_datos()
 
@@ -235,7 +216,8 @@ class MainWindow(QMainWindow):
 
     def show_menu(self):
         print("Navegando a Menú...")
-        # self.load_module("menu", MenuCRUD, "Gestión del Menú", needs_db=True)
+        # Lógica habilitada
+        self.load_module("menu", MenuCRUD, "Gestión del Menú", needs_db=True)
 
     def show_categorias(self):
         print("Navegando a Categorías...")
