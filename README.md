@@ -38,6 +38,8 @@ restaurante_manager/
 ## 🗃️ Modelo de Base de Datos
 El sistema utiliza SQLite como motor de base de datos. A continuación se presenta el Diagrama Entidad-Relación (ER) que describe las tablas y sus relaciones:
 
+![Diagrama ER de la Base de Datos](./diagrama_ER.svg)
+
 Nota: El diagrama muestra las relaciones clave entre Insumos, Recetas, Menús y las tablas de conversiones de unidades.
 
 ## 🚀 Instalación y Requisitos
@@ -56,11 +58,11 @@ cd restaurante_manager
 3. Crear un entorno virtual (Recomendado)
 Bash
 
-# En Windows
+### En Windows
 python -m venv venv
 venv\Scripts\activate
 
-# En macOS/Linux
+### En macOS/Linux
 python3 -m venv venv
 source venv/bin/activate
 4. Instalar dependencias
