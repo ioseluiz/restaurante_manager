@@ -28,6 +28,7 @@ class Dashboard(QWidget):
             ("Ventas (POS)", "ventas"),
             ("Gestión de Insumos", "insumos"),
             ("Gestión de Menú", "menu"),
+            ("Unidades de Medida", "unidades"),
             ("Categorías Insumos", "categorias"),
             ("Carga de Reportes", "reportes"),
             ("Usuarios", "usuarios"),

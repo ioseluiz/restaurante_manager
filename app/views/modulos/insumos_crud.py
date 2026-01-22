@@ -21,6 +21,20 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 
+# --- CLASE PERSONALIZADA PARA ORDENAR NÚMEROS ---
+class NumericItem(QTableWidgetItem):
+    """
+    Permite que la tabla ordene la columna por valor numérico
+    y no por orden alfabético (ej. para que 10 no vaya antes que 2).
+    """
+
+    def __lt__(self, other):
+        try:
+            return float(self.text()) < float(other.text())
+        except ValueError:
+            return super().__lt__(other)
+
+
 class InsumosCRUD(QWidget):
     def __init__(self, db_manager):
         super().__init__()
@@ -40,14 +54,13 @@ class InsumosCRUD(QWidget):
         self.tabs = QTabWidget()
 
         # Inicializar las pestañas
+        # NOTA: Se eliminó TabUnidades, ahora se gestiona en su propio módulo.
         self.tab_insumos = TabInsumos(self.db)
         self.tab_presentaciones = TabPresentaciones(self.db)
-        self.tab_unidades = TabUnidades(self.db)
 
         # Añadir pestañas
         self.tabs.addTab(self.tab_insumos, "1. Catálogo de Insumos")
         self.tabs.addTab(self.tab_presentaciones, "2. Presentaciones de Compra")
-        self.tabs.addTab(self.tab_unidades, "3. Configuración Unidades")
 
         # Conectar cambio de pestaña
         self.tabs.currentChanged.connect(self.on_tab_change)
@@ -68,8 +81,6 @@ class InsumosCRUD(QWidget):
             self.tab_insumos.cargar_datos()
         elif index == 1:
             self.tab_presentaciones.cargar_datos()
-        elif index == 2:
-            self.tab_unidades.cargar_datos()
 
 
 # =============================================================================
@@ -79,6 +90,7 @@ class TabInsumos(QWidget):
     def __init__(self, db):
         super().__init__()
         self.db = db
+        self.filtros = {}
         self.init_ui()
 
     def init_ui(self):
@@ -87,16 +99,14 @@ class TabInsumos(QWidget):
         # Toolbar
         btn_layout = QHBoxLayout()
         btn_add = QPushButton("Nuevo Insumo")
-        btn_add.setStyleSheet(
-            "background-color: #28a745; color: white; font-weight: bold;"
-        )
+        btn_add.setProperty("class", "btn-success")
         btn_add.clicked.connect(self.abrir_crear)
 
         btn_edit = QPushButton("Editar Seleccionado")
         btn_edit.clicked.connect(self.abrir_editar)
 
         btn_del = QPushButton("Eliminar")
-        btn_del.setStyleSheet("background-color: #dc3545; color: white;")
+        btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.eliminar)
 
         btn_layout.addWidget(btn_add)
@@ -104,6 +114,27 @@ class TabInsumos(QWidget):
         btn_layout.addWidget(btn_del)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
+
+        # --- FILTROS DE BÚSQUEDA ---
+        filter_layout = QHBoxLayout()
+        # Configuración: (Índice Columna, Placeholder)
+        config_filtros = [
+            (0, "Filtrar ID"),
+            (1, "Filtrar Nombre"),
+            (2, "Filtrar Unidad"),
+            (3, "Filtrar Categoría"),
+            (4, "Filtrar Stock"),
+        ]
+
+        for col_idx, placeholder in config_filtros:
+            inp = QLineEdit()
+            inp.setPlaceholderText(placeholder)
+            inp.setClearButtonEnabled(True)
+            inp.textChanged.connect(self.aplicar_filtros)
+            self.filtros[col_idx] = inp
+            filter_layout.addWidget(inp)
+
+        layout.addLayout(filter_layout)
 
         # Tabla
         self.table = QTableWidget()
@@ -115,12 +146,19 @@ class TabInsumos(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+
+        # Habilitar Ordenamiento
+        self.table.setSortingEnabled(True)
+
         layout.addWidget(self.table)
 
         self.setLayout(layout)
         self.cargar_datos()
 
     def cargar_datos(self):
+        # Desactivar sorting durante la carga para evitar errores de redibujado
+        self.table.setSortingEnabled(False)
+
         query = """
             SELECT i.id, i.nombre, u.nombre, c.nombre, i.stock_actual
             FROM insumos i
@@ -132,9 +170,45 @@ class TabInsumos(QWidget):
         self.table.setRowCount(0)
         for r_idx, row in enumerate(rows):
             self.table.insertRow(r_idx)
-            for c_idx, val in enumerate(row):
-                val_str = str(val) if val is not None else "-"
-                self.table.setItem(r_idx, c_idx, QTableWidgetItem(val_str))
+
+            # Col 0: ID (Numérico)
+            self.table.setItem(r_idx, 0, NumericItem(str(row[0])))
+
+            # Col 1: Nombre
+            val_nombre = str(row[1]) if row[1] is not None else "-"
+            self.table.setItem(r_idx, 1, QTableWidgetItem(val_nombre))
+
+            # Col 2: Unidad
+            val_unidad = str(row[2]) if row[2] is not None else "-"
+            self.table.setItem(r_idx, 2, QTableWidgetItem(val_unidad))
+
+            # Col 3: Categoría
+            val_cat = str(row[3]) if row[3] is not None else "-"
+            self.table.setItem(r_idx, 3, QTableWidgetItem(val_cat))
+
+            # Col 4: Stock (Numérico)
+            val_stock = row[4] if row[4] is not None else 0.0
+            self.table.setItem(r_idx, 4, NumericItem(str(val_stock)))
+
+        # Reactivar sorting y aplicar filtros si hay texto escrito
+        self.table.setSortingEnabled(True)
+        self.aplicar_filtros()
+
+    def aplicar_filtros(self):
+        rows = self.table.rowCount()
+        for row in range(rows):
+            mostrar = True
+            for col, inp in self.filtros.items():
+                texto_filtro = inp.text().lower().strip()
+                if not texto_filtro:
+                    continue
+
+                item = self.table.item(row, col)
+                if item:
+                    if texto_filtro not in item.text().lower():
+                        mostrar = False
+                        break
+            self.table.setRowHidden(row, not mostrar)
 
     def abrir_crear(self):
         dlg = InsumoDialog(self.db, parent=self)
@@ -206,7 +280,7 @@ class InsumoDialog(QDialog):
         layout.addRow("Categoría:", self.cmb_categoria)
 
         btn_save = QPushButton("Guardar")
-        btn_save.setStyleSheet("background-color: #28a745; color: white; padding: 5px;")
+        btn_save.setProperty("class", "btn-success")
         btn_save.clicked.connect(self.guardar)
         layout.addRow(btn_save)
         self.setLayout(layout)
@@ -271,7 +345,7 @@ class TabPresentaciones(QWidget):
         btn_add = QPushButton("Definir Presentación")
         btn_add.clicked.connect(self.add)
         btn_del = QPushButton("Eliminar")
-        btn_del.setStyleSheet("color: red;")
+        btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.delete)
         btn_layout.addWidget(btn_add)
         btn_layout.addWidget(btn_del)
@@ -292,6 +366,9 @@ class TabPresentaciones(QWidget):
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)  # Por defecto, estirar todas
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -475,90 +552,3 @@ class PresentacionDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
-
-
-# =============================================================================
-# PESTAÑA 3: UNIDADES (Configuración)
-# =============================================================================
-class TabUnidades(QWidget):
-    def __init__(self, db):
-        super().__init__()
-        self.db = db
-        self.init_ui()
-
-    def init_ui(self):
-        layout = QHBoxLayout()
-
-        # Panel Izquierdo: Lista
-        left_panel = QVBoxLayout()
-
-        hl = QHBoxLayout()
-        btn_add = QPushButton("Nueva Unidad")
-        btn_add.clicked.connect(self.add)
-        btn_del = QPushButton("Eliminar")
-        btn_del.setStyleSheet("color: red;")
-        btn_del.clicked.connect(self.delete)
-        hl.addWidget(btn_add)
-        hl.addWidget(btn_del)
-        left_panel.addLayout(hl)
-
-        self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Abrev."])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table.setAlternatingRowColors(True)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        left_panel.addWidget(self.table)
-
-        layout.addLayout(left_panel)
-        self.setLayout(layout)
-        self.cargar_datos()
-
-    def cargar_datos(self):
-        rows = self.db.fetch_all(
-            "SELECT id, nombre, abreviatura FROM unidades_medida ORDER BY id"
-        )
-        self.table.setRowCount(0)
-        for r, row in enumerate(rows):
-            self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(row[0])))
-            self.table.setItem(r, 1, QTableWidgetItem(row[1]))
-            self.table.setItem(r, 2, QTableWidgetItem(row[2]))
-
-    def add(self):
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Nueva Unidad")
-        f = QFormLayout(dlg)
-        t_nom = QLineEdit()
-        t_abr = QLineEdit()
-        f.addRow("Nombre (ej. Kilogramo):", t_nom)
-        f.addRow("Abreviatura (ej. kg):", t_abr)
-        btn = QPushButton("Guardar")
-        btn.clicked.connect(dlg.accept)
-        f.addRow(btn)
-
-        if dlg.exec_() and t_nom.text():
-            try:
-                self.db.execute_query(
-                    "INSERT INTO unidades_medida (nombre, abreviatura) VALUES (?,?)",
-                    (t_nom.text(), t_abr.text()),
-                )
-                self.cargar_datos()
-            except Exception as e:
-                QMessageBox.warning(self, "Error", str(e))
-
-    def delete(self):
-        row = self.table.currentRow()
-        if row < 0:
-            return
-        uid = self.table.item(row, 0).text()
-        try:
-            self.db.execute_query("DELETE FROM unidades_medida WHERE id=?", (uid,))
-            self.cargar_datos()
-        except:
-            QMessageBox.warning(
-                self,
-                "Error",
-                "No se puede eliminar: Esta unidad está en uso por uno o más insumos.",
-            )

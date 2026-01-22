@@ -20,6 +20,7 @@ from PyQt5.QtCore import Qt, QSize
 from app.views.modulos.insumos_crud import InsumosCRUD
 from app.views.modulos.menu_crud import MenuCRUD  # <--- DESCOMENTADO
 from app.views.modulos.recetas_crud import RecetasCRUD
+from app.views.modulos.unidades_crud import UnidadesCRUD
 
 # from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
@@ -116,6 +117,7 @@ class MainWindow(QMainWindow):
             ("Gestión de Insumos", "icon_insumos.png", self.show_insumos),
             ("Gestión del Menú", "icon_gestion_menu.png", self.show_menu),
             ("Gestión de Recetas", "icon_reportes.png", self.show_recetas),
+            ("Unidades de Medida", "icon_unidades.png", self.show_unidades),
             ("Categorías", "icon04.png", self.show_categorias),
             ("Carga de Reportes", "icon_upload_reports.png", self.show_reportes),
             ("Usuarios", "icon_user.png", self.show_usuarios),
@@ -237,6 +239,12 @@ class MainWindow(QMainWindow):
         print("Navegando a Recetas...")
         # Reutilizamos el icono de reportes por ahora o usa uno genérico
         self.load_module("recetas", RecetasCRUD, "Gestión de Recetas", needs_db=True)
+
+    def show_unidades(self):
+        print("Navegando a Unidades...")
+        self.load_module(
+            "unidades", UnidadesCRUD, "Gestión de Unidades de Medida", needs_db=True
+        )
 
     def show_usuarios(self):
         print("Navegando a Usuarios...")
