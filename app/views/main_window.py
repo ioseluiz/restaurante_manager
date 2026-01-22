@@ -18,13 +18,15 @@ from PyQt5.QtCore import Qt, QSize
 # --- IMPORTACIÓN DE VISTAS ---
 # from app.views.modulos.ventas_pos import VentasPOSWidget
 from app.views.modulos.insumos_crud import InsumosCRUD
-from app.views.modulos.menu_crud import MenuCRUD  # <--- DESCOMENTADO
+from app.views.modulos.menu_crud import MenuCRUD
 from app.views.modulos.recetas_crud import RecetasCRUD
 from app.views.modulos.unidades_crud import UnidadesCRUD
 
 # from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
-# from app.views.modulos.usuarios import UsuariosWidget
+
+# --- NUEVA IMPORTACIÓN ---
+from app.views.modulos.usuarios import UsuariosWidget
 
 
 class MainWindow(QMainWindow):
@@ -40,7 +42,9 @@ class MainWindow(QMainWindow):
         self.auth = auth_controller
         self.logout_requested = False
 
-        self.setWindowTitle("Sistema de Gestión de Restaurante")
+        self.setWindowTitle(
+            f"Sistema de Gestión - Usuario: {self.auth.current_user[1]}"
+        )  # Muestra usuario en título
         self.setMinimumSize(1200, 800)
 
         # Configuración de rutas para assets
@@ -120,8 +124,17 @@ class MainWindow(QMainWindow):
             ("Unidades de Medida", "icon_unidades.png", self.show_unidades),
             ("Categorías", "icon04.png", self.show_categorias),
             ("Carga de Reportes", "icon_upload_reports.png", self.show_reportes),
-            ("Usuarios", "icon_user.png", self.show_usuarios),
         ]
+
+        # --- LÓGICA DE CONTROL DE ACCESO ---
+        # self.auth.current_user es una tupla: (id, username, rol)
+        current_role = (
+            self.auth.current_user[2] if self.auth.current_user else "empleado"
+        )
+
+        if current_role == "admin":
+            buttons.append(("Usuarios", "icon_user.png", self.show_usuarios))
+        # -----------------------------------
 
         for text, icon_name, callback in buttons:
             btn = self.create_nav_button(text, icon_name, callback)
@@ -220,7 +233,6 @@ class MainWindow(QMainWindow):
 
     def show_menu(self):
         print("Navegando a Menú...")
-        # Lógica habilitada
         self.load_module("menu", MenuCRUD, "Gestión del Menú", needs_db=True)
 
     def show_categorias(self):
@@ -237,7 +249,6 @@ class MainWindow(QMainWindow):
 
     def show_recetas(self):
         print("Navegando a Recetas...")
-        # Reutilizamos el icono de reportes por ahora o usa uno genérico
         self.load_module("recetas", RecetasCRUD, "Gestión de Recetas", needs_db=True)
 
     def show_unidades(self):
@@ -248,7 +259,10 @@ class MainWindow(QMainWindow):
 
     def show_usuarios(self):
         print("Navegando a Usuarios...")
-        # self.load_module("usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True)
+        # Habilitado:
+        self.load_module(
+            "usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True
+        )
 
     def go_home(self):
         self.stack.setCurrentIndex(0)
