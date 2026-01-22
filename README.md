@@ -1,24 +1,22 @@
-Restaurante Manager 🍽️
-Restaurante Manager es una aplicación de escritorio desarrollada en Python diseñada para optimizar la gestión operativa de un restaurante. Permite administrar inventarios, recetas, costos, menús y analizar reportes de ventas, todo integrado en una interfaz gráfica intuitiva.
+# Restaurante Manager 🍽️
 
-📋 Características Principales
+**Restaurante Manager** es una aplicación de escritorio desarrollada en Python diseñada para optimizar la gestión operativa de un restaurante. Permite administrar inventarios, recetas, costos, menús y analizar reportes de ventas, todo integrado en una interfaz gráfica intuitiva.
+
+## 📋 Características Principales
+
 El sistema cuenta con los siguientes módulos:
 
-🔐 Autenticación: Sistema de login seguro para usuarios (Administradores y Empleados).
+* **🔐 Autenticación:** Sistema de login seguro para usuarios (Administradores y Empleados).
+* **📦 Gestión de Insumos:** Control de stock, costos unitarios, unidades de medida y conversiones.
+* **🍲 Recetas y Menú:** Creación de platos y definición de recetas (escandallo) para calcular costos precisos.
+* **📊 Reportes de Ventas:** Importación y análisis de reportes de ventas (soporte para CSV/Excel).
+* **🛒 Compras:** Gestión de presentaciones de compra y proveedores.
 
-📦 Gestión de Insumos: Control de stock, costos unitarios, unidades de medida y conversiones.
+## 🗂️ Estructura del Proyecto
 
-🍲 Recetas y Menú: Creación de platos y definición de recetas (escandallo) para calcular costos precisos.
-
-📊 Reportes de Ventas: Importación y análisis de reportes de ventas (soporte para CSV/Excel).
-
-🛒 Compras: Gestión de presentaciones de compra y proveedores.
-
-🗂️ Estructura del Proyecto
 El proyecto sigue una arquitectura organizada separando la lógica de negocio (controladores), la interfaz (vistas) y los datos.
 
-Plaintext
-
+```text
 restaurante_manager/
 ├── app/
 │   ├── controllers/       # Lógica de negocio y autenticación
@@ -34,6 +32,7 @@ restaurante_manager/
 ├── main.py                # Punto de entrada de la aplicación
 ├── requirements.txt       # Dependencias del proyecto
 └── README.md              # Documentación del proyecto
+
 🗃️ Modelo de Base de Datos
 El sistema utiliza SQLite como motor de base de datos. A continuación se presenta el Diagrama Entidad-Relación (ER) que describe las tablas y sus relaciones:
 
@@ -68,8 +67,6 @@ Instala las librerías necesarias listadas en requirements.txt:
 Bash
 
 pip install -r requirements.txt
-Las librerías principales incluyen: PyQt5, pandas, openpyxl, matplotlib (si aplica).
-
 💻 Ejecución
 Para iniciar la aplicación, ejecuta el archivo principal desde la raíz del proyecto:
 
@@ -80,7 +77,7 @@ Al iniciar por primera vez:
 
 Se creará automáticamente la carpeta data/ y la base de datos restaurante.db.
 
-Se creará un usuario administrador por defecto (si así está configurado en connection.py):
+Se creará un usuario administrador por defecto (si así está configurado):
 
 Usuario: admin
 
