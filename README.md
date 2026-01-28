@@ -20,12 +20,6 @@ El sistema cuenta con los siguientes módulos:
 
 El proyecto sigue una arquitectura organizada separando la lógica de negocio (controladores), la interfaz (vistas) y los datos.
 
-
-
-## 🗂️ Estructura del Proyecto
-
-El proyecto sigue una arquitectura organizada separando la lógica de negocio (controladores), la interfaz (vistas) y los datos.
-
 ```text
 restaurante_manager/
 ├── app/
