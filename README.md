@@ -51,11 +51,14 @@ Asegúrate de tener instalado Python 3.8 o superior.
 2. Clonar el repositorio
 Descarga el código fuente o clona el repositorio:
 
+```
 Bash
 
 git clone <URL_DE_TU_REPOSITORIO>
 cd restaurante_manager
+```
 3. Crear un entorno virtual (Recomendado)
+```
 Bash
 
 ### En Windows
@@ -65,18 +68,21 @@ venv\Scripts\activate
 ### En macOS/Linux
 python3 -m venv venv
 source venv/bin/activate
+```
 4. Instalar dependencias
 Instala las librerías necesarias listadas en requirements.txt:
 
-Bash
+```Bash
 
 pip install -r requirements.txt
+```
 💻 Ejecución
 Para iniciar la aplicación, ejecuta el archivo principal desde la raíz del proyecto:
 
-Bash
+```Bash
 
 python main.py
+```
 Al iniciar por primera vez:
 
 Se creará automáticamente la carpeta data/ y la base de datos restaurante.db.

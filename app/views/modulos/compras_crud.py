@@ -19,6 +19,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 
+from app.controllers.kardex_controller import KardexController
+
 
 class ComprasCRUD(QWidget):
     def __init__(self, db_manager):
@@ -139,6 +141,9 @@ class TabGestionCompras(QWidget):
 
     def procesar_recepcion(self, compra_id):
         try:
+            # Inicializar controlador
+            kardex = KardexController(self.db)
+
             # 1. Obtener detalles
             detalles = self.db.fetch_all(
                 "SELECT presentacion_id, cantidad FROM detalle_compras WHERE compra_id=?",
@@ -146,19 +151,22 @@ class TabGestionCompras(QWidget):
             )
 
             for pres_id, cant_compra in detalles:
-                # 2. Obtener datos de la presentacion (cuanto contenido tiene) y el insumo asociado
+                # 2. Obtener datos de la presentacion
                 pres = self.db.fetch_one(
-                    "SELECT insumo_id, cantidad_contenido FROM presentaciones_compra WHERE id=?",
+                    "SELECT insumo_id, cantidad_contenido, nombre FROM presentaciones_compra WHERE id=?",
                     (pres_id,),
                 )
                 if pres:
-                    insumo_id, contenido_unitario = pres
+                    insumo_id, contenido_unitario, nombre_pres = pres
                     cantidad_total_a_sumar = cant_compra * contenido_unitario
 
-                    # 3. Actualizar Stock
-                    self.db.execute_query(
-                        "UPDATE insumos SET stock_actual = stock_actual + ? WHERE id=?",
-                        (cantidad_total_a_sumar, insumo_id),
+                    # 3. USAR KARDEX EN LUGAR DE UPDATE DIRECTO
+                    kardex.registrar_movimiento(
+                        insumo_id=insumo_id,
+                        cantidad=cantidad_total_a_sumar,
+                        tipo="COMPRA",
+                        referencia_id=compra_id,
+                        observacion=f"Entrada por Compra (Presentación: {nombre_pres})",
                     )
 
             # 4. Actualizar estado compra
@@ -166,7 +174,9 @@ class TabGestionCompras(QWidget):
                 "UPDATE compras SET estado='RECIBIDO' WHERE id=?", (compra_id,)
             )
             QMessageBox.information(
-                self, "Éxito", "Inventario actualizado correctamente."
+                self,
+                "Éxito",
+                "Inventario actualizado y registrado en Kardex correctamente.",
             )
             self.cargar_compras()
 
