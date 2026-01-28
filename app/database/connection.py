@@ -190,6 +190,28 @@ class DatabaseManager:
             );
         """)
 
+        # 12. Registro Diario (Cabecera)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS registro_ventas_diarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE UNIQUE NOT NULL,
+                inventario_descontado BOOLEAN DEFAULT 0, -- Para saber si ya se restaron los insumos
+                fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # 13. Detalle Ventas (Solo Cantidades)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_ventas_diarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                registro_diario_id INTEGER NOT NULL,
+                menu_item_id INTEGER NOT NULL,
+                cantidad REAL DEFAULT 0.0,
+                FOREIGN KEY (registro_diario_id) REFERENCES registro_ventas_diarias(id) ON DELETE CASCADE,
+                FOREIGN KEY (menu_item_id) REFERENCES menu_items(id)
+            );
+        """)
+
         self.conn.commit()
 
     def _migrate_tables(self):

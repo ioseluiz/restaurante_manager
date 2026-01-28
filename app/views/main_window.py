@@ -22,6 +22,7 @@ from app.views.modulos.carga_reportes import CargaReportesWidget
 from app.views.modulos.usuarios import UsuariosWidget
 from app.views.modulos.calculo_insumos import CalculoInsumosView
 from app.views.modulos.compras_crud import ComprasCRUD
+from app.views.modulos.ventas_diarias import VentasDiariasView
 
 # --- NUEVA IMPORTACIÓN (INVENTARIO) ---
 from app.views.modulos.inventario_view import InventarioView
@@ -78,6 +79,13 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(lbl_header)
 
         # --- BOTONES DE NAVEGACIÓN (Con Iconos Restaurados) ---
+
+        self.btn_ventas_dia = self.create_nav_button(
+            "Registro Ventas Diario",
+            "assets/icons/icon_pos_ventas.png",
+            self.show_ventas_diarias,
+        )
+        sidebar_layout.addWidget(self.btn_ventas_dia)
 
         # 1. Compras
         self.btn_compras = self.create_nav_button(
@@ -245,6 +253,14 @@ class MainWindow(QMainWindow):
             module_data["instance"].cargar_inventario()
 
     # --- MÉTODOS DE NAVEGACIÓN ---
+
+    def show_ventas_diarias(self):
+        self.load_module(
+            "ventas_diarias",
+            VentasDiariasView,
+            "Registro Diario de Ventas",
+            needs_db=True,
+        )
 
     def show_compras(self):
         self.load_module("compras", ComprasCRUD, "Gestión de Compras", needs_db=True)
