@@ -13,13 +13,15 @@ class DatabaseManager:
         self.initialize_tables()
         self.create_default_admin()
 
+        # MIGRACIÓN AUTOMÁTICA: Agrega columnas nuevas si no existen
+        self._migrate_tables()
+
     def initialize_tables(self):
         """
         Inicializa las tablas de la base de datos.
-        Integra el nuevo módulo de cálculo de insumos y mantiene el historial de ventas/usuarios.
         """
 
-        # --- 1. Unidades de Medida (NUEVO) ---
+        # --- 1. Unidades de Medida ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS unidades_medida (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +30,7 @@ class DatabaseManager:
             );
         """)
 
-        # --- 2. Conversiones (Kilos <-> Libras <-> Unidades) (NUEVO) ---
+        # --- 2. Conversiones (Kilos <-> Libras <-> Unidades) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversiones_unidades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,20 +42,22 @@ class DatabaseManager:
             );
         """)
 
-        # --- 3. Insumos (CORREGIDO - Se agregaron stock_actual y costo_unitario) ---
+        # --- 3. Insumos (ACTUALIZADO: nuevos campos grupo_calculo y factor_calculo) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
                 unidad_base_id INTEGER NOT NULL,
                 categoria_id INTEGER, 
-                stock_actual REAL DEFAULT 0.0,    -- <--- AGREGADO
-                costo_unitario REAL DEFAULT 0.0,  -- <--- AGREGADO (Para futuros cálculos de recetas)
+                stock_actual REAL DEFAULT 0.0,
+                costo_unitario REAL DEFAULT 0.0,
+                grupo_calculo TEXT,               -- NUEVO: Combos, Desayuno, Criolla, etc.
+                factor_calculo REAL DEFAULT 1.0,  -- NUEVO: Margen de seguridad (ej. 1.1)
                 FOREIGN KEY (unidad_base_id) REFERENCES unidades_medida(id)
             );
         """)
 
-        # --- 4. Presentaciones de Compra (NUEVO) ---
+        # --- 4. Presentaciones de Compra ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS presentaciones_compra (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +70,7 @@ class DatabaseManager:
             );
         """)
 
-        # --- 5. Composición Empaque (NUEVO) ---
+        # --- 5. Composición Empaque ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS composicion_empaque (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +82,45 @@ class DatabaseManager:
             );
         """)
 
-        # --- MÓDULOS EXISTENTES (COMPATIBILIDAD) ---
+        # 6. Proveedores
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS proveedores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                contacto TEXT,
+                telefono TEXT,
+                tipo TEXT DEFAULT 'PROVEEDOR' -- 'PROVEEDOR' o 'SUPERMERCADO'
+            );
+        """)
+
+        # 7. Compras (Cabecera)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS compras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proveedor_id INTEGER NOT NULL,
+                fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+                fecha_compra TEXT, -- Fecha manual de la factura
+                total REAL DEFAULT 0.0,
+                estado TEXT DEFAULT 'PENDIENTE', -- 'PENDIENTE', 'RECIBIDO', 'CANCELADO'
+                FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+            );
+        """)
+
+        # 8. Detalle de Compra
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_compras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                compra_id INTEGER NOT NULL,
+                presentacion_id INTEGER NOT NULL,
+                cantidad REAL NOT NULL, -- Cantidad de cajas/bultos
+                precio_unitario REAL NOT NULL,
+                subtotal REAL NOT NULL,
+                FOREIGN KEY (compra_id) REFERENCES compras(id) ON DELETE CASCADE,
+                FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id)
+            );
+        """)
+
+        # --- MÓDULOS EXISTENTES ---
 
         # Categorías de Insumos
         self.cursor.execute("""
@@ -146,6 +188,25 @@ class DatabaseManager:
                 rol TEXT DEFAULT 'empleado'
             )
         """)
+
+        self.conn.commit()
+
+    def _migrate_tables(self):
+        """
+        Intenta agregar las columnas nuevas a la tabla 'insumos' si ya existe
+        y no tiene estos campos. Evita errores si ya existen.
+        """
+        try:
+            self.cursor.execute("ALTER TABLE insumos ADD COLUMN grupo_calculo TEXT")
+        except sqlite3.OperationalError:
+            pass  # La columna ya existe, ignoramos el error
+
+        try:
+            self.cursor.execute(
+                "ALTER TABLE insumos ADD COLUMN factor_calculo REAL DEFAULT 1.0"
+            )
+        except sqlite3.OperationalError:
+            pass
 
         self.conn.commit()
 

@@ -23,11 +23,6 @@ from PyQt5.QtCore import Qt
 
 # --- CLASE PERSONALIZADA PARA ORDENAR NÚMEROS ---
 class NumericItem(QTableWidgetItem):
-    """
-    Permite que la tabla ordene la columna por valor numérico
-    y no por orden alfabético (ej. para que 10 no vaya antes que 2).
-    """
-
     def __lt__(self, other):
         try:
             return float(self.text()) < float(other.text())
@@ -54,7 +49,6 @@ class InsumosCRUD(QWidget):
         self.tabs = QTabWidget()
 
         # Inicializar las pestañas
-        # NOTA: Se eliminó TabUnidades, ahora se gestiona en su propio módulo.
         self.tab_insumos = TabInsumos(self.db)
         self.tab_presentaciones = TabPresentaciones(self.db)
 
@@ -69,14 +63,9 @@ class InsumosCRUD(QWidget):
         self.setLayout(main_layout)
 
     def cargar_datos(self):
-        """
-        Método 'puente' para compatibilidad con MainWindow.
-        Recarga los datos de la pestaña que esté activa en ese momento.
-        """
         self.on_tab_change(self.tabs.currentIndex())
 
     def on_tab_change(self, index):
-        # Recargar datos de la pestaña activa
         if index == 0:
             self.tab_insumos.cargar_datos()
         elif index == 1:
@@ -117,13 +106,12 @@ class TabInsumos(QWidget):
 
         # --- FILTROS DE BÚSQUEDA ---
         filter_layout = QHBoxLayout()
-        # Configuración: (Índice Columna, Placeholder)
         config_filtros = [
             (0, "Filtrar ID"),
             (1, "Filtrar Nombre"),
             (2, "Filtrar Unidad"),
             (3, "Filtrar Categoría"),
-            (4, "Filtrar Stock"),
+            (4, "Filtrar Grupo"),  # Agregamos filtro por grupo
         ]
 
         for col_idx, placeholder in config_filtros:
@@ -138,29 +126,26 @@ class TabInsumos(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)  # Aumentamos columnas
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Nombre", "Unidad Base", "Categoría", "Stock"]
+            ["ID", "Nombre", "Unidad Base", "Categoría", "Grupo Calc.", "Factor"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-
-        # Habilitar Ordenamiento
         self.table.setSortingEnabled(True)
 
         layout.addWidget(self.table)
-
         self.setLayout(layout)
         self.cargar_datos()
 
     def cargar_datos(self):
-        # Desactivar sorting durante la carga para evitar errores de redibujado
         self.table.setSortingEnabled(False)
 
+        # Modificamos query para traer grupo y factor
         query = """
-            SELECT i.id, i.nombre, u.nombre, c.nombre, i.stock_actual
+            SELECT i.id, i.nombre, u.nombre, c.nombre, i.grupo_calculo, i.factor_calculo
             FROM insumos i
             LEFT JOIN unidades_medida u ON i.unidad_base_id = u.id
             LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
@@ -171,26 +156,26 @@ class TabInsumos(QWidget):
         for r_idx, row in enumerate(rows):
             self.table.insertRow(r_idx)
 
-            # Col 0: ID (Numérico)
             self.table.setItem(r_idx, 0, NumericItem(str(row[0])))
+            self.table.setItem(
+                r_idx, 1, QTableWidgetItem(str(row[1]) if row[1] else "-")
+            )
+            self.table.setItem(
+                r_idx, 2, QTableWidgetItem(str(row[2]) if row[2] else "-")
+            )
+            self.table.setItem(
+                r_idx, 3, QTableWidgetItem(str(row[3]) if row[3] else "-")
+            )
 
-            # Col 1: Nombre
-            val_nombre = str(row[1]) if row[1] is not None else "-"
-            self.table.setItem(r_idx, 1, QTableWidgetItem(val_nombre))
+            # Grupo
+            self.table.setItem(
+                r_idx, 4, QTableWidgetItem(str(row[4]) if row[4] else "General")
+            )
 
-            # Col 2: Unidad
-            val_unidad = str(row[2]) if row[2] is not None else "-"
-            self.table.setItem(r_idx, 2, QTableWidgetItem(val_unidad))
+            # Factor
+            val_factor = row[5] if row[5] else 1.0
+            self.table.setItem(r_idx, 5, NumericItem(str(val_factor)))
 
-            # Col 3: Categoría
-            val_cat = str(row[3]) if row[3] is not None else "-"
-            self.table.setItem(r_idx, 3, QTableWidgetItem(val_cat))
-
-            # Col 4: Stock (Numérico)
-            val_stock = row[4] if row[4] is not None else 0.0
-            self.table.setItem(r_idx, 4, NumericItem(str(val_stock)))
-
-        # Reactivar sorting y aplicar filtros si hay texto escrito
         self.table.setSortingEnabled(True)
         self.aplicar_filtros()
 
@@ -202,7 +187,6 @@ class TabInsumos(QWidget):
                 texto_filtro = inp.text().lower().strip()
                 if not texto_filtro:
                     continue
-
                 item = self.table.item(row, col)
                 if item:
                     if texto_filtro not in item.text().lower():
@@ -248,7 +232,7 @@ class TabInsumos(QWidget):
                 )
 
 
-# Dialogo Formulario Insumo
+# --- DIÁLOGO DE EDICIÓN ACTUALIZADO ---
 class InsumoDialog(QDialog):
     def __init__(self, db, insumo_id=None, parent=None):
         super().__init__(parent)
@@ -263,7 +247,24 @@ class InsumoDialog(QDialog):
         self.cmb_unidad = QComboBox()
         self.cmb_categoria = QComboBox()
 
-        # Cargar Combos
+        # --- NUEVOS CAMPOS ---
+        self.cmb_grupo_calc = QComboBox()
+        # Opciones estáticas según requerimiento + opción por defecto
+        self.cmb_grupo_calc.addItems(["General", "COMBOS", "DESAYUNO", "CRIOLLA"])
+        self.cmb_grupo_calc.setEditable(
+            True
+        )  # Permitir escribir nuevos grupos si es necesario
+
+        self.spin_factor = QDoubleSpinBox()
+        self.spin_factor.setRange(0.1, 10.0)
+        self.spin_factor.setSingleStep(0.1)
+        self.spin_factor.setValue(1.0)
+        self.spin_factor.setToolTip(
+            "Factor multiplicador para el cálculo (Ej: 1.0 = exacto, 1.1 = +10% seguridad)"
+        )
+        # ---------------------
+
+        # Cargar Combos BD
         unidades = self.db.fetch_all(
             "SELECT id, nombre, abreviatura FROM unidades_medida"
         )
@@ -279,6 +280,10 @@ class InsumoDialog(QDialog):
         layout.addRow("Unidad de Inventario:", self.cmb_unidad)
         layout.addRow("Categoría:", self.cmb_categoria)
 
+        # Agregar a Layout
+        layout.addRow("Grupo de Cálculo:", self.cmb_grupo_calc)
+        layout.addRow("Factor Cálculo:", self.spin_factor)
+
         btn_save = QPushButton("Guardar")
         btn_save.setProperty("class", "btn-success")
         btn_save.clicked.connect(self.guardar)
@@ -289,24 +294,40 @@ class InsumoDialog(QDialog):
             self.cargar_datos_edicion()
 
     def cargar_datos_edicion(self):
-        rows = self.db.fetch_all(
-            "SELECT nombre, unidad_base_id, categoria_id FROM insumos WHERE id=?",
-            (self.insumo_id,),
-        )
+        query = "SELECT nombre, unidad_base_id, categoria_id, grupo_calculo, factor_calculo FROM insumos WHERE id=?"
+        rows = self.db.fetch_all(query, (self.insumo_id,))
         if rows:
             row = rows[0]
             self.txt_nombre.setText(row[0])
+
             idx_u = self.cmb_unidad.findData(row[1])
             if idx_u >= 0:
                 self.cmb_unidad.setCurrentIndex(idx_u)
+
             idx_c = self.cmb_categoria.findData(row[2])
             if idx_c >= 0:
                 self.cmb_categoria.setCurrentIndex(idx_c)
+
+            # Set Nuevos Campos
+            grupo = row[3]
+            idx_g = self.cmb_grupo_calc.findText(grupo) if grupo else 0
+            if idx_g >= 0:
+                self.cmb_grupo_calc.setCurrentIndex(idx_g)
+            else:
+                self.cmb_grupo_calc.setCurrentText(grupo)  # Si es un grupo custom
+
+            factor = row[4]
+            if factor:
+                self.spin_factor.setValue(factor)
 
     def guardar(self):
         nom = self.txt_nombre.text().strip()
         uid = self.cmb_unidad.currentData()
         cid = self.cmb_categoria.currentData()
+
+        # Obtener valores nuevos
+        grupo = self.cmb_grupo_calc.currentText()
+        factor = self.spin_factor.value()
 
         if not nom or not uid:
             return QMessageBox.warning(
@@ -315,22 +336,27 @@ class InsumoDialog(QDialog):
 
         try:
             if self.insumo_id:
+                query = """
+                    UPDATE insumos 
+                    SET nombre=?, unidad_base_id=?, categoria_id=?, grupo_calculo=?, factor_calculo=? 
+                    WHERE id=?
+                """
                 self.db.execute_query(
-                    "UPDATE insumos SET nombre=?, unidad_base_id=?, categoria_id=? WHERE id=?",
-                    (nom, uid, cid, self.insumo_id),
+                    query, (nom, uid, cid, grupo, factor, self.insumo_id)
                 )
             else:
-                self.db.execute_query(
-                    "INSERT INTO insumos (nombre, unidad_base_id, categoria_id) VALUES (?,?,?)",
-                    (nom, uid, cid),
-                )
+                query = """
+                    INSERT INTO insumos (nombre, unidad_base_id, categoria_id, grupo_calculo, factor_calculo) 
+                    VALUES (?,?,?,?,?)
+                """
+                self.db.execute_query(query, (nom, uid, cid, grupo, factor))
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
 
 # =============================================================================
-# PESTAÑA 2: PRESENTACIONES (Cajas, Bultos, etc.)
+# PESTAÑA 2: PRESENTACIONES (Se mantiene igual que el original)
 # =============================================================================
 class TabPresentaciones(QWidget):
     def __init__(self, db):
@@ -340,7 +366,6 @@ class TabPresentaciones(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-
         btn_layout = QHBoxLayout()
         btn_add = QPushButton("Definir Presentación")
         btn_add.clicked.connect(self.add)
@@ -366,9 +391,6 @@ class TabPresentaciones(QWidget):
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.Stretch)  # Por defecto, estirar todas
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -421,54 +443,39 @@ class PresentacionDialog(QDialog):
         self.db = db
         self.setWindowTitle("Nueva Presentación de Compra")
         self.resize(500, 450)
-
         layout = QVBoxLayout()
-
-        # Formulario Básico
         form = QFormLayout()
         self.cmb_insumo = QComboBox()
         self.cargar_insumos()
         self.cmb_insumo.currentIndexChanged.connect(self.update_labels)
-
         self.txt_nombre = QLineEdit()
         self.txt_nombre.setPlaceholderText("Ej: Caja x12, Bulto 50lb")
-
         self.spin_precio = QDoubleSpinBox()
         self.spin_precio.setMaximum(99999.99)
         self.spin_precio.setPrefix("$ ")
-
         form.addRow("Insumo Base:", self.cmb_insumo)
         form.addRow("Nombre Empaque:", self.txt_nombre)
         form.addRow("Precio Compra:", self.spin_precio)
         layout.addLayout(form)
-
-        # Detalle Composición
         self.chk_detalle = QCheckBox("Es un empaque compuesto (Ej: Caja con botellas)")
         self.chk_detalle.toggled.connect(self.toggle_detalle)
         layout.addWidget(self.chk_detalle)
-
         self.grp_det = QGroupBox("Contenido Interno")
         f_det = QFormLayout()
         self.txt_sub_nom = QLineEdit()
-        self.txt_sub_nom.setPlaceholderText("Ej: Botella")
         self.spin_cant = QSpinBox()
         self.spin_cant.setRange(1, 1000)
         self.spin_cant.valueChanged.connect(self.calc_total)
-
         self.spin_peso_uni = QDoubleSpinBox()
         self.spin_peso_uni.setRange(0.001, 9999)
         self.spin_peso_uni.setDecimals(3)
         self.spin_peso_uni.valueChanged.connect(self.calc_total)
-
         self.lbl_u1 = QLabel("Peso/Vol Unitario:")
-
         f_det.addRow("Nombre Unidad Interna:", self.txt_sub_nom)
         f_det.addRow("Cantidad:", self.spin_cant)
         f_det.addRow(self.lbl_u1, self.spin_peso_uni)
         self.grp_det.setLayout(f_det)
         layout.addWidget(self.grp_det)
-
-        # Totales
         self.grp_tot = QGroupBox("Total para Inventario")
         f_tot = QFormLayout()
         self.spin_total = QDoubleSpinBox()
@@ -478,17 +485,14 @@ class PresentacionDialog(QDialog):
         f_tot.addRow(self.lbl_u2, self.spin_total)
         self.grp_tot.setLayout(f_tot)
         layout.addWidget(self.grp_tot)
-
         btn = QPushButton("Guardar Definición")
         btn.clicked.connect(self.guardar)
         layout.addWidget(btn)
-
         self.setLayout(layout)
         self.toggle_detalle(False)
-        self.update_labels()  # Update labels on init
+        self.update_labels()
 
     def cargar_insumos(self):
-        # Cargar insumo y su unidad de medida
         query = "SELECT i.id, i.nombre, u.abreviatura FROM insumos i JOIN unidades_medida u ON i.unidad_base_id = u.id ORDER BY i.nombre"
         rows = self.db.fetch_all(query)
         for r in rows:
@@ -516,28 +520,21 @@ class PresentacionDialog(QDialog):
         data_ins = self.cmb_insumo.currentData()
         if not data_ins:
             return
-
         ins_id = data_ins["id"]
         nom = self.txt_nombre.text()
         precio = self.spin_precio.value()
         total = self.spin_total.value()
-
         if total <= 0:
             return QMessageBox.warning(
                 self, "Error", "El contenido total debe ser mayor a 0"
             )
-
         costo_u = precio / total
-
         try:
-            # Insertar Presentación
             cur = self.db.execute_query(
                 "INSERT INTO presentaciones_compra (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado) VALUES (?,?,?,?,?)",
                 (ins_id, nom, total, precio, costo_u),
             )
             pid = cur.lastrowid
-
-            # Insertar Detalle si aplica
             if self.chk_detalle.isChecked():
                 self.db.execute_query(
                     "INSERT INTO composicion_empaque (presentacion_id, nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario) VALUES (?,?,?,?)",
@@ -548,7 +545,6 @@ class PresentacionDialog(QDialog):
                         self.spin_peso_uni.value(),
                     ),
                 )
-
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

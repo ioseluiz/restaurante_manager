@@ -16,17 +16,16 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
 
 # --- IMPORTACIÓN DE VISTAS ---
-# from app.views.modulos.ventas_pos import VentasPOSWidget
 from app.views.modulos.insumos_crud import InsumosCRUD
 from app.views.modulos.menu_crud import MenuCRUD
 from app.views.modulos.recetas_crud import RecetasCRUD
 from app.views.modulos.unidades_crud import UnidadesCRUD
-
-# from app.views.modulos.categorias_crud import CategoriasCRUD
 from app.views.modulos.carga_reportes import CargaReportesWidget
-
-# --- NUEVA IMPORTACIÓN ---
 from app.views.modulos.usuarios import UsuariosWidget
+
+# --- NUEVA IMPORTACIÓN (CÁLCULO DE INSUMOS) ---
+from app.views.modulos.calculo_insumos import CalculoInsumosView
+from app.views.modulos.compras_crud import ComprasCRUD
 
 
 class MainWindow(QMainWindow):
@@ -44,7 +43,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(
             f"Sistema de Gestión - Usuario: {self.auth.current_user[1]}"
-        )  # Muestra usuario en título
+        )
         self.setMinimumSize(1200, 800)
 
         # Configuración de rutas para assets
@@ -119,22 +118,28 @@ class MainWindow(QMainWindow):
         buttons = [
             ("Punto de Venta", "icon_pos_ventas.png", self.show_pos),
             ("Gestión de Insumos", "icon_insumos.png", self.show_insumos),
+            ("Gestión de Compras", "icon_insumos.png", self.show_compras),
             ("Gestión del Menú", "icon_gestion_menu.png", self.show_menu),
             ("Gestión de Recetas", "icon_reportes.png", self.show_recetas),
+            # --- NUEVO BOTÓN AGREGADO AQUÍ ---
+            (
+                "Cálculo de Compras",
+                "icon_generate_report.png",
+                self.show_calculo_insumos,
+            ),
+            # ---------------------------------
             ("Unidades de Medida", "icon_unidades.png", self.show_unidades),
             ("Categorías", "icon04.png", self.show_categorias),
             ("Carga de Reportes", "icon_upload_reports.png", self.show_reportes),
         ]
 
         # --- LÓGICA DE CONTROL DE ACCESO ---
-        # self.auth.current_user es una tupla: (id, username, rol)
         current_role = (
             self.auth.current_user[2] if self.auth.current_user else "empleado"
         )
 
         if current_role == "admin":
             buttons.append(("Usuarios", "icon_user.png", self.show_usuarios))
-        # -----------------------------------
 
         for text, icon_name, callback in buttons:
             btn = self.create_nav_button(text, icon_name, callback)
@@ -235,6 +240,17 @@ class MainWindow(QMainWindow):
         print("Navegando a Menú...")
         self.load_module("menu", MenuCRUD, "Gestión del Menú", needs_db=True)
 
+    def show_recetas(self):
+        print("Navegando a Recetas...")
+        self.load_module("recetas", RecetasCRUD, "Gestión de Recetas", needs_db=True)
+
+    # --- NUEVO MÉTODO DE NAVEGACIÓN ---
+    def show_calculo_insumos(self):
+        print("Navegando a Calculo Insumos...")
+        self.load_module(
+            "calculo_insumos", CalculoInsumosView, "Reporte de Compras", needs_db=True
+        )
+
     def show_categorias(self):
         print("Navegando a Categorías...")
         # self.load_module("categorias", CategoriasCRUD, "Categorías de Insumos", needs_db=True)
@@ -247,10 +263,6 @@ class MainWindow(QMainWindow):
             needs_db=True,
         )
 
-    def show_recetas(self):
-        print("Navegando a Recetas...")
-        self.load_module("recetas", RecetasCRUD, "Gestión de Recetas", needs_db=True)
-
     def show_unidades(self):
         print("Navegando a Unidades...")
         self.load_module(
@@ -259,9 +271,14 @@ class MainWindow(QMainWindow):
 
     def show_usuarios(self):
         print("Navegando a Usuarios...")
-        # Habilitado:
         self.load_module(
             "usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True
+        )
+
+    def show_compras(self):
+        print("Navegando a Compras...")
+        self.load_module(
+            "compras", ComprasCRUD, "Gestión de Compras e Inventario", needs_db=True
         )
 
     def go_home(self):

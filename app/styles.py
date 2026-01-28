@@ -90,7 +90,7 @@ GLOBAL_STYLES = f"""
     
     /* Botón de "Volver al Inicio" */
     QPushButton[class="btn-navbar"] {{
-        background-color: {COLORS["text"]}; /* Gris oscuro elegante */
+        background-color: {COLORS["text"]}; 
         color: white;
         border: none;
         border-radius: 5px;
@@ -119,24 +119,35 @@ GLOBAL_STYLES = f"""
         border-radius: 4px;
     }}
     
-    /* MODIFICACIÓN: Encabezado claro para ver las flechas de ordenamiento */
     QHeaderView::section {{
-        background-color: {COLORS["background"]}; /* Fondo gris claro */
-        color: {COLORS["text"]};                  /* Texto oscuro */
+        background-color: {COLORS["background"]}; 
+        color: {COLORS["text"]};                  
         padding: 8px;
-        border: 1px solid {COLORS["border"]};     /* Borde suave */
+        border: 1px solid {COLORS["border"]};     
         font-weight: bold;
     }}
 
     /* --- INPUTS --- */
-    QLineEdit, QComboBox, QDoubleSpinBox {{
+    QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit {{
         padding: 6px;
         border: 1px solid {COLORS["border"]};
         border-radius: 4px;
         background-color: white;
+        color: {COLORS["text"]}; 
     }}
-    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {{
+    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{
         border: 2px solid {COLORS["primary"]};
+    }}
+
+    /* --- CORRECCIÓN LISTAS DESPLEGABLES (COMBOBOX) --- */
+    /* Fuerza el fondo blanco en la lista que se despliega */
+    QComboBox QAbstractItemView {{
+        background-color: white;
+        color: {COLORS["text"]};
+        selection-background-color: {COLORS["primary"]};
+        selection-color: white;
+        border: 1px solid {COLORS["border"]};
+        outline: none;
     }}
 
     /* --- LABELS HEADER --- */
@@ -145,5 +156,52 @@ GLOBAL_STYLES = f"""
         font-weight: bold;
         color: {COLORS["text"]};
         margin-bottom: 10px;
+    }}
+
+    /* --- CORRECCIÓN CALENDARIO (QDateEdit Popup) --- */
+    QCalendarWidget QWidget {{
+        background-color: white;
+        color: {COLORS["text"]};
+    }}
+    
+    QCalendarWidget QWidget#qt_calendar_navigationbar {{
+        background-color: {COLORS["background"]};
+        border-bottom: 1px solid {COLORS["border"]};
+    }}
+
+    QCalendarWidget QToolButton {{
+        color: {COLORS["text"]};
+        background-color: transparent;
+        icon-size: 20px;
+        border: none;
+        font-weight: bold;
+        margin: 2px;
+    }}
+    QCalendarWidget QToolButton:hover {{
+        background-color: #bdc3c7;
+        border-radius: 4px;
+    }}
+    
+    QCalendarWidget QMenu {{
+        background-color: white;
+        color: {COLORS["text"]};
+    }}
+
+    QCalendarWidget QSpinBox {{
+        background-color: white;
+        color: {COLORS["text"]};
+        selection-background-color: {COLORS["primary"]};
+        selection-color: white;
+    }}
+    
+    QCalendarWidget QAbstractItemView:enabled {{
+        background-color: white;
+        color: {COLORS["text"]};
+        selection-background-color: {COLORS["primary"]};
+        selection-color: white;
+        outline: none;
+    }}
+    QCalendarWidget QAbstractItemView:disabled {{
+        color: #bdc3c7;
     }}
 """
