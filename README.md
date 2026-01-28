@@ -1,6 +1,6 @@
-# Restaurante Manager 🍽️
+# Restaurante Italos Manager 🍽️
 
-# Restaurante Manager 🍽️
+
 
 **Restaurante Manager** es una aplicación de escritorio desarrollada en Python diseñada para optimizar la gestión operativa de un restaurante. Permite administrar inventarios, recetas, costos, menús y analizar reportes de ventas, todo integrado en una interfaz gráfica intuitiva.
 
