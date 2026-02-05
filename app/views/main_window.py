@@ -44,11 +44,26 @@ class MainWindow(QMainWindow):
         # Diccionario para almacenar instancias de módulos cargados (Lazy Loading)
         self.modules = {}
 
-        self.setWindowTitle(f"Sistema de Gestión - Usuario: {self.auth.current_user}")
+        self.setWindowTitle("Sistema de Gestión de Restaurante")
         self.resize(1200, 800)
         self.setWindowIcon(QIcon("assets/icons/icon01.png"))  # Icono de la ventana
 
         self.init_ui()
+
+        self.setup_statusbar()
+
+    def setup_statusbar(self):
+        """Configura la barra de estado para mostrar el usuario actual."""
+        # Extraemos el nombre de usuario.
+        # Si self.auth.current_user es una tupla o objeto, intentamos obtener solo el string del nombre.
+        user_display = self.auth.current_user
+        if isinstance(user_display, (list, tuple)) and len(user_display) > 1:
+            user_display = user_display[1]  # Asumiendo formato (id, username, ...)
+
+        self.statusBar().showMessage(f"Usuario: {user_display}")
+        self.statusBar().setStyleSheet(
+            "color: #2c3e50; font-weight: bold; border-top: 1px solid #bdc3c7;"
+        )
 
     def init_ui(self):
         """Configura la interfaz gráfica principal."""

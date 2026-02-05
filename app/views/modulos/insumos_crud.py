@@ -1,3 +1,4 @@
+# [FILE: app/views/modulos/insumos_crud.py]
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -51,10 +52,12 @@ class InsumosCRUD(QWidget):
         # Inicializar las pestañas
         self.tab_insumos = TabInsumos(self.db)
         self.tab_presentaciones = TabPresentaciones(self.db)
+        self.tab_categorias = TabCategorias(self.db)
 
         # Añadir pestañas
         self.tabs.addTab(self.tab_insumos, "1. Catálogo de Insumos")
         self.tabs.addTab(self.tab_presentaciones, "2. Presentaciones de Compra")
+        self.tabs.addTab(self.tab_categorias, "3. Categorías")
 
         # Conectar cambio de pestaña
         self.tabs.currentChanged.connect(self.on_tab_change)
@@ -70,6 +73,8 @@ class InsumosCRUD(QWidget):
             self.tab_insumos.cargar_datos()
         elif index == 1:
             self.tab_presentaciones.cargar_datos()
+        elif index == 2:
+            self.tab_categorias.cargar_datos()
 
 
 # =============================================================================
@@ -111,7 +116,7 @@ class TabInsumos(QWidget):
             (1, "Filtrar Nombre"),
             (2, "Filtrar Unidad"),
             (3, "Filtrar Categoría"),
-            (4, "Filtrar Grupo"),  # Agregamos filtro por grupo
+            (4, "Filtrar Grupo"),
         ]
 
         for col_idx, placeholder in config_filtros:
@@ -126,11 +131,23 @@ class TabInsumos(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(6)  # Aumentamos columnas
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
             ["ID", "Nombre", "Unidad Base", "Categoría", "Grupo Calc.", "Factor"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # --- CORRECCIÓN DE ANCHO DE COLUMNAS ---
+        header = self.table.horizontalHeader()
+
+        # 1. Hacemos que la columna "Nombre" (índice 1) ocupe el espacio sobrante
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+
+        # 2. Hacemos que el resto de columnas se ajusten a su contenido para que se lea todo
+        # Índices: 0 (ID), 2 (Unidad), 3 (Categoría), 4 (Grupo), 5 (Factor)
+        for col_idx in [0, 2, 3, 4, 5]:
+            header.setSectionResizeMode(col_idx, QHeaderView.ResizeToContents)
+        # ----------------------------------------
+
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -143,7 +160,6 @@ class TabInsumos(QWidget):
     def cargar_datos(self):
         self.table.setSortingEnabled(False)
 
-        # Modificamos query para traer grupo y factor
         query = """
             SELECT i.id, i.nombre, u.nombre, c.nombre, i.grupo_calculo, i.factor_calculo
             FROM insumos i
@@ -232,7 +248,7 @@ class TabInsumos(QWidget):
                 )
 
 
-# --- DIÁLOGO DE EDICIÓN ACTUALIZADO ---
+# --- DIÁLOGO DE EDICIÓN ---
 class InsumoDialog(QDialog):
     def __init__(self, db, insumo_id=None, parent=None):
         super().__init__(parent)
@@ -247,13 +263,9 @@ class InsumoDialog(QDialog):
         self.cmb_unidad = QComboBox()
         self.cmb_categoria = QComboBox()
 
-        # --- NUEVOS CAMPOS ---
         self.cmb_grupo_calc = QComboBox()
-        # Opciones estáticas según requerimiento + opción por defecto
         self.cmb_grupo_calc.addItems(["General", "COMBOS", "DESAYUNO", "CRIOLLA"])
-        self.cmb_grupo_calc.setEditable(
-            True
-        )  # Permitir escribir nuevos grupos si es necesario
+        self.cmb_grupo_calc.setEditable(True)
 
         self.spin_factor = QDoubleSpinBox()
         self.spin_factor.setRange(0.1, 10.0)
@@ -262,7 +274,6 @@ class InsumoDialog(QDialog):
         self.spin_factor.setToolTip(
             "Factor multiplicador para el cálculo (Ej: 1.0 = exacto, 1.1 = +10% seguridad)"
         )
-        # ---------------------
 
         # Cargar Combos BD
         unidades = self.db.fetch_all(
@@ -279,8 +290,6 @@ class InsumoDialog(QDialog):
         layout.addRow("Nombre Insumo:", self.txt_nombre)
         layout.addRow("Unidad de Inventario:", self.cmb_unidad)
         layout.addRow("Categoría:", self.cmb_categoria)
-
-        # Agregar a Layout
         layout.addRow("Grupo de Cálculo:", self.cmb_grupo_calc)
         layout.addRow("Factor Cálculo:", self.spin_factor)
 
@@ -308,13 +317,12 @@ class InsumoDialog(QDialog):
             if idx_c >= 0:
                 self.cmb_categoria.setCurrentIndex(idx_c)
 
-            # Set Nuevos Campos
             grupo = row[3]
             idx_g = self.cmb_grupo_calc.findText(grupo) if grupo else 0
             if idx_g >= 0:
                 self.cmb_grupo_calc.setCurrentIndex(idx_g)
             else:
-                self.cmb_grupo_calc.setCurrentText(grupo)  # Si es un grupo custom
+                self.cmb_grupo_calc.setCurrentText(grupo)
 
             factor = row[4]
             if factor:
@@ -324,8 +332,6 @@ class InsumoDialog(QDialog):
         nom = self.txt_nombre.text().strip()
         uid = self.cmb_unidad.currentData()
         cid = self.cmb_categoria.currentData()
-
-        # Obtener valores nuevos
         grupo = self.cmb_grupo_calc.currentText()
         factor = self.spin_factor.value()
 
@@ -356,7 +362,7 @@ class InsumoDialog(QDialog):
 
 
 # =============================================================================
-# PESTAÑA 2: PRESENTACIONES (Se mantiene igual que el original)
+# PESTAÑA 2: PRESENTACIONES
 # =============================================================================
 class TabPresentaciones(QWidget):
     def __init__(self, db):
@@ -390,7 +396,10 @@ class TabPresentaciones(QWidget):
                 "Costo Calc.",
             ]
         )
+        # Aquí usamos Stretch por defecto, si también se ve mal aquí,
+        # se puede aplicar la misma lógica que en TabInsumos.
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -548,3 +557,117 @@ class PresentacionDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+
+# =============================================================================
+# PESTAÑA 3: CATEGORÍAS
+# =============================================================================
+class TabCategorias(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        action_layout = QHBoxLayout()
+
+        btn_add = QPushButton("Nueva Categoría")
+        btn_add.setProperty("class", "btn-success")
+        btn_add.clicked.connect(self.abrir_form_crear)
+
+        btn_del = QPushButton("Eliminar")
+        btn_del.setProperty("class", "btn-danger")
+        btn_del.clicked.connect(self.eliminar_registro)
+
+        action_layout.addWidget(btn_add)
+        action_layout.addWidget(btn_del)
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
+
+        # Tabla
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Código", "Nombre Categoría"])
+
+        # Aplicamos la misma lógica de re-dimensionado aquí también
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(2, QHeaderView.Stretch)  # Nombre estira
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID ajusta
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Código ajusta
+
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        layout.addWidget(self.table)
+
+        self.setLayout(layout)
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        rows = self.db.fetch_all("SELECT id, codigo, nombre FROM categorias_insumos")
+        self.table.setRowCount(0)
+        for row_idx, row_data in enumerate(rows):
+            self.table.insertRow(row_idx)
+            for col_idx, data in enumerate(row_data):
+                self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
+
+    def abrir_form_crear(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Nueva Categoría")
+        form = QFormLayout(dialog)
+        dialog.setMinimumWidth(300)
+
+        inp_code = QLineEdit()
+        inp_name = QLineEdit()
+
+        form.addRow("Código (ej. 5008):", inp_code)
+        form.addRow("Nombre (ej. CARNES):", inp_name)
+
+        btn_save = QPushButton("Guardar")
+        btn_save.clicked.connect(dialog.accept)
+        form.addRow(btn_save)
+
+        if dialog.exec_() == QDialog.Accepted:
+            codigo = inp_code.text().strip()
+            nombre = inp_name.text().strip()
+            if codigo and nombre:
+                try:
+                    self.db.execute_query(
+                        "INSERT INTO categorias_insumos (codigo, nombre) VALUES (?,?)",
+                        (codigo, nombre),
+                    )
+                    self.cargar_datos()
+                except Exception as e:
+                    QMessageBox.warning(
+                        self, "Error", f"Error (probablemente código duplicado): {e}"
+                    )
+
+    def eliminar_registro(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        id_cat = self.table.item(row, 0).text()
+
+        uso = self.db.fetch_all(
+            "SELECT COUNT(*) FROM insumos WHERE categoria_id=?", (id_cat,)
+        )
+        if uso and uso[0][0] > 0:
+            QMessageBox.warning(
+                self,
+                "No permitido",
+                "No puedes eliminar una categoría que tiene insumos asociados.",
+            )
+            return
+
+        if (
+            QMessageBox.question(self, "Confirmar", "¿Eliminar categoría?")
+            == QMessageBox.Yes
+        ):
+            try:
+                self.db.execute_query(
+                    "DELETE FROM categorias_insumos WHERE id=?", (id_cat,)
+                )
+                self.cargar_datos()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
