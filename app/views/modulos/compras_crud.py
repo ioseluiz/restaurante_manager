@@ -16,10 +16,18 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QDateEdit,
     QGroupBox,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QFrame,
 )
 from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QColor, QFont, QPalette
+from datetime import datetime, timedelta
 
 from app.controllers.kardex_controller import KardexController
+
+# --- IMPORTACIÓN DE ESTILOS CENTRALIZADOS ---
+from app.styles import COLORS
 
 
 class ComprasCRUD(QWidget):
@@ -32,14 +40,20 @@ class ComprasCRUD(QWidget):
         layout = QVBoxLayout()
         header = QLabel("<h2>Gestión de Compras e Inventario</h2>")
         header.setAlignment(Qt.AlignCenter)
+        # Usamos el color de texto definido en styles.py
+        header.setStyleSheet(f"color: {COLORS['text']};")
         layout.addWidget(header)
 
         self.tabs = QTabWidget()
+
+        # Instancias de las pestañas
         self.tab_compras = TabGestionCompras(self.db)
         self.tab_proveedores = TabProveedores(self.db)
+        self.tab_resumen = TabResumenSemanal(self.db)
 
         self.tabs.addTab(self.tab_compras, "1. Registro de Compras")
         self.tabs.addTab(self.tab_proveedores, "2. Proveedores")
+        self.tabs.addTab(self.tab_resumen, "3. Resumen Semanal")
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -47,9 +61,10 @@ class ComprasCRUD(QWidget):
     def cargar_datos(self):
         self.tab_compras.cargar_compras()
         self.tab_proveedores.cargar_proveedores()
+        self.tab_resumen.cargar_datos()
 
 
-# --- PESTAÑA DE COMPRAS ---
+# --- PESTAÑA DE COMPRAS (Mantenida intacta) ---
 class TabGestionCompras(QWidget):
     def __init__(self, db):
         super().__init__()
@@ -65,7 +80,9 @@ class TabGestionCompras(QWidget):
         btn_nueva.clicked.connect(self.nueva_compra)
 
         btn_recibir = QPushButton("Marcar como RECIBIDO (Sumar a Stock)")
-        btn_recibir.setStyleSheet("background-color: #2ecc71; color: white;")
+        btn_recibir.setStyleSheet(
+            f"background-color: {COLORS['success']}; color: white;"
+        )
         btn_recibir.clicked.connect(self.recibir_compra)
 
         btn_ver = QPushButton("Ver Detalle")
@@ -106,11 +123,12 @@ class TabGestionCompras(QWidget):
             self.table.setItem(r, 3, QTableWidgetItem(f"${row[3]:.2f}"))
             self.table.setItem(r, 4, QTableWidgetItem(row[4]))
 
-            # Colorear estado
             if row[4] == "PENDIENTE":
                 self.table.item(r, 4).setBackground(Qt.yellow)
+                self.table.item(r, 4).setForeground(Qt.black)
             elif row[4] == "RECIBIDO":
                 self.table.item(r, 4).setBackground(Qt.green)
+                self.table.item(r, 4).setForeground(Qt.black)
 
     def nueva_compra(self):
         if NuevaCompraDialog(self.db, parent=self).exec_():
@@ -141,17 +159,13 @@ class TabGestionCompras(QWidget):
 
     def procesar_recepcion(self, compra_id):
         try:
-            # Inicializar controlador
             kardex = KardexController(self.db)
-
-            # 1. Obtener detalles
             detalles = self.db.fetch_all(
                 "SELECT presentacion_id, cantidad FROM detalle_compras WHERE compra_id=?",
                 (compra_id,),
             )
 
             for pres_id, cant_compra in detalles:
-                # 2. Obtener datos de la presentacion
                 pres = self.db.fetch_one(
                     "SELECT insumo_id, cantidad_contenido, nombre FROM presentaciones_compra WHERE id=?",
                     (pres_id,),
@@ -160,7 +174,6 @@ class TabGestionCompras(QWidget):
                     insumo_id, contenido_unitario, nombre_pres = pres
                     cantidad_total_a_sumar = cant_compra * contenido_unitario
 
-                    # 3. USAR KARDEX EN LUGAR DE UPDATE DIRECTO
                     kardex.registrar_movimiento(
                         insumo_id=insumo_id,
                         cantidad=cantidad_total_a_sumar,
@@ -169,7 +182,6 @@ class TabGestionCompras(QWidget):
                         observacion=f"Entrada por Compra (Presentación: {nombre_pres})",
                     )
 
-            # 4. Actualizar estado compra
             self.db.execute_query(
                 "UPDATE compras SET estado='RECIBIDO' WHERE id=?", (compra_id,)
             )
@@ -184,24 +196,22 @@ class TabGestionCompras(QWidget):
             QMessageBox.critical(self, "Error", str(e))
 
     def ver_detalle(self):
-        # Lógica simple para ver detalle (puedes expandirla)
         pass
 
 
-# --- DIALOGO NUEVA COMPRA ---
+# --- DIALOGO NUEVA COMPRA (Mantenido intacto) ---
 class NuevaCompraDialog(QDialog):
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Registrar Compra")
         self.resize(600, 500)
-        self.detalles = []  # Lista temporal de items
+        self.detalles = []
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
 
-        # Cabecera
         form = QFormLayout()
         self.cmb_prov = QComboBox()
         self.cargar_proveedores()
@@ -211,7 +221,6 @@ class NuevaCompraDialog(QDialog):
         form.addRow("Fecha Compra:", self.date_picker)
         layout.addLayout(form)
 
-        # Agregar Items
         grp_items = QGroupBox("Agregar Productos")
         l_items = QHBoxLayout()
         self.cmb_pres = QComboBox()
@@ -232,7 +241,6 @@ class NuevaCompraDialog(QDialog):
         grp_items.setLayout(l_items)
         layout.addWidget(grp_items)
 
-        # Tabla Resumen
         self.table_det = QTableWidget()
         self.table_det.setColumnCount(4)
         self.table_det.setHorizontalHeaderLabels(
@@ -256,7 +264,6 @@ class NuevaCompraDialog(QDialog):
             self.cmb_prov.addItem(r[1], r[0])
 
     def cargar_presentaciones(self):
-        # Muestra Presentacion + Insumo
         query = """
             SELECT p.id, p.nombre, i.nombre, p.precio_compra 
             FROM presentaciones_compra p JOIN insumos i ON p.insumo_id = i.id
@@ -303,19 +310,15 @@ class NuevaCompraDialog(QDialog):
             return
         prov_id = self.cmb_prov.currentData()
         fecha = self.date_picker.date().toString("yyyy-MM-dd")
-
-        # Calcular total
         total = sum(d["subtotal"] for d in self.detalles)
 
         try:
-            # 1. Crear Cabecera
             cur = self.db.execute_query(
                 "INSERT INTO compras (proveedor_id, fecha_compra, total, estado) VALUES (?,?,?,?)",
                 (prov_id, fecha, total, "PENDIENTE"),
             )
             compra_id = cur.lastrowid
 
-            # 2. Crear Detalles
             for d in self.detalles:
                 self.db.execute_query(
                     "INSERT INTO detalle_compras (compra_id, presentacion_id, cantidad, precio_unitario, subtotal) VALUES (?,?,?,?,?)",
@@ -330,7 +333,7 @@ class NuevaCompraDialog(QDialog):
             QMessageBox.critical(self, "Error", str(e))
 
 
-# --- PESTAÑA DE PROVEEDORES (Simplificada) ---
+# --- PESTAÑA DE PROVEEDORES (Mantenido intacto) ---
 class TabProveedores(QWidget):
     def __init__(self, db):
         super().__init__()
@@ -339,7 +342,6 @@ class TabProveedores(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-
         form_layout = QHBoxLayout()
         self.txt_nombre = QLineEdit()
         self.txt_nombre.setPlaceholderText("Nombre Proveedor")
@@ -379,3 +381,244 @@ class TabProveedores(QWidget):
             )
             self.cargar_proveedores()
             self.txt_nombre.clear()
+
+
+# --- PESTAÑA DE RESUMEN SEMANAL (CON MEJORA DE INDICADOR DE RAMA) ---
+class TabResumenSemanal(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.init_ui()
+        self.cargar_datos()
+
+    def init_ui(self):
+        # --- Filtros ---
+        filter_frame = QFrame()
+        filter_layout = QHBoxLayout()
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_frame.setLayout(filter_layout)
+
+        lbl_fecha = QLabel("Seleccione una fecha de la semana:")
+        lbl_fecha.setStyleSheet(f"color: {COLORS['text']}; font-weight: bold;")
+
+        self.date_picker = QDateEdit()
+        self.date_picker.setCalendarPopup(True)
+        self.date_picker.setDate(QDate.currentDate())
+        self.date_picker.setDisplayFormat("dd/MM/yyyy")
+        self.date_picker.dateChanged.connect(self.al_cambiar_fecha)
+        self.date_picker.setStyleSheet(
+            f"background-color: {COLORS['surface']}; color: {COLORS['text']};"
+        )
+
+        self.btn_refresh = QPushButton("Actualizar Resumen")
+        self.btn_refresh.clicked.connect(self.cargar_datos)
+        self.btn_refresh.setStyleSheet(
+            f"background-color: {COLORS['background']}; color: {COLORS['text']}; border: 1px solid {COLORS['border']};"
+        )
+
+        self.lbl_rango_semana = QLabel("")
+        self.lbl_rango_semana.setStyleSheet(
+            f"font-weight: bold; color: {COLORS['primary']}; margin-left: 10px;"
+        )
+
+        filter_layout.addWidget(lbl_fecha)
+        filter_layout.addWidget(self.date_picker)
+        filter_layout.addWidget(self.lbl_rango_semana)
+        filter_layout.addWidget(self.btn_refresh)
+        filter_layout.addStretch()
+
+        # --- Tabla (TreeWidget) ---
+        self.tree = QTreeWidget()
+
+        # INYECCIÓN DE ESTILOS Y CORRECCIÓN DE "FLECHA BLANCA"
+        # Usamos selectores de 'QTreeView::branch' para pintar un fondo detrás del indicador.
+        # Si la flecha es blanca (tema oscuro del sistema), se verá sobre el fondo gris oscuro o azul.
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                background-color: {COLORS["surface"]};
+                color: {COLORS["text"]};
+                alternate-background-color: #fcfcfc;
+                border: 1px solid {COLORS["border"]};
+            }}
+            QHeaderView::section {{
+                background-color: {COLORS["background"]};
+                color: {COLORS["text"]};
+                padding: 4px;
+                border: 1px solid {COLORS["border"]};
+                font-weight: bold;
+            }}
+            QTreeWidget::item {{
+                color: {COLORS["text"]};
+            }}
+            QTreeWidget::item:selected {{
+                background-color: {COLORS["primary"]};
+                color: white;
+            }}
+            
+            /* --- CORRECCIÓN INDICADORES DE RAMA (FLECHAS) --- */
+            /* Estado CERRADO: Fondo gris oscuro para que resalte la flecha blanca */
+            QTreeView::branch:has-children:!has-siblings:closed,
+            QTreeView::branch:closed:has-children:has-siblings {{
+                background: {COLORS["text"]}; 
+                margin: 4px;
+                border-radius: 3px;
+            }}
+            
+            /* Estado ABIERTO: Fondo azul (primary) para indicar activo */
+            QTreeView::branch:open:has-children:!has-siblings,
+            QTreeView::branch:open:has-children:has-siblings {{
+                background: {COLORS["primary"]};
+                margin: 4px;
+                border-radius: 3px;
+            }}
+        """)
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setHeaderLabels(
+            ["Insumo", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Total Sem."]
+        )
+
+        # INTENTO ADICIONAL DE FORZAR PALETA DE COLORES
+        # Esto ayuda si el widget respeta la paleta del sistema para dibujar primitivas (como la flecha)
+        palette = self.tree.palette()
+        palette.setColor(QPalette.Base, QColor(COLORS["surface"]))
+        palette.setColor(QPalette.Text, QColor(COLORS["text"]))
+        # WindowText suele usarse para elementos de control
+        palette.setColor(QPalette.WindowText, QColor(COLORS["text"]))
+        self.tree.setPalette(palette)
+
+        header = self.tree.header()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for i in range(1, 9):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+
+        self.layout.addWidget(filter_frame)
+        self.layout.addWidget(self.tree)
+
+        # Totales al pie
+        self.lbl_gran_total = QLabel("Total Compras Semana: $0.00")
+        self.lbl_gran_total.setStyleSheet(f"""
+            font-size: 16px; 
+            font-weight: bold; 
+            padding: 10px; 
+            color: {COLORS["text"]}; 
+            background-color: {COLORS["background"]}; 
+            border: 1px solid {COLORS["border"]};
+        """)
+        self.lbl_gran_total.setAlignment(Qt.AlignRight)
+        self.layout.addWidget(self.lbl_gran_total)
+
+    def al_cambiar_fecha(self):
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        self.tree.clear()
+
+        qdate = self.date_picker.date()
+        py_date = qdate.toPyDate()
+
+        start_date = py_date - timedelta(days=py_date.weekday())
+        end_date = start_date + timedelta(days=6)
+
+        str_start = start_date.strftime("%Y-%m-%d")
+        str_end = end_date.strftime("%Y-%m-%d")
+
+        self.lbl_rango_semana.setText(
+            f"(Semana: {start_date.strftime('%d/%m')} - {end_date.strftime('%d/%m')})"
+        )
+
+        try:
+            query = """
+                SELECT 
+                    cat.nombre as categoria,
+                    i.nombre as insumo,
+                    c.fecha_compra as fecha_compra,
+                    SUM(dc.subtotal) as monto
+                FROM detalle_compras dc
+                JOIN compras c ON dc.compra_id = c.id
+                JOIN presentaciones_compra pc ON dc.presentacion_id = pc.id
+                JOIN insumos i ON pc.insumo_id = i.id
+                LEFT JOIN categorias_insumos cat ON i.categoria_id = cat.id
+                WHERE c.fecha_compra BETWEEN ? AND ?
+                GROUP BY cat.nombre, i.nombre, c.fecha_compra
+                ORDER BY cat.nombre, i.nombre
+            """
+
+            rows = self.db.fetch_all(query, (str_start, str_end))
+
+            data = {}
+            gran_total_semana = 0.0
+
+            for row in rows:
+                cat_name = row[0] if row[0] else "Sin Categoría"
+                insumo_name = row[1]
+                fecha_str = row[2]
+                monto = float(row[3]) if row[3] else 0.0
+
+                try:
+                    fecha_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+                    day_idx = fecha_obj.weekday()
+                except ValueError:
+                    continue
+
+                if cat_name not in data:
+                    data[cat_name] = {}
+                if insumo_name not in data[cat_name]:
+                    data[cat_name][insumo_name] = [0.0] * 7
+
+                data[cat_name][insumo_name][day_idx] += monto
+                gran_total_semana += monto
+
+            col_count = self.tree.columnCount()
+
+            for cat_nombre in sorted(data.keys()):
+                cat_item = QTreeWidgetItem([cat_nombre])
+                cat_item.setExpanded(True)
+
+                # Fila de Categoría
+                for i in range(col_count):
+                    cat_item.setBackground(i, QColor(COLORS["background"]))
+                    cat_item.setForeground(i, QColor(COLORS["text"]))
+
+                cat_item.setFont(0, QFont("Arial", 9, QFont.Bold))
+
+                self.tree.addTopLevelItem(cat_item)
+
+                cat_totales_dias = [0.0] * 7
+                cat_total_final = 0.0
+
+                for insumo_nombre in sorted(data[cat_nombre].keys()):
+                    dias_montos = data[cat_nombre][insumo_nombre]
+                    total_insumo = sum(dias_montos)
+                    cat_total_final += total_insumo
+
+                    valores_fila = (
+                        [insumo_nombre]
+                        + [f"${v:,.2f}" if v > 0 else "" for v in dias_montos]
+                        + [f"${total_insumo:,.2f}"]
+                    )
+
+                    child_item = QTreeWidgetItem(valores_fila)
+
+                    # Asegurar contraste en hijos
+                    for i in range(col_count):
+                        child_item.setForeground(i, QColor(COLORS["text"]))
+
+                    cat_item.addChild(child_item)
+
+                    for i, v in enumerate(dias_montos):
+                        cat_totales_dias[i] += v
+
+                # Totales categoría
+                for i, v in enumerate(cat_totales_dias):
+                    cat_item.setText(i + 1, f"${v:,.2f}" if v > 0 else "")
+                cat_item.setText(8, f"${cat_total_final:,.2f}")
+
+            self.lbl_gran_total.setText(
+                f"Total Compras Semana: ${gran_total_semana:,.2f}"
+            )
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al cargar resumen: {str(e)}")
