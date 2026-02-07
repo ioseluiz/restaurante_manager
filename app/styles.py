@@ -7,6 +7,10 @@ COLORS = {
     "success": "#2ecc71",  # Verde acción positiva
     "success_hover": "#27ae60",
     "danger": "#e74c3c",  # Rojo peligro/eliminar
+    # --- AGREGA ESTAS DOS LÍNEAS ---
+    "warning": "#f1c40f",  # Amarillo/Naranja para editar/precaución
+    "warning_hover": "#f39c12",
+    # -------------------------------
     "danger_hover": "#c0392b",
     "background": "#ecf0f1",  # Gris muy claro para fondo de ventana
     "surface": "#ffffff",  # Blanco para tarjetas/tablas

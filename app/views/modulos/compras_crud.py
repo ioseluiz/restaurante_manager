@@ -30,6 +30,91 @@ from app.controllers.kardex_controller import KardexController
 from app.styles import COLORS
 
 
+class DetalleCompraDialog(QDialog):
+    def __init__(self, db, compra_id, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.compra_id = compra_id
+        self.setWindowTitle(f"Detalle de Compra #{compra_id}")
+        self.resize(600, 400)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Título
+        lbl_titulo = QLabel(f"<h2>Productos de la Compra #{self.compra_id}</h2>")
+        lbl_titulo.setAlignment(Qt.AlignCenter)
+        lbl_titulo.setStyleSheet(f"color: {COLORS['primary']};")
+        layout.addWidget(lbl_titulo)
+
+        # Tabla de detalles
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(
+            ["Insumo / Presentación", "Cantidad", "Precio Unit.", "Subtotal"]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)  # Solo lectura
+        layout.addWidget(self.table)
+
+        # Label para el total
+        self.lbl_total = QLabel("Total: $0.00")
+        self.lbl_total.setAlignment(Qt.AlignRight)
+        self.lbl_total.setStyleSheet("font-size: 16px; font-weight: bold;")
+        layout.addWidget(self.lbl_total)
+
+        info_compra = self.db.fetch_one(
+            "SELECT tipo_pago FROM compras WHERE id=?", (self.compra_id,)
+        )
+        tipo_pago_str = info_compra[0] if info_compra else "-"
+
+        lbl_info = QLabel(f"<b>Método de Pago:</b> {tipo_pago_str}")
+        layout.addWidget(lbl_info)
+
+        # Botón cerrar
+        btn_close = QPushButton("Cerrar")
+        btn_close.clicked.connect(self.accept)
+        layout.addWidget(btn_close)
+
+        self.setLayout(layout)
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        # Consulta uniendo detalle -> presentacion -> insumo para obtener los nombres
+        query = """
+            SELECT i.nombre, pc.nombre, dc.cantidad, dc.precio_unitario, dc.subtotal
+            FROM detalle_compras dc
+            JOIN presentaciones_compra pc ON dc.presentacion_id = pc.id
+            JOIN insumos i ON pc.insumo_id = i.id
+            WHERE dc.compra_id = ?
+        """
+        rows = self.db.fetch_all(query, (self.compra_id,))
+
+        self.table.setRowCount(0)
+        gran_total = 0.0
+
+        for r, row in enumerate(rows):
+            insumo_nombre = row[0]
+            presentacion = row[1]
+            cantidad = row[2]
+            precio = row[3]
+            subtotal = row[4]
+
+            gran_total += subtotal
+
+            self.table.insertRow(r)
+            # Columna 0: Nombre completo (Ej: Tomate - Kg)
+            self.table.setItem(
+                r, 0, QTableWidgetItem(f"{insumo_nombre} ({presentacion})")
+            )
+            self.table.setItem(r, 1, QTableWidgetItem(str(cantidad)))
+            self.table.setItem(r, 2, QTableWidgetItem(f"${precio:.2f}"))
+            self.table.setItem(r, 3, QTableWidgetItem(f"${subtotal:.2f}"))
+
+        self.lbl_total.setText(f"Total Compra: ${gran_total:.2f}")
+
+
 class ComprasCRUD(QWidget):
     def __init__(self, db_manager):
         super().__init__()
@@ -88,16 +173,30 @@ class TabGestionCompras(QWidget):
         btn_ver = QPushButton("Ver Detalle")
         btn_ver.clicked.connect(self.ver_detalle)
 
+        btn_editar = QPushButton("Editar")
+        btn_editar.setStyleSheet(
+            f"background-color: {COLORS['warning']}; color: black;"
+        )
+        btn_editar.clicked.connect(self.editar_compra)
+
+        btn_eliminar = QPushButton("Eliminar")
+        btn_eliminar.setStyleSheet(
+            f"background-color: {COLORS['danger']}; color: white;"
+        )
+        btn_eliminar.clicked.connect(self.eliminar_compra)
+
         btn_layout.addWidget(btn_nueva)
         btn_layout.addWidget(btn_recibir)
         btn_layout.addWidget(btn_ver)
+        btn_layout.addWidget(btn_editar)  # <--- Agregar
+        btn_layout.addWidget(btn_eliminar)  # <--- Agregar
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Proveedor", "Fecha", "Total", "Estado", "Acción"]
+            ["ID", "Proveedor", "Fecha", "Tipo Pago", "Total", "Estado", "Acción"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -108,8 +207,9 @@ class TabGestionCompras(QWidget):
         self.cargar_compras()
 
     def cargar_compras(self):
+        # AGREGAMOS c.tipo_pago A LA CONSULTA
         query = """
-            SELECT c.id, p.nombre, c.fecha_compra, c.total, c.estado 
+            SELECT c.id, p.nombre, c.fecha_compra, c.total, c.estado, c.tipo_pago
             FROM compras c JOIN proveedores p ON c.proveedor_id = p.id 
             ORDER BY c.id DESC
         """
@@ -117,18 +217,37 @@ class TabGestionCompras(QWidget):
         self.table.setRowCount(0)
         for r, row in enumerate(rows):
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(row[0])))
-            self.table.setItem(r, 1, QTableWidgetItem(row[1]))
-            self.table.setItem(r, 2, QTableWidgetItem(row[2]))
-            self.table.setItem(r, 3, QTableWidgetItem(f"${row[3]:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(row[4]))
 
-            if row[4] == "PENDIENTE":
-                self.table.item(r, 4).setBackground(Qt.yellow)
-                self.table.item(r, 4).setForeground(Qt.black)
-            elif row[4] == "RECIBIDO":
-                self.table.item(r, 4).setBackground(Qt.green)
-                self.table.item(r, 4).setForeground(Qt.black)
+            # Recuperamos los datos de la tupla (cuidado con los índices)
+            id_compra = str(row[0])
+            proveedor = row[1]
+            fecha = row[2]
+            total = row[3]
+            estado = row[4]
+            tipo_pago = row[5] if row[5] else "CONTADO"  # Manejo de nulos por seguridad
+
+            self.table.setItem(r, 0, QTableWidgetItem(id_compra))
+            self.table.setItem(r, 1, QTableWidgetItem(proveedor))
+            self.table.setItem(r, 2, QTableWidgetItem(fecha))
+
+            # NUEVA COLUMNA: TIPO PAGO
+            self.table.setItem(r, 3, QTableWidgetItem(tipo_pago))
+
+            # DESPLAZAMOS LOS INDICES DE LAS OTRAS COLUMNAS
+            self.table.setItem(r, 4, QTableWidgetItem(f"${total:.2f}"))
+
+            item_estado = QTableWidgetItem(estado)
+            self.table.setItem(r, 5, item_estado)
+
+            if estado == "PENDIENTE":
+                item_estado.setBackground(Qt.yellow)
+                item_estado.setForeground(Qt.black)
+            elif estado == "RECIBIDO":
+                item_estado.setBackground(Qt.green)
+                item_estado.setForeground(Qt.black)
+
+            # La columna acción suele quedar vacía o con botón, aquí no ponemos texto
+            self.table.setItem(r, 6, QTableWidgetItem(""))
 
     def nueva_compra(self):
         if NuevaCompraDialog(self.db, parent=self).exec_():
@@ -140,7 +259,7 @@ class TabGestionCompras(QWidget):
             return QMessageBox.warning(self, "Aviso", "Seleccione una compra")
 
         cid = self.table.item(row, 0).text()
-        estado = self.table.item(row, 4).text()
+        estado = self.table.item(row, 5).text()
 
         if estado == "RECIBIDO":
             return QMessageBox.information(
@@ -196,18 +315,103 @@ class TabGestionCompras(QWidget):
             QMessageBox.critical(self, "Error", str(e))
 
     def ver_detalle(self):
-        pass
+        # 1. Obtener la fila seleccionada
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una compra de la lista para ver el detalle."
+            )
+
+        # 2. Obtener el ID de la compra (está en la columna 0, oculta o visible)
+        # Asegúrate de que en init_ui la columna 0 sea el ID. Según tu código:
+        # self.table.setItem(r, 0, QTableWidgetItem(str(row[0]))) -> Correcto
+        compra_id = self.table.item(row, 0).text()
+
+        # 3. Abrir el diálogo
+        dialog = DetalleCompraDialog(self.db, compra_id, parent=self)
+        dialog.exec_()
+
+    def editar_compra(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una compra para editar."
+            )
+
+        # Obtener ID y Estado
+        # ASUMIENDO que ID está en col 0 y Estado en col 5 (ajusta según tus cambios anteriores)
+        cid = self.table.item(row, 0).text()
+        estado = self.table.item(row, 5).text()
+
+        if estado == "RECIBIDO":
+            return QMessageBox.warning(
+                self,
+                "Acción Denegada",
+                "No se puede editar una compra ya RECIBIDA e inventariada.\n"
+                "Esto afectaría el stock histórico.",
+            )
+
+        # Abrimos el dialogo pasando el ID
+        # Nota: self.db es pasado al diálogo, y parent=self
+        dialog = NuevaCompraDialog(self.db, compra_id=cid, parent=self)
+        if dialog.exec_():
+            self.cargar_compras()  # Recargamos la tabla al cerrar
+
+    def eliminar_compra(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una compra para eliminar."
+            )
+
+        cid = self.table.item(row, 0).text()
+        estado = self.table.item(
+            row, 5
+        ).text()  # Ajusta índice columna estado si es necesario
+
+        if estado == "RECIBIDO":
+            return QMessageBox.critical(
+                self,
+                "Error",
+                "No se puede eliminar una compra RECIBIDA.\n"
+                "El stock ya fue sumado al inventario.",
+            )
+
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar Eliminación",
+            f"¿Está seguro de eliminar la compra #{cid}? Esta acción es irreversible.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if confirm == QMessageBox.Yes:
+            try:
+                # Al tener ON DELETE CASCADE en la BD (ver connection.py),
+                # borrar la compra borra sus detalles automáticamente.
+                self.db.execute_query("DELETE FROM compras WHERE id=?", (cid,))
+                self.cargar_compras()
+                QMessageBox.information(self, "Éxito", "Compra eliminada.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"No se pudo eliminar: {str(e)}")
 
 
 # --- DIALOGO NUEVA COMPRA (Mantenido intacto) ---
 class NuevaCompraDialog(QDialog):
-    def __init__(self, db, parent=None):
+    def __init__(self, db, compra_id=None, parent=None):
         super().__init__(parent)
         self.db = db
-        self.setWindowTitle("Registrar Compra")
+        self.compra_id = compra_id  # Guardamos el ID si es una edición
+
+        titulo = "Editar Compra" if self.compra_id else "Registrar Compra"
+        self.setWindowTitle(titulo)
+
         self.resize(600, 500)
         self.detalles = []
         self.init_ui()
+
+        # Si hay ID, cargamos los datos
+        if self.compra_id:
+            self.cargar_datos_existentes()
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -217,8 +421,11 @@ class NuevaCompraDialog(QDialog):
         self.cargar_proveedores()
         self.date_picker = QDateEdit(QDate.currentDate())
         self.date_picker.setCalendarPopup(True)
+        self.cmb_tipo_pago = QComboBox()
+        self.cmb_tipo_pago.addItems(["CONTADO", "CHEQUE", "TRANSFERENCIA", "CREDITO"])
         form.addRow("Proveedor:", self.cmb_prov)
         form.addRow("Fecha Compra:", self.date_picker)
+        form.addRow("Tipo de Pago:", self.cmb_tipo_pago)
         layout.addLayout(form)
 
         grp_items = QGroupBox("Agregar Productos")
@@ -241,13 +448,38 @@ class NuevaCompraDialog(QDialog):
         grp_items.setLayout(l_items)
         layout.addWidget(grp_items)
 
+        # -- TABLA DE DETALLES --
         self.table_det = QTableWidget()
         self.table_det.setColumnCount(4)
         self.table_det.setHorizontalHeaderLabels(
             ["Producto", "Cant", "Precio U.", "Subtotal"]
         )
         self.table_det.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_det.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table_det.setSelectionMode(QTableWidget.SingleSelection)
+        self.table_det.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table_det)
+
+        # --- [NUEVO] BOTONES DE ACCIÓN PARA LAS LÍNEAS ---
+        hbox_acciones = QHBoxLayout()
+
+        btn_editar_linea = QPushButton("Editar Línea Seleccionada")
+        btn_editar_linea.setStyleSheet(
+            f"background-color: {COLORS['warning']}; color: black;"
+        )
+        btn_editar_linea.clicked.connect(self.editar_item_lista)
+
+        btn_borrar_linea = QPushButton("Borrar Línea")
+        btn_borrar_linea.setStyleSheet(
+            f"background-color: {COLORS['danger']}; color: white;"
+        )
+        btn_borrar_linea.clicked.connect(self.eliminar_item_lista)
+
+        hbox_acciones.addWidget(btn_editar_linea)
+        hbox_acciones.addWidget(btn_borrar_linea)
+        hbox_acciones.addStretch()  # Empuja los botones a la izquierda
+
+        layout.addLayout(hbox_acciones)
 
         self.lbl_total = QLabel("<h2>Total: $0.00</h2>")
         self.lbl_total.setAlignment(Qt.AlignRight)
@@ -305,30 +537,165 @@ class NuevaCompraDialog(QDialog):
             total_global += d["subtotal"]
         self.lbl_total.setText(f"<h2>Total: ${total_global:.2f}</h2>")
 
+    def cargar_datos_existentes(self):
+        # 1. Cargar Cabecera
+        query_header = (
+            "SELECT proveedor_id, fecha_compra, tipo_pago FROM compras WHERE id=?"
+        )
+        header = self.db.fetch_one(query_header, (self.compra_id,))
+
+        if header:
+            # Seleccionar Proveedor en el Combo
+            index_prov = self.cmb_prov.findData(header[0])
+            if index_prov >= 0:
+                self.cmb_prov.setCurrentIndex(index_prov)
+
+            # Establecer Fecha
+            fecha_dt = datetime.strptime(header[1], "%Y-%m-%d")
+            self.date_picker.setDate(fecha_dt.date())
+
+            # Seleccionar Tipo de Pago
+            tipo_pago = header[2] if header[2] else "CONTADO"
+            index_pago = self.cmb_tipo_pago.findText(tipo_pago)
+            if index_pago >= 0:
+                self.cmb_tipo_pago.setCurrentIndex(index_pago)
+
+        # 2. Cargar Detalles
+        query_det = """
+            SELECT dc.presentacion_id, pc.nombre, i.nombre, dc.cantidad, dc.precio_unitario, dc.subtotal 
+            FROM detalle_compras dc
+            JOIN presentaciones_compra pc ON dc.presentacion_id = pc.id
+            JOIN insumos i ON pc.insumo_id = i.id
+            WHERE dc.compra_id = ?
+        """
+        rows = self.db.fetch_all(query_det, (self.compra_id,))
+
+        for r in rows:
+            # Reconstruimos la estructura de diccionario que usa la tabla
+            pres_id = r[0]
+            nombre_pres = r[1]
+            nombre_insumo = r[2]
+            cantidad = r[3]
+            precio = r[4]
+            subtotal = r[5]
+
+            item_text = f"{nombre_insumo} - {nombre_pres}"
+
+            self.detalles.append(
+                {
+                    "pres_id": pres_id,
+                    "texto": item_text,
+                    "cant": cantidad,
+                    "precio": precio,
+                    "subtotal": subtotal,
+                }
+            )
+
+        self.actualizar_tabla()
+
+    def eliminar_item_lista(self):
+        """Elimina la fila seleccionada de la lista temporal"""
+        row = self.table_det.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un producto de la lista para borrar."
+            )
+
+        # Eliminamos del arreglo de datos (self.detalles) usando el índice de la fila
+        self.detalles.pop(row)
+
+        # Refrescamos la tabla visualmente
+        self.actualizar_tabla()
+
+    def editar_item_lista(self):
+        """Carga los datos de la fila en el formulario y la elimina de la lista"""
+        row = self.table_det.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un producto de la lista para editar."
+            )
+
+        # Recuperamos el diccionario de datos de esa fila
+        item = self.detalles[row]
+        pres_id_a_editar = item["pres_id"]
+
+        # 1. Buscar en el ComboBox el índice que corresponde a ese ID
+        index_combo = -1
+        for i in range(self.cmb_pres.count()):
+            data = self.cmb_pres.itemData(i)
+            # data es un dict {'id': ..., 'precio': ...} según tu código original
+            if data and data["id"] == pres_id_a_editar:
+                index_combo = i
+                break
+
+        if index_combo != -1:
+            # 2. Restaurar valores en los controles
+            self.cmb_pres.setCurrentIndex(index_combo)
+            self.spin_cant.setValue(item["cant"])
+            self.spin_precio.setValue(item["precio"])
+
+            # 3. Eliminar la línea original (para evitar duplicados al volver a agregar)
+            self.detalles.pop(row)
+            self.actualizar_tabla()
+
+            # Feedback al usuario
+            self.cmb_pres.setFocus()  # Poner foco listo para editar
+
+        else:
+            QMessageBox.warning(
+                self,
+                "Error",
+                "No se encontró la presentación original en la lista desplegable.",
+            )
+
     def guardar_bd(self):
         if not self.detalles:
-            return
+            return QMessageBox.warning(self, "Error", "La lista de compra está vacía.")
+
         prov_id = self.cmb_prov.currentData()
         fecha = self.date_picker.date().toString("yyyy-MM-dd")
         total = sum(d["subtotal"] for d in self.detalles)
+        tipo_pago = self.cmb_tipo_pago.currentText()
 
         try:
-            cur = self.db.execute_query(
-                "INSERT INTO compras (proveedor_id, fecha_compra, total, estado) VALUES (?,?,?,?)",
-                (prov_id, fecha, total, "PENDIENTE"),
-            )
-            compra_id = cur.lastrowid
+            if self.compra_id:
+                # --- LÓGICA DE EDICIÓN ---
+                # 1. Actualizar Cabecera
+                self.db.execute_query(
+                    "UPDATE compras SET proveedor_id=?, fecha_compra=?, total=?, tipo_pago=? WHERE id=?",
+                    (prov_id, fecha, total, tipo_pago, self.compra_id),
+                )
+                # 2. Borrar detalles anteriores (para reescribirlos limpios)
+                self.db.execute_query(
+                    "DELETE FROM detalle_compras WHERE compra_id=?", (self.compra_id,)
+                )
+                compra_actual = self.compra_id
+                msg = "Compra actualizada correctamente."
+            else:
+                # --- LÓGICA DE CREACIÓN ---
+                cur = self.db.execute_query(
+                    "INSERT INTO compras (proveedor_id, fecha_compra, total, estado, tipo_pago) VALUES (?,?,?,?,?)",
+                    (prov_id, fecha, total, "PENDIENTE", tipo_pago),
+                )
+                compra_actual = cur.lastrowid
+                msg = "Compra registrada correctamente."
 
+            # 3. Insertar los detalles (nuevos o reescritos)
             for d in self.detalles:
                 self.db.execute_query(
                     "INSERT INTO detalle_compras (compra_id, presentacion_id, cantidad, precio_unitario, subtotal) VALUES (?,?,?,?,?)",
-                    (compra_id, d["pres_id"], d["cant"], d["precio"], d["subtotal"]),
+                    (
+                        compra_actual,
+                        d["pres_id"],
+                        d["cant"],
+                        d["precio"],
+                        d["subtotal"],
+                    ),
                 )
 
-            QMessageBox.information(
-                self, "Éxito", "Compra registrada en estado PENDIENTE."
-            )
+            QMessageBox.information(self, "Éxito", msg)
             self.accept()
+
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 

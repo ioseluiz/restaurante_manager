@@ -95,6 +95,7 @@ class DatabaseManager:
                 fecha_compra TEXT,
                 total REAL DEFAULT 0.0,
                 estado TEXT DEFAULT 'PENDIENTE',
+                tipo_pago TEXT DEFAULT 'CONTADO',  -- <--- AGREGAR ESTA LÍNEA
                 FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
             );
         """)
