@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont, QPalette
 from datetime import datetime, timedelta
+import calendar  # Importamos calendar para manejar rangos de meses
 
 from app.controllers.kardex_controller import KardexController
 
@@ -125,7 +126,6 @@ class ComprasCRUD(QWidget):
         layout = QVBoxLayout()
         header = QLabel("<h2>Gestión de Compras e Inventario</h2>")
         header.setAlignment(Qt.AlignCenter)
-        # Usamos el color de texto definido en styles.py
         header.setStyleSheet(f"color: {COLORS['text']};")
         layout.addWidget(header)
 
@@ -135,10 +135,14 @@ class ComprasCRUD(QWidget):
         self.tab_compras = TabGestionCompras(self.db)
         self.tab_proveedores = TabProveedores(self.db)
         self.tab_resumen = TabResumenSemanal(self.db)
+        self.tab_resumen_mensual = TabResumenMensual(self.db)  # <--- Nueva Pestaña
 
         self.tabs.addTab(self.tab_compras, "1. Registro de Compras")
         self.tabs.addTab(self.tab_proveedores, "2. Proveedores")
         self.tabs.addTab(self.tab_resumen, "3. Resumen Semanal")
+        self.tabs.addTab(
+            self.tab_resumen_mensual, "4. Resumen Mensual"
+        )  # <--- Agregada
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -147,6 +151,7 @@ class ComprasCRUD(QWidget):
         self.tab_compras.cargar_compras()
         self.tab_proveedores.cargar_proveedores()
         self.tab_resumen.cargar_datos()
+        self.tab_resumen_mensual.cargar_datos()  # <--- Actualizar también mensual
 
 
 # --- PESTAÑA DE COMPRAS (Mantenida intacta) ---
@@ -188,8 +193,8 @@ class TabGestionCompras(QWidget):
         btn_layout.addWidget(btn_nueva)
         btn_layout.addWidget(btn_recibir)
         btn_layout.addWidget(btn_ver)
-        btn_layout.addWidget(btn_editar)  # <--- Agregar
-        btn_layout.addWidget(btn_eliminar)  # <--- Agregar
+        btn_layout.addWidget(btn_editar)
+        btn_layout.addWidget(btn_eliminar)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -207,7 +212,6 @@ class TabGestionCompras(QWidget):
         self.cargar_compras()
 
     def cargar_compras(self):
-        # AGREGAMOS c.tipo_pago A LA CONSULTA
         query = """
             SELECT c.id, p.nombre, c.fecha_compra, c.total, c.estado, c.tipo_pago
             FROM compras c JOIN proveedores p ON c.proveedor_id = p.id 
@@ -218,22 +222,17 @@ class TabGestionCompras(QWidget):
         for r, row in enumerate(rows):
             self.table.insertRow(r)
 
-            # Recuperamos los datos de la tupla (cuidado con los índices)
             id_compra = str(row[0])
             proveedor = row[1]
             fecha = row[2]
             total = row[3]
             estado = row[4]
-            tipo_pago = row[5] if row[5] else "CONTADO"  # Manejo de nulos por seguridad
+            tipo_pago = row[5] if row[5] else "CONTADO"
 
             self.table.setItem(r, 0, QTableWidgetItem(id_compra))
             self.table.setItem(r, 1, QTableWidgetItem(proveedor))
             self.table.setItem(r, 2, QTableWidgetItem(fecha))
-
-            # NUEVA COLUMNA: TIPO PAGO
             self.table.setItem(r, 3, QTableWidgetItem(tipo_pago))
-
-            # DESPLAZAMOS LOS INDICES DE LAS OTRAS COLUMNAS
             self.table.setItem(r, 4, QTableWidgetItem(f"${total:.2f}"))
 
             item_estado = QTableWidgetItem(estado)
@@ -246,7 +245,6 @@ class TabGestionCompras(QWidget):
                 item_estado.setBackground(Qt.green)
                 item_estado.setForeground(Qt.black)
 
-            # La columna acción suele quedar vacía o con botón, aquí no ponemos texto
             self.table.setItem(r, 6, QTableWidgetItem(""))
 
     def nueva_compra(self):
@@ -315,19 +313,12 @@ class TabGestionCompras(QWidget):
             QMessageBox.critical(self, "Error", str(e))
 
     def ver_detalle(self):
-        # 1. Obtener la fila seleccionada
         row = self.table.currentRow()
         if row < 0:
             return QMessageBox.warning(
                 self, "Aviso", "Seleccione una compra de la lista para ver el detalle."
             )
-
-        # 2. Obtener el ID de la compra (está en la columna 0, oculta o visible)
-        # Asegúrate de que en init_ui la columna 0 sea el ID. Según tu código:
-        # self.table.setItem(r, 0, QTableWidgetItem(str(row[0]))) -> Correcto
         compra_id = self.table.item(row, 0).text()
-
-        # 3. Abrir el diálogo
         dialog = DetalleCompraDialog(self.db, compra_id, parent=self)
         dialog.exec_()
 
@@ -338,8 +329,6 @@ class TabGestionCompras(QWidget):
                 self, "Aviso", "Seleccione una compra para editar."
             )
 
-        # Obtener ID y Estado
-        # ASUMIENDO que ID está en col 0 y Estado en col 5 (ajusta según tus cambios anteriores)
         cid = self.table.item(row, 0).text()
         estado = self.table.item(row, 5).text()
 
@@ -351,11 +340,9 @@ class TabGestionCompras(QWidget):
                 "Esto afectaría el stock histórico.",
             )
 
-        # Abrimos el dialogo pasando el ID
-        # Nota: self.db es pasado al diálogo, y parent=self
         dialog = NuevaCompraDialog(self.db, compra_id=cid, parent=self)
         if dialog.exec_():
-            self.cargar_compras()  # Recargamos la tabla al cerrar
+            self.cargar_compras()
 
     def eliminar_compra(self):
         row = self.table.currentRow()
@@ -365,9 +352,7 @@ class TabGestionCompras(QWidget):
             )
 
         cid = self.table.item(row, 0).text()
-        estado = self.table.item(
-            row, 5
-        ).text()  # Ajusta índice columna estado si es necesario
+        estado = self.table.item(row, 5).text()
 
         if estado == "RECIBIDO":
             return QMessageBox.critical(
@@ -386,8 +371,6 @@ class TabGestionCompras(QWidget):
 
         if confirm == QMessageBox.Yes:
             try:
-                # Al tener ON DELETE CASCADE en la BD (ver connection.py),
-                # borrar la compra borra sus detalles automáticamente.
                 self.db.execute_query("DELETE FROM compras WHERE id=?", (cid,))
                 self.cargar_compras()
                 QMessageBox.information(self, "Éxito", "Compra eliminada.")
@@ -400,7 +383,7 @@ class NuevaCompraDialog(QDialog):
     def __init__(self, db, compra_id=None, parent=None):
         super().__init__(parent)
         self.db = db
-        self.compra_id = compra_id  # Guardamos el ID si es una edición
+        self.compra_id = compra_id
 
         titulo = "Editar Compra" if self.compra_id else "Registrar Compra"
         self.setWindowTitle(titulo)
@@ -409,7 +392,6 @@ class NuevaCompraDialog(QDialog):
         self.detalles = []
         self.init_ui()
 
-        # Si hay ID, cargamos los datos
         if self.compra_id:
             self.cargar_datos_existentes()
 
@@ -448,7 +430,6 @@ class NuevaCompraDialog(QDialog):
         grp_items.setLayout(l_items)
         layout.addWidget(grp_items)
 
-        # -- TABLA DE DETALLES --
         self.table_det = QTableWidget()
         self.table_det.setColumnCount(4)
         self.table_det.setHorizontalHeaderLabels(
@@ -460,7 +441,6 @@ class NuevaCompraDialog(QDialog):
         self.table_det.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table_det)
 
-        # --- [NUEVO] BOTONES DE ACCIÓN PARA LAS LÍNEAS ---
         hbox_acciones = QHBoxLayout()
 
         btn_editar_linea = QPushButton("Editar Línea Seleccionada")
@@ -477,7 +457,7 @@ class NuevaCompraDialog(QDialog):
 
         hbox_acciones.addWidget(btn_editar_linea)
         hbox_acciones.addWidget(btn_borrar_linea)
-        hbox_acciones.addStretch()  # Empuja los botones a la izquierda
+        hbox_acciones.addStretch()
 
         layout.addLayout(hbox_acciones)
 
@@ -538,29 +518,24 @@ class NuevaCompraDialog(QDialog):
         self.lbl_total.setText(f"<h2>Total: ${total_global:.2f}</h2>")
 
     def cargar_datos_existentes(self):
-        # 1. Cargar Cabecera
         query_header = (
             "SELECT proveedor_id, fecha_compra, tipo_pago FROM compras WHERE id=?"
         )
         header = self.db.fetch_one(query_header, (self.compra_id,))
 
         if header:
-            # Seleccionar Proveedor en el Combo
             index_prov = self.cmb_prov.findData(header[0])
             if index_prov >= 0:
                 self.cmb_prov.setCurrentIndex(index_prov)
 
-            # Establecer Fecha
             fecha_dt = datetime.strptime(header[1], "%Y-%m-%d")
             self.date_picker.setDate(fecha_dt.date())
 
-            # Seleccionar Tipo de Pago
             tipo_pago = header[2] if header[2] else "CONTADO"
             index_pago = self.cmb_tipo_pago.findText(tipo_pago)
             if index_pago >= 0:
                 self.cmb_tipo_pago.setCurrentIndex(index_pago)
 
-        # 2. Cargar Detalles
         query_det = """
             SELECT dc.presentacion_id, pc.nombre, i.nombre, dc.cantidad, dc.precio_unitario, dc.subtotal 
             FROM detalle_compras dc
@@ -571,7 +546,6 @@ class NuevaCompraDialog(QDialog):
         rows = self.db.fetch_all(query_det, (self.compra_id,))
 
         for r in rows:
-            # Reconstruimos la estructura de diccionario que usa la tabla
             pres_id = r[0]
             nombre_pres = r[1]
             nombre_insumo = r[2]
@@ -594,53 +568,36 @@ class NuevaCompraDialog(QDialog):
         self.actualizar_tabla()
 
     def eliminar_item_lista(self):
-        """Elimina la fila seleccionada de la lista temporal"""
         row = self.table_det.currentRow()
         if row < 0:
             return QMessageBox.warning(
                 self, "Aviso", "Seleccione un producto de la lista para borrar."
             )
-
-        # Eliminamos del arreglo de datos (self.detalles) usando el índice de la fila
         self.detalles.pop(row)
-
-        # Refrescamos la tabla visualmente
         self.actualizar_tabla()
 
     def editar_item_lista(self):
-        """Carga los datos de la fila en el formulario y la elimina de la lista"""
         row = self.table_det.currentRow()
         if row < 0:
             return QMessageBox.warning(
                 self, "Aviso", "Seleccione un producto de la lista para editar."
             )
-
-        # Recuperamos el diccionario de datos de esa fila
         item = self.detalles[row]
         pres_id_a_editar = item["pres_id"]
-
-        # 1. Buscar en el ComboBox el índice que corresponde a ese ID
         index_combo = -1
         for i in range(self.cmb_pres.count()):
             data = self.cmb_pres.itemData(i)
-            # data es un dict {'id': ..., 'precio': ...} según tu código original
             if data and data["id"] == pres_id_a_editar:
                 index_combo = i
                 break
 
         if index_combo != -1:
-            # 2. Restaurar valores en los controles
             self.cmb_pres.setCurrentIndex(index_combo)
             self.spin_cant.setValue(item["cant"])
             self.spin_precio.setValue(item["precio"])
-
-            # 3. Eliminar la línea original (para evitar duplicados al volver a agregar)
             self.detalles.pop(row)
             self.actualizar_tabla()
-
-            # Feedback al usuario
-            self.cmb_pres.setFocus()  # Poner foco listo para editar
-
+            self.cmb_pres.setFocus()
         else:
             QMessageBox.warning(
                 self,
@@ -659,20 +616,16 @@ class NuevaCompraDialog(QDialog):
 
         try:
             if self.compra_id:
-                # --- LÓGICA DE EDICIÓN ---
-                # 1. Actualizar Cabecera
                 self.db.execute_query(
                     "UPDATE compras SET proveedor_id=?, fecha_compra=?, total=?, tipo_pago=? WHERE id=?",
                     (prov_id, fecha, total, tipo_pago, self.compra_id),
                 )
-                # 2. Borrar detalles anteriores (para reescribirlos limpios)
                 self.db.execute_query(
                     "DELETE FROM detalle_compras WHERE compra_id=?", (self.compra_id,)
                 )
                 compra_actual = self.compra_id
                 msg = "Compra actualizada correctamente."
             else:
-                # --- LÓGICA DE CREACIÓN ---
                 cur = self.db.execute_query(
                     "INSERT INTO compras (proveedor_id, fecha_compra, total, estado, tipo_pago) VALUES (?,?,?,?,?)",
                     (prov_id, fecha, total, "PENDIENTE", tipo_pago),
@@ -680,7 +633,6 @@ class NuevaCompraDialog(QDialog):
                 compra_actual = cur.lastrowid
                 msg = "Compra registrada correctamente."
 
-            # 3. Insertar los detalles (nuevos o reescritos)
             for d in self.detalles:
                 self.db.execute_query(
                     "INSERT INTO detalle_compras (compra_id, presentacion_id, cantidad, precio_unitario, subtotal) VALUES (?,?,?,?,?)",
@@ -750,7 +702,7 @@ class TabProveedores(QWidget):
             self.txt_nombre.clear()
 
 
-# --- PESTAÑA DE RESUMEN SEMANAL (CON MEJORA DE INDICADOR DE RAMA) ---
+# --- PESTAÑA DE RESUMEN SEMANAL (MODIFICADO) ---
 class TabResumenSemanal(QWidget):
     def __init__(self, db):
         super().__init__()
@@ -800,9 +752,6 @@ class TabResumenSemanal(QWidget):
         # --- Tabla (TreeWidget) ---
         self.tree = QTreeWidget()
 
-        # INYECCIÓN DE ESTILOS Y CORRECCIÓN DE "FLECHA BLANCA"
-        # Usamos selectores de 'QTreeView::branch' para pintar un fondo detrás del indicador.
-        # Si la flecha es blanca (tema oscuro del sistema), se verá sobre el fondo gris oscuro o azul.
         self.tree.setStyleSheet(f"""
             QTreeWidget {{
                 background-color: {COLORS["surface"]};
@@ -824,17 +773,12 @@ class TabResumenSemanal(QWidget):
                 background-color: {COLORS["primary"]};
                 color: white;
             }}
-            
-            /* --- CORRECCIÓN INDICADORES DE RAMA (FLECHAS) --- */
-            /* Estado CERRADO: Fondo gris oscuro para que resalte la flecha blanca */
             QTreeView::branch:has-children:!has-siblings:closed,
             QTreeView::branch:closed:has-children:has-siblings {{
                 background: {COLORS["text"]}; 
                 margin: 4px;
                 border-radius: 3px;
             }}
-            
-            /* Estado ABIERTO: Fondo azul (primary) para indicar activo */
             QTreeView::branch:open:has-children:!has-siblings,
             QTreeView::branch:open:has-children:has-siblings {{
                 background: {COLORS["primary"]};
@@ -843,16 +787,15 @@ class TabResumenSemanal(QWidget):
             }}
         """)
         self.tree.setAlternatingRowColors(True)
+
+        # OJO: Los headers se establecerán dinámicamente en cargar_datos
         self.tree.setHeaderLabels(
             ["Insumo", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Total Sem."]
         )
 
-        # INTENTO ADICIONAL DE FORZAR PALETA DE COLORES
-        # Esto ayuda si el widget respeta la paleta del sistema para dibujar primitivas (como la flecha)
         palette = self.tree.palette()
         palette.setColor(QPalette.Base, QColor(COLORS["surface"]))
         palette.setColor(QPalette.Text, QColor(COLORS["text"]))
-        # WindowText suele usarse para elementos de control
         palette.setColor(QPalette.WindowText, QColor(COLORS["text"]))
         self.tree.setPalette(palette)
 
@@ -896,9 +839,22 @@ class TabResumenSemanal(QWidget):
             f"(Semana: {start_date.strftime('%d/%m')} - {end_date.strftime('%d/%m')})"
         )
 
+        # Headers Dinámicos
+        header_labels = ["Insumo"]
+        nombres_dias = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+        temp_date = start_date
+        for i in range(7):
+            dia_str = f"{nombres_dias[i]} {temp_date.day}"
+            header_labels.append(dia_str)
+            temp_date += timedelta(days=1)
+        header_labels.append("Total Sem.")
+        self.tree.setHeaderLabels(header_labels)
+
         try:
+            # --- MODIFICACIÓN: Agregamos cat.codigo al SELECT y GROUP BY ---
             query = """
                 SELECT 
+                    cat.codigo as codigo_cat,
                     cat.nombre as categoria,
                     i.nombre as insumo,
                     c.fecha_compra as fecha_compra,
@@ -909,8 +865,8 @@ class TabResumenSemanal(QWidget):
                 JOIN insumos i ON pc.insumo_id = i.id
                 LEFT JOIN categorias_insumos cat ON i.categoria_id = cat.id
                 WHERE c.fecha_compra BETWEEN ? AND ?
-                GROUP BY cat.nombre, i.nombre, c.fecha_compra
-                ORDER BY cat.nombre, i.nombre
+                GROUP BY cat.codigo, cat.nombre, i.nombre, c.fecha_compra
+                ORDER BY cat.codigo, cat.nombre, i.nombre
             """
 
             rows = self.db.fetch_all(query, (str_start, str_end))
@@ -919,10 +875,20 @@ class TabResumenSemanal(QWidget):
             gran_total_semana = 0.0
 
             for row in rows:
-                cat_name = row[0] if row[0] else "Sin Categoría"
-                insumo_name = row[1]
-                fecha_str = row[2]
-                monto = float(row[3]) if row[3] else 0.0
+                # Índices desplazados por agregar codigo al principio
+                cat_code = row[0]
+                cat_name_raw = row[1]
+                insumo_name = row[2]
+                fecha_str = row[3]
+                monto = float(row[4]) if row[4] else 0.0
+
+                # Formatear nombre categoría "CODIGO - NOMBRE"
+                if cat_code and cat_name_raw:
+                    cat_display = f"{cat_code} - {cat_name_raw}"
+                elif cat_name_raw:
+                    cat_display = cat_name_raw
+                else:
+                    cat_display = "Sin Categoría"
 
                 try:
                     fecha_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
@@ -930,12 +896,12 @@ class TabResumenSemanal(QWidget):
                 except ValueError:
                     continue
 
-                if cat_name not in data:
-                    data[cat_name] = {}
-                if insumo_name not in data[cat_name]:
-                    data[cat_name][insumo_name] = [0.0] * 7
+                if cat_display not in data:
+                    data[cat_display] = {}
+                if insumo_name not in data[cat_display]:
+                    data[cat_display][insumo_name] = [0.0] * 7
 
-                data[cat_name][insumo_name][day_idx] += monto
+                data[cat_display][insumo_name][day_idx] += monto
                 gran_total_semana += monto
 
             col_count = self.tree.columnCount()
@@ -944,7 +910,6 @@ class TabResumenSemanal(QWidget):
                 cat_item = QTreeWidgetItem([cat_nombre])
                 cat_item.setExpanded(True)
 
-                # Fila de Categoría
                 for i in range(col_count):
                     cat_item.setBackground(i, QColor(COLORS["background"]))
                     cat_item.setForeground(i, QColor(COLORS["text"]))
@@ -969,7 +934,6 @@ class TabResumenSemanal(QWidget):
 
                     child_item = QTreeWidgetItem(valores_fila)
 
-                    # Asegurar contraste en hijos
                     for i in range(col_count):
                         child_item.setForeground(i, QColor(COLORS["text"]))
 
@@ -978,7 +942,6 @@ class TabResumenSemanal(QWidget):
                     for i, v in enumerate(dias_montos):
                         cat_totales_dias[i] += v
 
-                # Totales categoría
                 for i, v in enumerate(cat_totales_dias):
                     cat_item.setText(i + 1, f"${v:,.2f}" if v > 0 else "")
                 cat_item.setText(8, f"${cat_total_final:,.2f}")
@@ -989,3 +952,251 @@ class TabResumenSemanal(QWidget):
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al cargar resumen: {str(e)}")
+
+
+# --- NUEVA PESTAÑA: RESUMEN MENSUAL ---
+# [Dentro de app/views/modulos/compras_crud.py]
+
+
+class TabResumenMensual(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        self.init_ui()
+        self.cargar_datos()
+
+    def init_ui(self):
+        filter_frame = QFrame()
+        filter_layout = QHBoxLayout()
+        filter_layout.setContentsMargins(0, 0, 0, 0)
+        filter_frame.setLayout(filter_layout)
+
+        lbl_fecha = QLabel("Seleccione Mes/Año (Click día):")
+        lbl_fecha.setStyleSheet(f"color: {COLORS['text']}; font-weight: bold;")
+
+        self.date_picker = QDateEdit()
+        self.date_picker.setCalendarPopup(True)
+        self.date_picker.setDate(QDate.currentDate())
+        self.date_picker.setDisplayFormat("MMMM yyyy")
+        self.date_picker.dateChanged.connect(self.al_cambiar_fecha)
+        self.date_picker.setStyleSheet(
+            f"background-color: {COLORS['surface']}; color: {COLORS['text']};"
+        )
+
+        self.btn_refresh = QPushButton("Actualizar")
+        self.btn_refresh.clicked.connect(self.cargar_datos)
+        self.btn_refresh.setStyleSheet(
+            f"background-color: {COLORS['background']}; color: {COLORS['text']}; border: 1px solid {COLORS['border']};"
+        )
+
+        self.lbl_rango_mes = QLabel("")
+        self.lbl_rango_mes.setStyleSheet(
+            f"font-weight: bold; color: {COLORS['primary']}; margin-left: 10px;"
+        )
+
+        filter_layout.addWidget(lbl_fecha)
+        filter_layout.addWidget(self.date_picker)
+        filter_layout.addWidget(self.lbl_rango_mes)
+        filter_layout.addWidget(self.btn_refresh)
+        filter_layout.addStretch()
+
+        self.tree = QTreeWidget()
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                background-color: {COLORS["surface"]};
+                color: {COLORS["text"]};
+                alternate-background-color: #fcfcfc;
+                border: 1px solid {COLORS["border"]};
+            }}
+            QHeaderView::section {{
+                background-color: {COLORS["background"]};
+                color: {COLORS["text"]};
+                padding: 4px;
+                border: 1px solid {COLORS["border"]};
+                font-weight: bold;
+            }}
+            QTreeWidget::item {{
+                color: {COLORS["text"]};
+            }}
+            QTreeWidget::item:selected {{
+                background-color: {COLORS["primary"]};
+                color: white;
+            }}
+            QTreeView::branch:has-children:!has-siblings:closed,
+            QTreeView::branch:closed:has-children:has-siblings {{
+                background: {COLORS["text"]}; 
+                margin: 4px;
+                border-radius: 3px;
+            }}
+            QTreeView::branch:open:has-children:!has-siblings,
+            QTreeView::branch:open:has-children:has-siblings {{
+                background: {COLORS["primary"]};
+                margin: 4px;
+                border-radius: 3px;
+            }}
+        """)
+        self.tree.setAlternatingRowColors(True)
+        headers = [
+            "Insumo",
+            "Sem 1 (1-7)",
+            "Sem 2 (8-14)",
+            "Sem 3 (15-21)",
+            "Sem 4 (22-28)",
+            "Sem 5 (>29)",
+            "Total Mes",
+        ]
+        self.tree.setHeaderLabels(headers)
+
+        palette = self.tree.palette()
+        palette.setColor(QPalette.Base, QColor(COLORS["surface"]))
+        palette.setColor(QPalette.Text, QColor(COLORS["text"]))
+        palette.setColor(QPalette.WindowText, QColor(COLORS["text"]))
+        self.tree.setPalette(palette)
+
+        header = self.tree.header()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for i in range(1, 7):
+            header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+
+        self.layout.addWidget(filter_frame)
+        self.layout.addWidget(self.tree)
+
+        self.lbl_gran_total = QLabel("Total Compras Mes: $0.00")
+        self.lbl_gran_total.setStyleSheet(f"""
+            font-size: 16px; 
+            font-weight: bold; 
+            padding: 10px; 
+            color: {COLORS["text"]}; 
+            background-color: {COLORS["background"]}; 
+            border: 1px solid {COLORS["border"]};
+        """)
+        self.lbl_gran_total.setAlignment(Qt.AlignRight)
+        self.layout.addWidget(self.lbl_gran_total)
+
+    def al_cambiar_fecha(self):
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        self.tree.clear()
+
+        qdate = self.date_picker.date()
+        year = qdate.year()
+        month = qdate.month()  # Se mantiene la corrección de paréntesis
+
+        try:
+            last_day = calendar.monthrange(year, month)[1]
+        except Exception:
+            last_day = 30
+
+        start_date = datetime(year, month, 1).date()
+        end_date = datetime(year, month, last_day).date()
+
+        str_start = start_date.strftime("%Y-%m-%d")
+        str_end = end_date.strftime("%Y-%m-%d")
+
+        self.lbl_rango_mes.setText(f"(Rango: {str_start} al {str_end})")
+
+        try:
+            # --- MODIFICACIÓN: Agregamos cat.codigo al SELECT y GROUP BY ---
+            query = """
+                SELECT 
+                    cat.codigo as codigo_cat,
+                    cat.nombre as categoria,
+                    i.nombre as insumo,
+                    c.fecha_compra as fecha_compra,
+                    SUM(dc.subtotal) as monto
+                FROM detalle_compras dc
+                JOIN compras c ON dc.compra_id = c.id
+                JOIN presentaciones_compra pc ON dc.presentacion_id = pc.id
+                JOIN insumos i ON pc.insumo_id = i.id
+                LEFT JOIN categorias_insumos cat ON i.categoria_id = cat.id
+                WHERE c.fecha_compra BETWEEN ? AND ?
+                GROUP BY cat.codigo, cat.nombre, i.nombre, c.fecha_compra
+                ORDER BY cat.codigo, cat.nombre, i.nombre
+            """
+
+            rows = self.db.fetch_all(query, (str_start, str_end))
+
+            data = {}
+            gran_total_mes = 0.0
+
+            for row in rows:
+                cat_code = row[0]
+                cat_name_raw = row[1]
+                insumo_name = row[2]
+                fecha_str = row[3]
+                monto = float(row[4]) if row[4] else 0.0
+
+                # Formatear nombre categoría "CODIGO - NOMBRE"
+                if cat_code and cat_name_raw:
+                    cat_display = f"{cat_code} - {cat_name_raw}"
+                elif cat_name_raw:
+                    cat_display = cat_name_raw
+                else:
+                    cat_display = "Sin Categoría"
+
+                try:
+                    fecha_obj = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+                    day_num = fecha_obj.day
+                    week_idx = (day_num - 1) // 7
+                    if week_idx > 4:
+                        week_idx = 4
+                except ValueError:
+                    continue
+
+                if cat_display not in data:
+                    data[cat_display] = {}
+                if insumo_name not in data[cat_display]:
+                    data[cat_display][insumo_name] = [0.0] * 5
+
+                data[cat_display][insumo_name][week_idx] += monto
+                gran_total_mes += monto
+
+            col_count = self.tree.columnCount()
+
+            for cat_nombre in sorted(data.keys()):
+                cat_item = QTreeWidgetItem([cat_nombre])
+                cat_item.setExpanded(True)
+
+                for i in range(col_count):
+                    cat_item.setBackground(i, QColor(COLORS["background"]))
+                    cat_item.setForeground(i, QColor(COLORS["text"]))
+                cat_item.setFont(0, QFont("Arial", 9, QFont.Bold))
+
+                self.tree.addTopLevelItem(cat_item)
+
+                cat_totales_semanas = [0.0] * 5
+                cat_total_final = 0.0
+
+                for insumo_nombre in sorted(data[cat_nombre].keys()):
+                    semanas_montos = data[cat_nombre][insumo_nombre]
+                    total_insumo = sum(semanas_montos)
+                    cat_total_final += total_insumo
+
+                    valores_fila = (
+                        [insumo_nombre]
+                        + [f"${v:,.2f}" if v > 0 else "" for v in semanas_montos]
+                        + [f"${total_insumo:,.2f}"]
+                    )
+
+                    child_item = QTreeWidgetItem(valores_fila)
+                    for i in range(col_count):
+                        child_item.setForeground(i, QColor(COLORS["text"]))
+
+                    cat_item.addChild(child_item)
+
+                    for i, v in enumerate(semanas_montos):
+                        cat_totales_semanas[i] += v
+
+                for i, v in enumerate(cat_totales_semanas):
+                    cat_item.setText(i + 1, f"${v:,.2f}" if v > 0 else "")
+                cat_item.setText(6, f"${cat_total_final:,.2f}")
+
+            self.lbl_gran_total.setText(f"Total Compras Mes: ${gran_total_mes:,.2f}")
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error", f"Error al cargar resumen mensual: {str(e)}"
+            )
