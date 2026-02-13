@@ -19,7 +19,7 @@ class DatabaseManager:
         """
         Inicializa las tablas de la base de datos.
         """
-        # --- TABLAS EXISTENTES (Resumidas para brevedad, mantener tu código original) ---
+        # --- TABLAS EXISTENTES ---
         # 1. Unidades
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS unidades_medida (
@@ -95,7 +95,7 @@ class DatabaseManager:
                 fecha_compra TEXT,
                 total REAL DEFAULT 0.0,
                 estado TEXT DEFAULT 'PENDIENTE',
-                tipo_pago TEXT DEFAULT 'CONTADO',  -- <--- AGREGAR ESTA LÍNEA
+                tipo_pago TEXT DEFAULT 'CONTADO',
                 FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
             );
         """)
@@ -120,22 +120,40 @@ class DatabaseManager:
                 nombre TEXT NOT NULL
             )
         """)
-        # Reporte Ventas Semanal
+
+        # --- NUEVA ESTRUCTURA DE REPORTES DE VENTAS (MENSUAL) ---
+
+        # Cabecera del Reporte Mensual
         self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ventas_reporte_semanal (
+            CREATE TABLE IF NOT EXISTS reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo_producto TEXT,
-                nombre_producto TEXT,
-                dia_semana TEXT,
-                cantidad REAL,
-                promedio_medida REAL,
-                total_venta REAL,
-                fecha_inicio_reporte TEXT,
-                fecha_fin_reporte TEXT,
-                fecha_carga DATETIME DEFAULT CURRENT_TIMESTAMP,
-                inventario_descontado BOOLEAN DEFAULT 0 -- NUEVO CAMPO
+                fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
+                fecha_inicio_periodo DATE,
+                fecha_fin_periodo DATE,
+                mes INTEGER, -- 1 al 12
+                anio INTEGER,
+                total_venta_reportada REAL DEFAULT 0.0,
+                observaciones TEXT
             )
         """)
+
+        # Detalle del Reporte Mensual (Remplaza a ventas_reporte_semanal)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_reportes_ventas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                reporte_id INTEGER NOT NULL,
+                codigo_producto TEXT,
+                nombre_producto TEXT,
+                dia_semana TEXT, -- Domingo, Lunes, etc.
+                cantidad REAL DEFAULT 0.0,
+                promedio_medida REAL DEFAULT 0.0,
+                total_venta REAL DEFAULT 0.0,
+                total_costo REAL DEFAULT 0.0,
+                total_utilidad REAL DEFAULT 0.0,
+                FOREIGN KEY (reporte_id) REFERENCES reportes_ventas(id) ON DELETE CASCADE
+            )
+        """)
+
         # Menu Items
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS menu_items (
@@ -157,7 +175,7 @@ class DatabaseManager:
                 FOREIGN KEY(insumo_id) REFERENCES insumos(id)
             )
         """)
-        # Ventas
+        # Ventas (Registro simple, puede ser depurado en el futuro)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,33 +193,33 @@ class DatabaseManager:
             )
         """)
 
-        # --- NUEVA TABLA: KARDEX (MOVIMIENTOS DE INVENTARIO) ---
+        # --- KARDEX (MOVIMIENTOS DE INVENTARIO) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS movimientos_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 insumo_id INTEGER NOT NULL,
                 fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
-                tipo_movimiento TEXT NOT NULL, -- 'COMPRA', 'VENTA', 'MERMA', 'AJUSTE'
-                cantidad REAL NOT NULL,        -- Positivo para entrada, Negativo para salida
+                tipo_movimiento TEXT NOT NULL, 
+                cantidad REAL NOT NULL,
                 stock_anterior REAL,
                 stock_nuevo REAL,
-                referencia_id INTEGER,         -- ID de la Compra o ID del Reporte de Venta
+                referencia_id INTEGER,
                 observacion TEXT,
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             );
         """)
 
-        # 12. Registro Diario (Cabecera)
+        # Registro Diario (Cabecera)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS registro_ventas_diarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fecha DATE UNIQUE NOT NULL,
-                inventario_descontado BOOLEAN DEFAULT 0, -- Para saber si ya se restaron los insumos
+                inventario_descontado BOOLEAN DEFAULT 0,
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         """)
 
-        # 13. Detalle Ventas (Solo Cantidades)
+        # Detalle Ventas (Solo Cantidades)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_ventas_diarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,17 +249,8 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
-        # Nueva migración para flag de ventas
-        try:
-            self.cursor.execute(
-                "ALTER TABLE ventas_reporte_semanal ADD COLUMN inventario_descontado BOOLEAN DEFAULT 0"
-            )
-        except sqlite3.OperationalError:
-            pass
-
         self.conn.commit()
 
-    # ... (Resto de métodos: create_default_admin, execute_query, fetch_all, insert_report_batch se mantienen igual)
     def create_default_admin(self):
         try:
             check = self.cursor.execute(
@@ -270,31 +279,84 @@ class DatabaseManager:
         self.cursor.execute(query, params)
         return self.cursor.fetchone()
 
-    def insert_report_batch(self, records, fecha_inicio, fecha_fin):
-        # ... (Tu código existente)
-        query = """
-            INSERT INTO ventas_reporte_semanal 
-            (codigo_producto, nombre_producto, dia_semana, cantidad, promedio_medida, total_venta, fecha_inicio_reporte, fecha_fin_reporte, inventario_descontado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+    # --- MÉTODOS DE REPORTES ---
+
+    def guardar_reporte_mensual(self, metadata, records):
         """
-        data = []
-        for r in records:
-            data.append(
-                (
-                    r["code"],
-                    r["desc"],
-                    r["day"],
-                    r["qty"],
-                    r.get("prom", 0.0),
-                    r["total"],
-                    fecha_inicio,
-                    fecha_fin,
-                )
-            )
+        Guarda un reporte mensual completo: Cabecera y Detalles.
+        """
         try:
-            self.cursor.executemany(query, data)
+            fecha_inicio = metadata.get("desde", "")
+            fecha_fin = metadata.get("hasta", "")
+            total_global = sum(r["total_venta"] for r in records)
+
+            query_header = """
+                INSERT INTO reportes_ventas 
+                (fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, observaciones)
+                VALUES (?, ?, ?, ?)
+            """
+            self.cursor.execute(
+                query_header, (fecha_inicio, fecha_fin, total_global, "Carga desde CSV")
+            )
+            reporte_id = self.cursor.lastrowid
+
+            query_detail = """
+                INSERT INTO detalle_reportes_ventas 
+                (reporte_id, codigo_producto, nombre_producto, dia_semana, cantidad, promedio_medida, total_venta, total_costo, total_utilidad)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+
+            data_tuples = []
+            for r in records:
+                data_tuples.append(
+                    (
+                        reporte_id,
+                        r["code"],
+                        r["desc"],
+                        r["day"],
+                        r["qty"],
+                        r.get("prom", 0.0),
+                        r["total_venta"],
+                        r.get("total_costo", 0.0),
+                        r.get("total_utilidad", 0.0),
+                    )
+                )
+
+            self.cursor.executemany(query_detail, data_tuples)
             self.conn.commit()
-            return True, f"{self.cursor.rowcount} registros insertados."
+            return (
+                True,
+                f"Reporte guardado con éxito. ID: {reporte_id}. {len(records)} registros.",
+            )
+
         except Exception as e:
             self.conn.rollback()
+            return False, f"Error al guardar reporte: {str(e)}"
+
+    def obtener_reportes_registrados(self):
+        """Devuelve la lista de reportes cargados para el historial."""
+        query = """
+            SELECT id, fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, fecha_registro 
+            FROM reportes_ventas 
+            ORDER BY id DESC
+        """
+        return self.fetch_all(query)
+
+    def obtener_detalle_reporte(self, reporte_id):
+        """Devuelve los ítems de un reporte específico."""
+        query = """
+            SELECT codigo_producto, nombre_producto, dia_semana, cantidad, total_venta, total_costo
+            FROM detalle_reportes_ventas
+            WHERE reporte_id = ?
+        """
+        return self.fetch_all(query, (reporte_id,))
+
+    def eliminar_reporte(self, reporte_id):
+        """Elimina un reporte y sus detalles (por el ON DELETE CASCADE)."""
+        try:
+            self.execute_query(
+                "DELETE FROM reportes_ventas WHERE id = ?", (reporte_id,)
+            )
+            return True, "Reporte eliminado."
+        except Exception as e:
             return False, str(e)
