@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor  # Importación necesaria para el color
 from app.controllers.report_parser import ReportParser
 
 
@@ -41,29 +42,27 @@ class CargaReportesWidget(QWidget):
         # Sistema de Pestañas
         self.tabs = QTabWidget()
 
-        # Pestaña 1: Carga (Instancia de la clase interna PestanaCarga)
+        # Pestaña 1: Carga
         self.tab_carga = PestanaCarga(self.db, self.callback_cancelar)
 
-        # Pestaña 2: Historial (Instancia de la clase interna PestanaHistorial)
+        # Pestaña 2: Historial
         self.tab_historial = PestanaHistorial(self.db)
 
         self.tabs.addTab(self.tab_carga, "📥 Cargar Nuevo Reporte")
         self.tabs.addTab(self.tab_historial, "📋 Historial y Consultas")
 
-        # Evento al cambiar de pestaña (para refrescar el historial al entrar)
         self.tabs.currentChanged.connect(self.al_cambiar_pestana)
 
         layout.addWidget(self.tabs)
 
     def al_cambiar_pestana(self, index):
-        # Si cambiamos a la pestaña de historial (índice 1), refrescar datos
         if index == 1:
             self.tab_historial.cargar_lista_reportes()
 
 
 class PestanaCarga(QWidget):
     """
-    Funcionalidad de carga de CSV.
+    Funcionalidad de carga de CSV con validación visual.
     """
 
     def __init__(self, db, callback_cancelar):
@@ -78,10 +77,15 @@ class PestanaCarga(QWidget):
         layout = QVBoxLayout()
 
         # Instrucciones
-        lbl_info = QLabel(
-            "Seleccione el archivo CSV generado por el POS para cargar al sistema."
-        )
+        lbl_info = QLabel("Seleccione el archivo CSV generado por el POS.")
         layout.addWidget(lbl_info)
+
+        # Leyenda de Colores
+        lbl_leyenda = QLabel(
+            "Leyenda: <span style='background-color:#ffcccc'>&nbsp;&nbsp;&nbsp;&nbsp;</span> El código NO existe en el Menú (debe registrarlo)."
+        )
+        lbl_leyenda.setTextFormat(Qt.RichText)
+        layout.addWidget(lbl_leyenda)
 
         # Botón de Selección
         top_layout = QHBoxLayout()
@@ -91,7 +95,7 @@ class PestanaCarga(QWidget):
         top_layout.addWidget(btn_cargar)
         layout.addLayout(top_layout)
 
-        # Info del Reporte detectado
+        # Info del Reporte
         info_group = QHBoxLayout()
         self.lbl_fechas = QLabel("Periodo Detectado: -")
         self.lbl_fechas.setStyleSheet("font-weight: bold; color: #007bff;")
@@ -117,12 +121,13 @@ class PestanaCarga(QWidget):
         )
         btn_confirmar.clicked.connect(self.guardar_en_bd)
 
-        btn_cancelar = QPushButton("Cancelar / Cerrar")
+        btn_cancelar = QPushButton("Limpiar / Cancelar")
         btn_cancelar.setStyleSheet(
             "background-color: #6c757d; color: white; padding: 10px;"
         )
-        if self.callback_cancelar:
-            btn_cancelar.clicked.connect(self.callback_cancelar)
+
+        # CORRECCIÓN: Conectamos siempre a la función local, no condicionalmente
+        btn_cancelar.clicked.connect(self.accion_cancelar)
 
         actions_layout.addWidget(btn_cancelar)
         actions_layout.addWidget(btn_confirmar)
@@ -146,21 +151,52 @@ class PestanaCarga(QWidget):
                 QMessageBox.critical(self, "Error", f"Error leyendo archivo:\n{str(e)}")
 
     def mostrar_datos(self, records, metadata):
+        # 1. Obtener lista de códigos existentes en la BD para comparar
+        codigos_bd = self.db.obtener_todos_codigos_menu()
+
+        # UI Info
         inicio = metadata.get("desde", "N/A")
         fin = metadata.get("hasta", "N/A")
         self.lbl_fechas.setText(f"Periodo Detectado: {inicio} al {fin}")
         self.lbl_registros.setText(f"Registros: {len(records)}")
 
+        # Limitar visualización para rendimiento
         limit = min(len(records), 500)
         self.table.setRowCount(limit)
+
+        color_alerta = QColor("#ffcccc")  # Rojo claro
+
         for r_idx in range(limit):
             row = records[r_idx]
-            self.table.setItem(r_idx, 0, QTableWidgetItem(str(row["code"])))
-            self.table.setItem(r_idx, 1, QTableWidgetItem(str(row["desc"])))
-            self.table.setItem(r_idx, 2, QTableWidgetItem(str(row["day"])))
-            self.table.setItem(r_idx, 3, QTableWidgetItem(str(row["qty"])))
-            self.table.setItem(r_idx, 4, QTableWidgetItem(f"{row['total_venta']:.2f}"))
-            self.table.setItem(r_idx, 5, QTableWidgetItem(f"{row['total_costo']:.2f}"))
+            codigo_reporte = str(row["code"]).strip()
+
+            # Crear items
+            item_code = QTableWidgetItem(codigo_reporte)
+            item_desc = QTableWidgetItem(str(row["desc"]))
+            item_day = QTableWidgetItem(str(row["day"]))
+            item_qty = QTableWidgetItem(str(row["qty"]))
+            item_venta = QTableWidgetItem(f"{row['total_venta']:.2f}")
+            item_costo = QTableWidgetItem(f"{row['total_costo']:.2f}")
+
+            # VALIDACIÓN: Si el código NO está en la lista de la BD, pintar de rojo
+            if codigo_reporte not in codigos_bd:
+                for item in [
+                    item_code,
+                    item_desc,
+                    item_day,
+                    item_qty,
+                    item_venta,
+                    item_costo,
+                ]:
+                    item.setBackground(color_alerta)
+                    item.setToolTip("Este código no existe en el menú actual.")
+
+            self.table.setItem(r_idx, 0, item_code)
+            self.table.setItem(r_idx, 1, item_desc)
+            self.table.setItem(r_idx, 2, item_day)
+            self.table.setItem(r_idx, 3, item_qty)
+            self.table.setItem(r_idx, 4, item_venta)
+            self.table.setItem(r_idx, 5, item_costo)
 
     def guardar_en_bd(self):
         if not self.current_records:
@@ -182,8 +218,15 @@ class PestanaCarga(QWidget):
             else:
                 QMessageBox.critical(self, "Error BD", msg)
 
+    def accion_cancelar(self):
+        """Limpia el formulario y ejecuta el callback si existe."""
+        self.limpiar()
+        if self.callback_cancelar:
+            self.callback_cancelar()
+
     def limpiar(self):
         self.current_records = []
+        self.current_metadata = {}
         self.table.setRowCount(0)
         self.lbl_fechas.setText("Periodo Detectado: -")
         self.lbl_registros.setText("Registros: 0")
@@ -191,7 +234,7 @@ class PestanaCarga(QWidget):
 
 class PestanaHistorial(QWidget):
     """
-    Nueva pestaña para visualizar reportes guardados.
+    Pestaña para visualizar reportes guardados.
     """
 
     def __init__(self, db):
@@ -202,14 +245,14 @@ class PestanaHistorial(QWidget):
     def init_ui(self):
         layout = QVBoxLayout(self)
 
-        # Usamos un Splitter para dividir la lista de reportes (arriba) y el detalle (abajo)
+        # Splitter Vertical
         splitter = QSplitter(Qt.Vertical)
 
-        # --- SECCIÓN SUPERIOR: LISTA DE REPORTES ---
+        # --- ARRIBA: LISTA ---
         top_widget = QWidget()
         top_layout = QVBoxLayout(top_widget)
         top_layout.addWidget(
-            QLabel("<b>1. Reportes Disponibles</b> (Haga clic para ver detalle)")
+            QLabel("<b>1. Reportes Disponibles</b> (Click para ver detalle)")
         )
 
         self.tabla_reportes = QTableWidget()
@@ -224,7 +267,6 @@ class PestanaHistorial(QWidget):
 
         top_layout.addWidget(self.tabla_reportes)
 
-        # Botón Eliminar Reporte
         btn_eliminar = QPushButton("Eliminar Reporte Seleccionado")
         btn_eliminar.setStyleSheet(
             "background-color: #dc3545; color: white; padding: 5px;"
@@ -234,7 +276,7 @@ class PestanaHistorial(QWidget):
 
         splitter.addWidget(top_widget)
 
-        # --- SECCIÓN INFERIOR: DETALLE DEL REPORTE ---
+        # --- ABAJO: DETALLE ---
         bottom_widget = QWidget()
         bottom_layout = QVBoxLayout(bottom_widget)
         self.lbl_detalle = QLabel("<b>2. Detalle de Ventas</b>")
@@ -258,7 +300,6 @@ class PestanaHistorial(QWidget):
         self.cargar_lista_reportes()
 
     def cargar_lista_reportes(self):
-        """Consulta la BD y llena la tabla superior."""
         reportes = self.db.obtener_reportes_registrados()
         self.tabla_reportes.setRowCount(0)
         self.tabla_detalle.setRowCount(0)
@@ -275,7 +316,6 @@ class PestanaHistorial(QWidget):
             self.tabla_reportes.setItem(i, 4, QTableWidgetItem(str(row[4])))
 
     def cargar_detalle_reporte(self, item):
-        """Carga los ítems del reporte seleccionado."""
         row_idx = item.row()
         reporte_id = self.tabla_reportes.item(row_idx, 0).text()
         periodo = f"{self.tabla_reportes.item(row_idx, 1).text()} al {self.tabla_reportes.item(row_idx, 2).text()}"
@@ -288,7 +328,6 @@ class PestanaHistorial(QWidget):
         self.tabla_detalle.setRowCount(len(detalles))
 
         for i, row in enumerate(detalles):
-            # row: codigo, nombre, dia, cantidad, venta, costo
             self.tabla_detalle.setItem(i, 0, QTableWidgetItem(str(row[0])))
             self.tabla_detalle.setItem(i, 1, QTableWidgetItem(str(row[1])))
             self.tabla_detalle.setItem(i, 2, QTableWidgetItem(str(row[2])))

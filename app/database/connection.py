@@ -360,3 +360,14 @@ class DatabaseManager:
             return True, "Reporte eliminado."
         except Exception as e:
             return False, str(e)
+
+    def obtener_todos_codigos_menu(self):
+        """
+        Devuelve una lista plana con todos los códigos de productos (menu_items)
+        registrados en la base de datos.
+        Utilizado para validaciones al cargar reportes.
+        """
+        query = "SELECT codigo FROM menu_items"
+        resultados = self.fetch_all(query)
+        # Convertir de lista de tuplas [(COD1,), (COD2,)] a lista simple [COD1, COD2]
+        return [r[0] for r in resultados]
