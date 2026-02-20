@@ -24,8 +24,11 @@ from app.views.modulos.calculo_insumos import CalculoInsumosView
 from app.views.modulos.compras_crud import ComprasCRUD
 from app.views.modulos.ventas_diarias import VentasDiariasView
 
+
 # --- NUEVA IMPORTACIÓN (INVENTARIO) ---
 from app.views.modulos.inventario_view import InventarioView
+
+from app.views.dashboard import DashboardView
 
 
 class MainWindow(QMainWindow):
@@ -94,6 +97,13 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(lbl_header)
 
         # --- BOTONES DE NAVEGACIÓN (Con Iconos Restaurados) ---
+
+        self.btn_inicio = self.create_nav_button(
+            "Inicio / Dashboard",
+            "assets/icons/icon01.png",  # Puedes usar otro icono si prefieres
+            self.show_dashboard,
+        )
+        sidebar_layout.addWidget(self.btn_inicio)
 
         self.btn_ventas_dia = self.create_nav_button(
             "Registro Ventas Diario",
@@ -206,6 +216,8 @@ class MainWindow(QMainWindow):
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
 
+        self.show_dashboard()
+
     def create_nav_button(self, text, icon_path, callback):
         """
         Crea un botón de navegación estilizado con icono.
@@ -311,6 +323,14 @@ class MainWindow(QMainWindow):
     def show_usuarios(self):
         self.load_module(
             "usuarios", UsuariosWidget, "Gestión de Usuarios", needs_db=True
+        )
+
+    def show_dashboard(self):
+        self.load_module(
+            "dashboard",
+            DashboardView,
+            "Panel de Control",
+            needs_db=True,
         )
 
     def logout(self):
