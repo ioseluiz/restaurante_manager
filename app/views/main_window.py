@@ -33,6 +33,17 @@ from app.views.modulos.inventario_view import InventarioView
 from app.views.dashboard import DashboardView
 
 
+def resource_path(relative_path):
+    """Obtiene la ruta absoluta al recurso, funciona para desarrollo y para PyInstaller"""
+    try:
+        # PyInstaller crea una carpeta temporal y almacena la ruta en _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, db_manager, auth_controller):
         super().__init__()
@@ -43,7 +54,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Sistema de Gestión de Restaurante")
         self.resize(1200, 800)
-        self.setWindowIcon(QIcon("assets/icons/icon01.png"))
+        # APLICACIÓN DE resource_path AL ICONO PRINCIPAL
+        self.setWindowIcon(QIcon(resource_path("assets/icons/icon01.png")))
 
         self.init_ui()
         self.setup_statusbar()
@@ -197,7 +209,8 @@ class MainWindow(QMainWindow):
         self.actualizar_info_bd()
 
         btn_logout = QPushButton("  Cerrar Sesión")
-        btn_logout.setIcon(QIcon("assets/icons/logout.png"))
+        # APLICACIÓN DE resource_path AL ICONO DE LOGOUT
+        btn_logout.setIcon(QIcon(resource_path("assets/icons/logout.png")))
         btn_logout.setIconSize(QSize(24, 24))
         btn_logout.setStyleSheet("""
             QPushButton {
@@ -223,11 +236,15 @@ class MainWindow(QMainWindow):
 
     def create_nav_button(self, text, icon_path, callback):
         btn = QPushButton(f"  {text}")
-        if icon_path and os.path.exists(icon_path):
-            btn.setIcon(QIcon(icon_path))
+
+        # APLICACIÓN DE resource_path A TODOS LOS ICONOS DEL SIDEBAR
+        abs_icon_path = resource_path(icon_path) if icon_path else ""
+
+        if abs_icon_path and os.path.exists(abs_icon_path):
+            btn.setIcon(QIcon(abs_icon_path))
             btn.setIconSize(QSize(32, 32))
         else:
-            btn.setIcon(QIcon("assets/icons/icon01.png"))
+            btn.setIcon(QIcon(resource_path("assets/icons/icon01.png")))
             btn.setIconSize(QSize(32, 32))
 
         btn.setStyleSheet("""

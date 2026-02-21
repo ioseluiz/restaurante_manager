@@ -8,3 +8,5 @@ prompt.md
 prompt_01.md
 datos_db/
 dbdiagram.txt
+build/
+dist/
