@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import (
     QLabel,
     QStackedWidget,
     QFrame,
+    QMessageBox,
+    QFileDialog,
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
@@ -47,14 +49,32 @@ class MainWindow(QMainWindow):
         self.setup_statusbar()
 
     def setup_statusbar(self):
-        user_display = self.auth.current_user
-        if isinstance(user_display, (list, tuple)) and len(user_display) > 1:
-            user_display = user_display[1]
-
-        self.statusBar().showMessage(f"Usuario: {user_display}")
+        """Inicializa la barra de estado inferior."""
         self.statusBar().setStyleSheet(
             "color: #2c3e50; font-weight: bold; border-top: 1px solid #bdc3c7;"
         )
+        self.actualizar_info_bd()
+
+    def actualizar_info_bd(self):
+        """Actualiza los textos de la interfaz para confirmar qué base de datos se usa."""
+        # Obtener usuario actual
+        user_display = self.auth.current_user
+        if isinstance(user_display, (list, tuple)) and len(user_display) > 1:
+            username = user_display[1]
+        else:
+            username = "Desconocido"
+
+        # Obtener ruta actual
+        ruta_bd = getattr(self.db, "db_path", "Ruta Desconocida")
+
+        # 1. Actualizar texto de la barra de estado
+        self.statusBar().showMessage(
+            f"Usuario: {username}  |  Base de Datos Activa: {ruta_bd}"
+        )
+
+        # 2. Actualizar la etiqueta del menú lateral (si ya fue creada)
+        if hasattr(self, "lbl_db_info"):
+            self.lbl_db_info.setText(f"📁 BD Actual:\n{ruta_bd}")
 
     def init_ui(self):
         central_widget = QWidget()
@@ -84,7 +104,6 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_inicio)
 
-        # <--- BOTÓN CONECTADO AL NUEVO MÓDULO DE VENTAS --->
         self.btn_ventas = self.create_nav_button(
             "Ventas",
             "assets/icons/icon_pos_ventas.png",
@@ -144,10 +163,38 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_unidades)
 
-        self.btn_usuarios = self.create_nav_button(
-            "Gestión de Usuarios", "assets/icons/icon_user.png", self.show_usuarios
+        # --- RESTRICCIÓN DE ROLES ---
+        user_rol = ""
+        user_data = self.auth.current_user
+        if isinstance(user_data, (list, tuple)) and len(user_data) > 2:
+            user_rol = str(user_data[2]).lower()
+
+        # Solo si es admin o administrador se muestran estos botones
+        if user_rol in ["admin", "administrador"]:
+            self.btn_usuarios = self.create_nav_button(
+                "Gestión de Usuarios", "assets/icons/icon_user.png", self.show_usuarios
+            )
+            sidebar_layout.addWidget(self.btn_usuarios)
+
+            self.btn_db_config = self.create_nav_button(
+                "Configurar BD",
+                "assets/icons/db_settings.png",
+                self.manage_db_connection,
+            )
+            self.btn_db_config.setStyleSheet(
+                self.btn_db_config.styleSheet() + "color: #f1c40f;"
+            )
+            sidebar_layout.addWidget(self.btn_db_config)
+
+        # --- NUEVA ETIQUETA INFORMATIVA DE BASE DE DATOS ---
+        self.lbl_db_info = QLabel()
+        self.lbl_db_info.setStyleSheet(
+            "color: #7f8c8d; font-size: 10px; margin-top: 5px; margin-bottom: 5px; margin-left: 5px;"
         )
-        sidebar_layout.addWidget(self.btn_usuarios)
+        self.lbl_db_info.setWordWrap(True)
+        sidebar_layout.addWidget(self.lbl_db_info)
+        # Inicializar el texto
+        self.actualizar_info_bd()
 
         btn_logout = QPushButton("  Cerrar Sesión")
         btn_logout.setIcon(QIcon("assets/icons/logout.png"))
@@ -204,6 +251,52 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(callback)
         return btn
 
+    def manage_db_connection(self):
+        """Muestra opciones para cambiar, crear o respaldar la base de datos."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Gestión de Base de Datos")
+        msg.setText("¿Qué acción desea realizar con la base de datos?")
+
+        btn_new = msg.addButton("Cargar Existente / Nueva BD", QMessageBox.ActionRole)
+        btn_backup = msg.addButton("Crear Respaldo (Copia)", QMessageBox.ActionRole)
+        msg.addButton("Cancelar", QMessageBox.RejectRole)
+
+        msg.exec_()
+
+        if msg.clickedButton() == btn_new:
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Seleccionar o Crear Base de Datos", "", "SQLite Files (*.db)"
+            )
+            if path:
+                self.db.switch_database(path)
+
+                # --- ACTUALIZAR LA INTERFAZ CON LA NUEVA RUTA ---
+                self.actualizar_info_bd()
+
+                QMessageBox.information(
+                    self, "Éxito", f"Conectado exitosamente a:\n{path}"
+                )
+                # Reiniciar módulos para que recarguen datos de la nueva conexión
+                self.modules = {}
+                self.show_dashboard()
+
+        elif msg.clickedButton() == btn_backup:
+            folder = QFileDialog.getExistingDirectory(
+                self, "Seleccionar Carpeta para el Respaldo"
+            )
+            if folder:
+                success, info = self.db.create_backup(folder)
+                if success:
+                    QMessageBox.information(
+                        self,
+                        "Respaldo Creado",
+                        f"Copia de seguridad guardada en:\n{info}",
+                    )
+                else:
+                    QMessageBox.critical(
+                        self, "Error", f"No se pudo crear el respaldo: {info}"
+                    )
+
     def load_module(self, name, widget_class, title, needs_db=False):
         if name not in self.modules:
             if needs_db:
@@ -252,8 +345,6 @@ class MainWindow(QMainWindow):
         self.load_module(
             "presupuestos", PresupuestosView, "Gestión de Presupuestos", needs_db=True
         )
-
-    # Nota: Se eliminó def show_reportes(self) porque ya está integrado en VentasModulo
 
     def show_unidades(self):
         self.load_module("unidades", UnidadesCRUD, "Unidades de Medida", needs_db=True)

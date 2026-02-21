@@ -2,18 +2,50 @@
 import sqlite3
 import os
 import hashlib
+import shutil
+from datetime import datetime
 
 
 class DatabaseManager:
-    def __init__(self, db_name="data/restaurante.db"):
-        os.makedirs(os.path.dirname(db_name), exist_ok=True)
-        self.conn = sqlite3.connect(db_name)
-        # Habilitar Foreign Keys es vital
+    def __init__(self, db_name=None):
+        # Si no se pasa nombre, intenta cargar de la configuración o usa el default
+        if db_name is None:
+            from app.database.config import get_db_path
+
+            db_name = get_db_path()
+
+        self.db_path = db_name
+        self.connect()
+
+    def connect(self):
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
         self.conn.execute("PRAGMA foreign_keys = ON;")
         self.cursor = self.conn.cursor()
         self.initialize_tables()
         self.create_default_admin()
         self._migrate_tables()
+
+    def switch_database(self, new_path):
+        """Cierra la conexión actual y abre una nueva en la ruta especificada."""
+        self.conn.close()
+        self.db_path = new_path
+        from app.database.config import save_db_path
+
+        save_db_path(new_path)
+        self.connect()
+
+    def create_backup(self, dest_folder):
+        """Crea una copia de seguridad del archivo actual."""
+        try:
+            filename = (
+                f"backup_restaurante_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+            )
+            dest_path = os.path.join(dest_folder, filename)
+            shutil.copy2(self.db_path, dest_path)
+            return True, dest_path
+        except Exception as e:
+            return False, str(e)
 
     def initialize_tables(self):
         """
