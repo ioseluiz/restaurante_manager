@@ -80,7 +80,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(lbl_header)
 
         self.btn_inicio = self.create_nav_button(
-            "Inicio / Dashboard", "assets/icons/icon01.png", self.show_dashboard
+            "Inicio / Dashboard", "assets/icons/home.png", self.show_dashboard
         )
         sidebar_layout.addWidget(self.btn_inicio)
 
@@ -94,13 +94,13 @@ class MainWindow(QMainWindow):
 
         self.btn_compras = self.create_nav_button(
             "Compras y Proveedores",
-            "assets/icons/icon_pos_ventas.png",
+            "assets/icons/shopping_cart.png",
             self.show_compras,
         )
         sidebar_layout.addWidget(self.btn_compras)
 
         self.btn_inventario = self.create_nav_button(
-            "Inventario (Kardex)", "assets/icons/icon_insumos.png", self.show_inventario
+            "Inventario", "assets/icons/inventario.png", self.show_inventario
         )
         self.btn_inventario.setStyleSheet(
             self.btn_inventario.styleSheet() + "border: 1px solid #3498db;"
@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_insumos)
 
         self.btn_recetas = self.create_nav_button(
-            "Recetas (Fichas)", "assets/icons/icon_chicken.png", self.show_recetas
+            "Recetas (Fichas)", "assets/icons/recetas.png", self.show_recetas
         )
         sidebar_layout.addWidget(self.btn_recetas)
 
@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_usuarios)
 
         btn_logout = QPushButton("  Cerrar Sesión")
-        btn_logout.setIcon(QIcon("assets/icons/icon06.png"))
+        btn_logout.setIcon(QIcon("assets/icons/logout.png"))
         btn_logout.setIconSize(QSize(24, 24))
         btn_logout.setStyleSheet("""
             QPushButton {
