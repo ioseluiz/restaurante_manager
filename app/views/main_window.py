@@ -55,7 +55,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Sistema de Gestión de Restaurante")
         self.resize(1200, 800)
         # APLICACIÓN DE resource_path AL ICONO PRINCIPAL
-        self.setWindowIcon(QIcon(resource_path("assets/icons/icon01.png")))
+        self.setWindowIcon(QIcon(resource_path("assets/icons/app.ico")))
 
         self.init_ui()
         self.setup_statusbar()
@@ -244,7 +244,7 @@ class MainWindow(QMainWindow):
             btn.setIcon(QIcon(abs_icon_path))
             btn.setIconSize(QSize(32, 32))
         else:
-            btn.setIcon(QIcon(resource_path("assets/icons/icon01.png")))
+            btn.setIcon(QIcon(resource_path("assets/icons/app.ico")))
             btn.setIconSize(QSize(32, 32))
 
         btn.setStyleSheet("""
