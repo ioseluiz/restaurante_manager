@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QColor, QFont  # --- NUEVO: Para dar color al árbol ---
 
 # --- ESTILOS COMUNES PARA DIÁLOGOS ---
 DIALOG_STYLES = """
@@ -110,6 +111,13 @@ class PresupuestosView(QWidget):
         )
         btn_ver.clicked.connect(self.ver_presupuesto)
 
+        # --- NUEVO BOTÓN: Control Presupuestal ---
+        btn_control = QPushButton(" Control Presupuestal")
+        btn_control.setStyleSheet(
+            "background-color: #8e44ad; color: white; padding: 8px; border-radius: 4px; font-weight: bold;"
+        )
+        btn_control.clicked.connect(self.abrir_control_presupuesto)
+
         btn_editar_gen = QPushButton(" Editar General")
         btn_editar_gen.setStyleSheet(
             "background-color: #f39c12; color: white; padding: 8px; border-radius: 4px; font-weight: bold;"
@@ -124,6 +132,7 @@ class PresupuestosView(QWidget):
 
         btn_layout.addWidget(btn_nuevo)
         btn_layout.addWidget(btn_ver)
+        btn_layout.addWidget(btn_control)  # --- NUEVO ---
         btn_layout.addWidget(btn_editar_gen)
         btn_layout.addWidget(btn_eliminar)
         btn_layout.addStretch()
@@ -196,6 +205,23 @@ class PresupuestosView(QWidget):
         dlg.exec_()
         self.cargar_datos()
 
+    # --- NUEVO MÉTODO DE CONTROL ---
+    def abrir_control_presupuesto(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(
+                self, "Atención", "Debe seleccionar un presupuesto para ver su control."
+            )
+            return
+
+        presupuesto_id = self.table.item(row, 0).data(Qt.UserRole)
+        numero = self.table.item(row, 0).text()
+        mes = self.table.item(row, 1).text()
+        anio = self.table.item(row, 2).text()
+
+        dlg = ControlPresupuestoDialog(self.db, presupuesto_id, numero, mes, anio, self)
+        dlg.exec_()
+
     def editar_general(self):
         row = self.table.currentRow()
         if row < 0:
@@ -239,6 +265,193 @@ class PresupuestosView(QWidget):
                 self, "Éxito", "Presupuesto eliminado correctamente."
             )
             self.cargar_datos()
+
+
+# --- NUEVO DIÁLOGO: CONTROL PRESUPUESTARIO ---
+class ControlPresupuestoDialog(QDialog):
+    def __init__(self, db_manager, presupuesto_id, numero, mes, anio, parent=None):
+        super().__init__(parent)
+        self.db = db_manager
+        self.presupuesto_id = presupuesto_id
+        self.numero = numero
+        self.mes = mes
+        self.anio = anio
+
+        self.setWindowTitle(f"Control de Presupuesto N° {numero} ({mes}/{anio})")
+        self.resize(900, 600)
+        self.setStyleSheet(DIALOG_STYLES)
+
+        self.init_ui()
+        self.cargar_datos_control()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Encabezado informativo
+        lbl_head = QLabel(f"<h3>Análisis y Control: Presupuesto N° {self.numero}</h3>")
+        lbl_head.setAlignment(Qt.AlignCenter)
+        layout.addWidget(lbl_head)
+
+        # Árbol de datos
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(
+            [
+                "Categoría / Insumo",
+                "Monto Presupuestado",
+                "Monto Ejecutado (Compras)",
+                "Saldo (Diferencia)",
+            ]
+        )
+        self.tree.setColumnWidth(0, 350)
+        self.tree.setColumnWidth(1, 150)
+        self.tree.setColumnWidth(2, 170)
+        self.tree.setColumnWidth(3, 150)
+        self.tree.setAlternatingRowColors(True)
+        layout.addWidget(self.tree)
+
+        # Resumen general abajo
+        self.lbl_resumen = QLabel("Cargando datos...")
+        self.lbl_resumen.setStyleSheet(
+            "font-size: 14px; padding: 10px; background-color: white; border: 1px solid #bdc3c7; border-radius: 4px;"
+        )
+        layout.addWidget(self.lbl_resumen)
+
+        # Botón Cerrar
+        btn_cerrar = QPushButton("Cerrar")
+        btn_cerrar.setStyleSheet(
+            "background-color: #bdc3c7; font-weight: bold; padding: 8px;"
+        )
+        btn_cerrar.clicked.connect(self.close)
+        layout.addWidget(btn_cerrar, alignment=Qt.AlignRight)
+
+    def cargar_datos_control(self):
+        self.tree.clear()
+
+        # 1. Obtener Presupuestado Original
+        query_pres = """
+            SELECT categoria_nombre, insumo_nombre, monto_estimado 
+            FROM detalle_presupuestos 
+            WHERE presupuesto_id = ?
+        """
+        datos_presupuesto = self.db.fetch_all(query_pres, (self.presupuesto_id,))
+
+        # 2. Obtener Comprado/Ejecutado cruzando compras -> detalle -> insumo -> categoría
+        query_compras = """
+            SELECT 
+                COALESCE(cat.nombre, 'Sin Categoría') as categoria,
+                i.nombre as insumo,
+                SUM(dc.subtotal) as ejecutado
+            FROM detalle_compras dc
+            JOIN compras c ON dc.compra_id = c.id
+            JOIN presentaciones_compra pc ON dc.presentacion_id = pc.id
+            JOIN insumos i ON pc.insumo_id = i.id
+            LEFT JOIN categorias_insumos cat ON i.categoria_id = cat.id
+            WHERE c.presupuesto_id = ?
+            GROUP BY cat.nombre, i.nombre
+        """
+        datos_compras = self.db.fetch_all(query_compras, (self.presupuesto_id,))
+
+        # 3. Estructurar en diccionario principal
+        diccionario = {}
+
+        # Agregar los presupuestados
+        for d in datos_presupuesto:
+            cat_nom = d[0] if d[0] else "Sin Categoría"
+            ins_nom = d[1]
+            monto_pres = d[2]
+
+            if cat_nom not in diccionario:
+                diccionario[cat_nom] = {}
+            if ins_nom not in diccionario[cat_nom]:
+                diccionario[cat_nom][ins_nom] = {"presupuestado": 0.0, "ejecutado": 0.0}
+
+            diccionario[cat_nom][ins_nom]["presupuestado"] += monto_pres
+
+        # Cruzar y agregar los ejecutados
+        for c in datos_compras:
+            cat_nom = c[0]
+            ins_nom = c[1]
+            monto_ejec = c[2]
+
+            if cat_nom not in diccionario:
+                diccionario[cat_nom] = {}
+            if ins_nom not in diccionario[cat_nom]:
+                diccionario[cat_nom][ins_nom] = {"presupuestado": 0.0, "ejecutado": 0.0}
+
+            diccionario[cat_nom][ins_nom]["ejecutado"] += monto_ejec
+
+        # 4. Renderizar Árbol
+        gran_total_presupuestado = 0.0
+        gran_total_ejecutado = 0.0
+
+        font_bold = QFont()
+        font_bold.setBold(True)
+
+        for cat in sorted(diccionario.keys()):
+            cat_item = QTreeWidgetItem(self.tree)
+            cat_item.setText(0, cat.upper())
+            cat_item.setFont(0, font_bold)
+
+            # Formatear la fila de la categoría en color oscuro
+            for i in range(4):
+                cat_item.setBackground(i, Qt.lightGray)
+
+            total_cat_pres = 0.0
+            total_cat_ejec = 0.0
+
+            for ins in sorted(diccionario[cat].keys()):
+                valores = diccionario[cat][ins]
+                m_pres = valores["presupuestado"]
+                m_ejec = valores["ejecutado"]
+                dif = m_pres - m_ejec
+
+                total_cat_pres += m_pres
+                total_cat_ejec += m_ejec
+
+                hijo = QTreeWidgetItem(cat_item)
+                hijo.setText(0, f"  {ins}")
+                hijo.setText(1, f"${m_pres:,.2f}")
+                hijo.setText(2, f"${m_ejec:,.2f}")
+
+                # Lógica de color de la diferencia
+                if dif < 0:
+                    hijo.setText(3, f"-${abs(dif):,.2f} (Excedido)")
+                    hijo.setForeground(3, QColor("#c0392b"))  # Rojo
+                else:
+                    hijo.setText(3, f"${dif:,.2f}")
+                    hijo.setForeground(3, QColor("#2980b9"))  # Azul
+
+            # Setear los totales de la categoría en el padre
+            dif_cat = total_cat_pres - total_cat_ejec
+            cat_item.setText(1, f"${total_cat_pres:,.2f}")
+            cat_item.setText(2, f"${total_cat_ejec:,.2f}")
+            if dif_cat < 0:
+                cat_item.setText(3, f"-${abs(dif_cat):,.2f}")
+                cat_item.setForeground(3, QColor("#c0392b"))
+            else:
+                cat_item.setText(3, f"${dif_cat:,.2f}")
+                cat_item.setForeground(3, QColor("#2980b9"))
+
+            gran_total_presupuestado += total_cat_pres
+            gran_total_ejecutado += total_cat_ejec
+
+        self.tree.expandAll()
+
+        # 5. Generar y mostrar resumen de totales generales
+        dif_global = gran_total_presupuestado - gran_total_ejecutado
+        color_saldo = "red" if dif_global < 0 else "blue"
+        texto_saldo = (
+            f"-${abs(dif_global):,.2f} (Alerta de Exceso)"
+            if dif_global < 0
+            else f"${dif_global:,.2f} (Dentro de Margen)"
+        )
+
+        html_res = f"""
+            <b>Total Original Presupuestado:</b> ${gran_total_presupuestado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <b>Total Real Ejecutado:</b> ${gran_total_ejecutado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp;
+            <b>Saldo Global:</b> <span style='color:{color_saldo}; font-weight:bold;'>{texto_saldo}</span>
+        """
+        self.lbl_resumen.setText(html_res)
 
 
 # --- DIÁLOGOS DE EDICIÓN ---
@@ -650,7 +863,7 @@ class CrearPresupuestoDialog(QDialog):
                 pres = self.db.fetch_one(query_pres, (ins_id,))
 
                 cant_compra_exacta = 0.0
-                cant_compra_final = 0.0  # Redondeada
+                cant_compra_final = 0.0
                 costo_insumo_final = 0.0
                 unidad_nombre_final = ""
 
@@ -668,7 +881,6 @@ class CrearPresupuestoDialog(QDialog):
                     cant_contenido, precio_pres, nombre_pres = pres
 
                     cant_compra_exacta = data["qty_base_total"] / cant_contenido
-                    # Redondeo hacia arriba a número entero
                     cant_compra_final = math.ceil(cant_compra_exacta)
                     costo_insumo_final = cant_compra_final * precio_pres
                     unidad_nombre_final = nombre_pres
@@ -684,7 +896,6 @@ class CrearPresupuestoDialog(QDialog):
                     precio_uni = ins_data[0] if ins_data and ins_data[0] else 0.0
 
                     cant_compra_exacta = data["qty_base_total"]
-                    # Redondeo hacia arriba a número entero
                     cant_compra_final = math.ceil(cant_compra_exacta)
                     costo_insumo_final = cant_compra_final * precio_uni
                     unidad_nombre_final = abrev_base
@@ -844,7 +1055,6 @@ class VerPresupuestoDialog(QDialog):
         self.lbl_head = QLabel()
         layout.addWidget(self.lbl_head)
 
-        # --- NUEVA BOTONERA SUPERIOR ---
         btn_layout_top = QHBoxLayout()
 
         btn_recalcular = QPushButton(" 🔄 Recalcular con Precios Actuales")
@@ -864,7 +1074,6 @@ class VerPresupuestoDialog(QDialog):
         btn_layout_top.addWidget(btn_agregar_insumo)
 
         layout.addLayout(btn_layout_top)
-        # -------------------------------
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
@@ -998,7 +1207,6 @@ class VerPresupuestoDialog(QDialog):
 
         self.tree.expandAll()
 
-    # --- NUEVA FUNCION DE RECALCULO AUTOMATICO ---
     def recalcular_automatico(self):
         resp = QMessageBox.question(
             self,
@@ -1013,7 +1221,6 @@ class VerPresupuestoDialog(QDialog):
             return
 
         try:
-            # 1. Obtener los reportes originales de este presupuesto
             query_reps = (
                 "SELECT reporte_id FROM presupuesto_reportes WHERE presupuesto_id = ?"
             )
@@ -1026,7 +1233,6 @@ class VerPresupuestoDialog(QDialog):
                 )
                 return
 
-            # 2. Rescatar insumos extra agregados manualmente
             query_extras = """
                 SELECT categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo 
                 FROM detalle_presupuestos 
@@ -1034,7 +1240,6 @@ class VerPresupuestoDialog(QDialog):
             """
             extras = self.db.fetch_all(query_extras, (self.presupuesto_id,))
 
-            # 3. Calcular nuevas cantidades basándonos en los reportes
             placeholders = ",".join(["?"] * len(reportes_ids))
             query_ventas = f"""
                 SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(cantidad) as cant
@@ -1219,7 +1424,6 @@ class VerPresupuestoDialog(QDialog):
                     )
                 )
 
-            # 4. Eliminar el detalle viejo y reemplazar
             self.db.execute_query(
                 "DELETE FROM detalle_presupuestos WHERE presupuesto_id = ?",
                 (self.presupuesto_id,),

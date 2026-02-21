@@ -1,7 +1,7 @@
+# [FILE: actualizar_db.py]
 import sqlite3
 import os
 
-# --- CORRECCIÓN AQUÍ ---
 # Apuntamos a la carpeta data explícitamente
 DB_NAME = "data/restaurante.db"
 
@@ -20,21 +20,32 @@ def migrar_db():
         cursor = conn.cursor()
 
         print(f"Conectado a: {DB_NAME}")
-        print("Agregando columna 'tipo_pago' a la tabla 'compras'...")
 
-        # Agregamos la columna
-        cursor.execute(
-            "ALTER TABLE compras ADD COLUMN tipo_pago TEXT DEFAULT 'CONTADO'"
-        )
+        # Migración anterior
+        try:
+            print("Verificando/Agregando columna 'tipo_pago'...")
+            cursor.execute(
+                "ALTER TABLE compras ADD COLUMN tipo_pago TEXT DEFAULT 'CONTADO'"
+            )
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                print(" -> La columna 'tipo_pago' ya existía.")
+
+        # --- NUEVA MIGRACIÓN: Enlace de Compras a Presupuestos ---
+        try:
+            print("Agregando columna 'presupuesto_id' a la tabla 'compras'...")
+            cursor.execute("ALTER TABLE compras ADD COLUMN presupuesto_id INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e).lower():
+                print(" -> La columna 'presupuesto_id' ya existía.")
+            else:
+                print(f"Error SQL: {e}")
 
         conn.commit()
         print("¡Éxito! Base de datos actualizada correctamente.")
         conn.close()
-    except sqlite3.OperationalError as e:
-        if "duplicate column name" in str(e):
-            print("AVISO: La columna 'tipo_pago' ya existía. No se hicieron cambios.")
-        else:
-            print(f"Error SQL: {e}")
+    except Exception as e:
+        print(f"Error general: {e}")
 
 
 if __name__ == "__main__":

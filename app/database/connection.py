@@ -19,7 +19,6 @@ class DatabaseManager:
         """
         Inicializa las tablas de la base de datos.
         """
-        # --- TABLAS EXISTENTES ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS unidades_medida (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,6 +79,8 @@ class DatabaseManager:
                 tipo TEXT DEFAULT 'PROVEEDOR'
             );
         """)
+
+        # --- MODIFICADO: Se agrega presupuesto_id ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS compras (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,9 +90,12 @@ class DatabaseManager:
                 total REAL DEFAULT 0.0,
                 estado TEXT DEFAULT 'PENDIENTE',
                 tipo_pago TEXT DEFAULT 'CONTADO',
-                FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+                presupuesto_id INTEGER,
+                FOREIGN KEY (proveedor_id) REFERENCES proveedores(id),
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id)
             );
         """)
+
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_compras (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,7 +116,6 @@ class DatabaseManager:
             )
         """)
 
-        # --- ESTRUCTURA DE REPORTES DE VENTAS (MENSUAL) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,7 +179,6 @@ class DatabaseManager:
             )
         """)
 
-        # KARDEX
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS movimientos_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +213,6 @@ class DatabaseManager:
             );
         """)
 
-        # --- NUEVAS TABLAS DE PRESUPUESTO ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS presupuestos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -233,7 +234,6 @@ class DatabaseManager:
             );
         """)
 
-        # --- SE AGREGA LA COLUMNA detalle_calculo ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_presupuestos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,7 +264,6 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
-        # --- NUEVAS MIGRACIONES PARA PROTEGER TUS DATOS DE PRESUPUESTOS ---
         try:
             self.cursor.execute(
                 "ALTER TABLE detalle_presupuestos ADD COLUMN unidad_nombre TEXT"
@@ -276,6 +275,12 @@ class DatabaseManager:
             self.cursor.execute(
                 "ALTER TABLE detalle_presupuestos ADD COLUMN detalle_calculo TEXT"
             )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: Migración interna para presupuesto_id en compras ---
+        try:
+            self.cursor.execute("ALTER TABLE compras ADD COLUMN presupuesto_id INTEGER")
         except sqlite3.OperationalError:
             pass
 
@@ -308,8 +313,6 @@ class DatabaseManager:
     def fetch_one(self, query, params=()):
         self.cursor.execute(query, params)
         return self.cursor.fetchone()
-
-    # --- MÉTODOS DE REPORTES ---
 
     def guardar_reporte_mensual(self, metadata, records):
         try:
