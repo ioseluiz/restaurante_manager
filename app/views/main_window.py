@@ -19,13 +19,14 @@ from app.views.modulos.insumos_crud import InsumosCRUD
 from app.views.modulos.menu_crud import MenuCRUD
 from app.views.modulos.recetas_crud import RecetasCRUD
 from app.views.modulos.unidades_crud import UnidadesCRUD
-from app.views.modulos.carga_reportes import CargaReportesWidget
+
 from app.views.modulos.usuarios import UsuariosWidget
 from app.views.modulos.presupuestos import (
     PresupuestosView,
-)  # <--- IMPORTACIÓN ACTUALIZADA
+)
 from app.views.modulos.compras_crud import ComprasCRUD
-from app.views.modulos.ventas_diarias import VentasDiariasView
+from app.views.modulos.ventas import VentasModulo  # <--- IMPORTACIÓN DEL NUEVO MÓDULO
+
 from app.views.modulos.inventario_view import InventarioView
 from app.views.dashboard import DashboardView
 
@@ -83,12 +84,13 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_inicio)
 
-        self.btn_ventas_dia = self.create_nav_button(
-            "Registro Ventas Diario",
+        # <--- BOTÓN CONECTADO AL NUEVO MÓDULO DE VENTAS --->
+        self.btn_ventas = self.create_nav_button(
+            "Ventas",
             "assets/icons/icon_pos_ventas.png",
-            self.show_ventas_diarias,
+            self.show_ventas,
         )
-        sidebar_layout.addWidget(self.btn_ventas_dia)
+        sidebar_layout.addWidget(self.btn_ventas)
 
         self.btn_compras = self.create_nav_button(
             "Compras y Proveedores",
@@ -122,20 +124,12 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_menu)
 
-        # <--- BOTÓN ACTUALIZADO --->
         self.btn_presupuestos = self.create_nav_button(
             "Presupuestos",
             "assets/icons/icon_generate_report.png",
             self.show_presupuestos,
         )
         sidebar_layout.addWidget(self.btn_presupuestos)
-
-        self.btn_reportes = self.create_nav_button(
-            "Cargar Reportes Ventas",
-            "assets/icons/icon_upload_reports.png",
-            self.show_reportes,
-        )
-        sidebar_layout.addWidget(self.btn_reportes)
 
         sidebar_layout.addStretch()
 
@@ -228,11 +222,12 @@ class MainWindow(QMainWindow):
         elif hasattr(module_data["instance"], "cargar_inventario"):
             module_data["instance"].cargar_inventario()
 
-    def show_ventas_diarias(self):
+    # <--- FUNCIÓN ACTUALIZADA PARA CARGAR EL MÓDULO CONSOLIDADO --->
+    def show_ventas(self):
         self.load_module(
-            "ventas_diarias",
-            VentasDiariasView,
-            "Registro Diario de Ventas",
+            "ventas",
+            VentasModulo,
+            "Módulo de Ventas",
             needs_db=True,
         )
 
@@ -253,15 +248,12 @@ class MainWindow(QMainWindow):
     def show_recetas(self):
         self.load_module("recetas", RecetasCRUD, "Gestión de Recetas", needs_db=True)
 
-    def show_presupuestos(self):  # <--- FUNCIÓN ACTUALIZADA
+    def show_presupuestos(self):
         self.load_module(
             "presupuestos", PresupuestosView, "Gestión de Presupuestos", needs_db=True
         )
 
-    def show_reportes(self):
-        self.load_module(
-            "reportes", CargaReportesWidget, "Carga de Reportes", needs_db=True
-        )
+    # Nota: Se eliminó def show_reportes(self) porque ya está integrado en VentasModulo
 
     def show_unidades(self):
         self.load_module("unidades", UnidadesCRUD, "Unidades de Medida", needs_db=True)

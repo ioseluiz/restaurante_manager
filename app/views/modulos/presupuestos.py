@@ -844,12 +844,27 @@ class VerPresupuestoDialog(QDialog):
         self.lbl_head = QLabel()
         layout.addWidget(self.lbl_head)
 
+        # --- NUEVA BOTONERA SUPERIOR ---
+        btn_layout_top = QHBoxLayout()
+
+        btn_recalcular = QPushButton(" 🔄 Recalcular con Precios Actuales")
+        btn_recalcular.setStyleSheet(
+            "background-color: #8e44ad; color: white; padding: 6px 12px; border-radius: 4px; font-weight: bold;"
+        )
+        btn_recalcular.clicked.connect(self.recalcular_automatico)
+
         btn_agregar_insumo = QPushButton(" + Agregar Insumo Manual Extra")
         btn_agregar_insumo.setStyleSheet(
-            "background-color: #27ae60; color: white; padding: 6px; border-radius: 4px; font-weight: bold;"
+            "background-color: #27ae60; color: white; padding: 6px 12px; border-radius: 4px; font-weight: bold;"
         )
         btn_agregar_insumo.clicked.connect(self.agregar_insumo_manual)
-        layout.addWidget(btn_agregar_insumo, alignment=Qt.AlignRight)
+
+        btn_layout_top.addWidget(btn_recalcular)
+        btn_layout_top.addStretch()
+        btn_layout_top.addWidget(btn_agregar_insumo)
+
+        layout.addLayout(btn_layout_top)
+        # -------------------------------
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
@@ -867,7 +882,6 @@ class VerPresupuestoDialog(QDialog):
         self.tree.setColumnWidth(3, 300)
         self.tree.setColumnWidth(4, 220)
         self.tree.setAlternatingRowColors(True)
-
         self.tree.setWordWrap(True)
         layout.addWidget(self.tree)
 
@@ -911,10 +925,8 @@ class VerPresupuestoDialog(QDialog):
         agrupado = {}
         for d in detalles:
             det_id, cat_nom, ins_nom, uni_nom, cant, monto, items, det_calc = d
-
             if cat_nom not in agrupado:
                 agrupado[cat_nom] = {"items": [], "total_monto": 0}
-
             agrupado[cat_nom]["items"].append(d)
             agrupado[cat_nom]["total_monto"] += monto
 
@@ -935,7 +947,6 @@ class VerPresupuestoDialog(QDialog):
 
                 hijo = QTreeWidgetItem(cat_item)
                 hijo.setText(0, ins_nom)
-                # Formateo a número entero para la visualización en la tabla
                 hijo.setText(1, f"{int(cant)}  {uni_nom}")
                 hijo.setTextAlignment(1, Qt.AlignRight | Qt.AlignVCenter)
                 hijo.setText(2, f"${monto:,.2f}")
@@ -986,6 +997,262 @@ class VerPresupuestoDialog(QDialog):
                 self.tree.setItemWidget(hijo, 4, widget_acciones)
 
         self.tree.expandAll()
+
+    # --- NUEVA FUNCION DE RECALCULO AUTOMATICO ---
+    def recalcular_automatico(self):
+        resp = QMessageBox.question(
+            self,
+            "Confirmar Recálculo",
+            "¿Desea recalcular todo el presupuesto usando los PRECIOS y RECETAS actuales?\n\n"
+            "• Los insumos 'Extras' agregados manualmente se conservarán.\n"
+            "• Las ediciones manuales a insumos calculados se sobreescribirán.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if resp != QMessageBox.Yes:
+            return
+
+        try:
+            # 1. Obtener los reportes originales de este presupuesto
+            query_reps = (
+                "SELECT reporte_id FROM presupuesto_reportes WHERE presupuesto_id = ?"
+            )
+            reps = self.db.fetch_all(query_reps, (self.presupuesto_id,))
+            reportes_ids = [str(r[0]) for r in reps]
+
+            if not reportes_ids:
+                QMessageBox.warning(
+                    self, "Error", "No se encontraron reportes base para recalcular."
+                )
+                return
+
+            # 2. Rescatar insumos extra agregados manualmente
+            query_extras = """
+                SELECT categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo 
+                FROM detalle_presupuestos 
+                WHERE presupuesto_id = ? AND items_menu = 'Agregado Extra'
+            """
+            extras = self.db.fetch_all(query_extras, (self.presupuesto_id,))
+
+            # 3. Calcular nuevas cantidades basándonos en los reportes
+            placeholders = ",".join(["?"] * len(reportes_ids))
+            query_ventas = f"""
+                SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(cantidad) as cant
+                FROM detalle_reportes_ventas 
+                WHERE reporte_id IN ({placeholders})
+                GROUP BY reporte_id, codigo_producto, LOWER(dia_semana)
+            """
+            ventas_data = self.db.fetch_all(query_ventas, tuple(reportes_ids))
+
+            dias_validos = {
+                "lunes",
+                "martes",
+                "miercoles",
+                "miércoles",
+                "jueves",
+                "viernes",
+                "sabado",
+                "sábado",
+                "domingo",
+                "lun",
+                "mar",
+                "mie",
+                "jue",
+                "vie",
+                "sab",
+                "dom",
+            }
+
+            ventas_por_producto = {}
+            for row in ventas_data:
+                rep_id, cod, dia, cant = row
+                dia_str = str(dia).strip().lower()
+                if dia_str not in dias_validos:
+                    continue
+                if cod not in ventas_por_producto:
+                    ventas_por_producto[cod] = {}
+                if dia_str not in ventas_por_producto[cod]:
+                    ventas_por_producto[cod][dia_str] = []
+                ventas_por_producto[cod][dia_str].append(cant)
+
+            ventas_detalle_mensual = {}
+            SEMANAS_POR_MES = 4.0
+            total_reportes = len(reportes_ids)
+
+            for cod, dias in ventas_por_producto.items():
+                detalle_dias = {}
+                total_venta_semanal_promedio = 0
+                for dia, cants in dias.items():
+                    prom_dia = sum(cants) / total_reportes
+                    detalle_dias[dia] = prom_dia
+                    total_venta_semanal_promedio += prom_dia
+
+                ventas_detalle_mensual[cod] = {
+                    "dias": detalle_dias,
+                    "total_mensual": total_venta_semanal_promedio * SEMANAS_POR_MES,
+                }
+
+            insumos_calc = {}
+            for cod, info_ventas in ventas_detalle_mensual.items():
+                ventas_totales = info_ventas["total_mensual"]
+                if ventas_totales <= 0:
+                    continue
+
+                query_recetas = """
+                    SELECT r.insumo_id, i.nombre, i.factor_calculo, c.nombre as categoria, 
+                           r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
+                    FROM recetas r
+                    JOIN menu_items m ON r.menu_item_id = m.id
+                    JOIN insumos i ON r.insumo_id = i.id
+                    LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
+                    LEFT JOIN unidades_medida u ON i.unidad_base_id = u.id
+                    WHERE m.codigo = ?
+                """
+                recetas = self.db.fetch_all(query_recetas, (cod,))
+
+                for rec in recetas:
+                    ins_id, ins_nom, factor, cat_nom, cant_nec, menu_nom, abrev_uni = (
+                        rec
+                    )
+                    factor = factor if factor else 1.0
+                    cat_nom = cat_nom if cat_nom else "Sin Categoría"
+                    abrev_uni = abrev_uni if abrev_uni else "Und."
+
+                    cant_amplificada = (ventas_totales * cant_nec) * factor
+
+                    if ins_id not in insumos_calc:
+                        insumos_calc[ins_id] = {
+                            "nombre": ins_nom,
+                            "categoria": cat_nom,
+                            "unidad_base": abrev_uni,
+                            "factor": factor,
+                            "qty_base_total": 0.0,
+                            "items_menu": {},
+                        }
+
+                    insumos_calc[ins_id]["qty_base_total"] += cant_amplificada
+
+                    if menu_nom not in insumos_calc[ins_id]["items_menu"]:
+                        insumos_calc[ins_id]["items_menu"][menu_nom] = {
+                            "ventas_dias": info_ventas["dias"],
+                            "ventas_mensual": ventas_totales,
+                            "receta_cant": cant_nec,
+                            "total_plato": 0.0,
+                        }
+
+                    insumos_calc[ins_id]["items_menu"][menu_nom]["total_plato"] += (
+                        cant_amplificada
+                    )
+
+            import math
+
+            detalles_db = []
+            for ins_id, data in insumos_calc.items():
+                abrev_base = data["unidad_base"]
+                factor_val = data["factor"]
+
+                query_pres = "SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY id ASC LIMIT 1"
+                pres = self.db.fetch_one(query_pres, (ins_id,))
+
+                cant_compra_exacta = 0.0
+                cant_compra_final = 0.0
+                costo_insumo_final = 0.0
+                unidad_nombre_final = ""
+
+                det_html = f"<div style='font-family: Arial, sans-serif;'>"
+                det_html += f"<h3 style='color:#2c3e50; border-bottom: 2px solid #bdc3c7; padding-bottom: 5px;'>Detalle de Cálculo: {data['nombre']}</h3>"
+                det_html += f"<table width='100%' style='margin-bottom: 15px;'><tr><td width='50%'><b>Unidad Base Recetas:</b> {abrev_base}</td><td width='50%'><b>Factor de Insumo (Merma):</b> {factor_val:.2f}</td></tr></table>"
+
+                if pres and pres[0] > 0:
+                    cant_contenido, precio_pres, nombre_pres = pres
+                    cant_compra_exacta = data["qty_base_total"] / cant_contenido
+                    cant_compra_final = math.ceil(cant_compra_exacta)
+                    costo_insumo_final = cant_compra_final * precio_pres
+                    unidad_nombre_final = nombre_pres
+
+                    det_html += f"<div style='background-color: #e8f8f5; padding: 10px; border-radius: 4px; border: 1px solid #1abc9c; margin-bottom: 15px;'>"
+                    det_html += f"<b>Presentación de Compra:</b> {nombre_pres}<br><b>Contenido:</b> {cant_contenido} {abrev_base}<br><b>Precio:</b> ${precio_pres:,.2f}</div>"
+                else:
+                    query_fallback = "SELECT costo_unitario FROM insumos WHERE id = ?"
+                    ins_data = self.db.fetch_one(query_fallback, (ins_id,))
+                    precio_uni = ins_data[0] if ins_data and ins_data[0] else 0.0
+                    cant_compra_exacta = data["qty_base_total"]
+                    cant_compra_final = math.ceil(cant_compra_exacta)
+                    costo_insumo_final = cant_compra_final * precio_uni
+                    unidad_nombre_final = abrev_base
+
+                    det_html += f"<div style='background-color: #fcf3cf; padding: 10px; border-radius: 4px; border: 1px solid #f1c40f; margin-bottom: 15px;'>"
+                    det_html += f"<i>No tiene presentación de compra asignada. Se calcula sobre unidad base.</i><br><b>Precio Unitario (Base):</b> ${precio_uni:,.2f}</div>"
+
+                det_html += "<h4 style='color:#2980b9;'>1. Requerimiento por Platos de Menú</h4>"
+                factor_str = (
+                    f" x {factor_val:.2f} (Factor)" if factor_val != 1.0 else ""
+                )
+
+                for m_nom, m_info in data["items_menu"].items():
+                    dias_format = " | ".join(
+                        [
+                            f"{d[:3].capitalize()}: {v:.1f}"
+                            for d, v in m_info["ventas_dias"].items()
+                        ]
+                    )
+                    det_html += f"<div style='margin-bottom: 10px; padding: 10px; border-left: 4px solid #3498db; background-color: #f8f9fa; border-radius: 0 4px 4px 0;'><b style='color:#2c3e50; font-size: 14px;'>{m_nom}</b><br><table width='100%' style='font-size: 12px; margin-top: 5px; color: #555;'><tr><td width='35%'><b>Ventas Diario (Promedio):</b></td><td>[{dias_format}]</td></tr><tr><td><b>Ventas Mensual Proyectado:</b></td><td>{m_info['ventas_mensual']:.2f} platos vendidos</td></tr><tr><td><b>Requerido en Receta:</b></td><td>{m_info['receta_cant']:.4f} {abrev_base} por plato</td></tr></table><div style='margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ccc; font-family: monospace; font-size: 13px;'>Fórmula: {m_info['ventas_mensual']:.2f} platos x {m_info['receta_cant']:.4f} {abrev_base}{factor_str} = <b style='color: #c0392b;'>{m_info['total_plato']:.2f} {abrev_base}</b></div></div>"
+
+                det_html += f"<h4 style='color:#27ae60; margin-top: 20px;'>2. Conversión a Compras y Costo Final</h4><ul style='font-size: 14px; background-color: #ecf0f1; padding: 15px 15px 15px 35px; border-radius: 5px;'><li style='margin-bottom: 5px;'><b>Total Base Requerido (Suma Platos):</b> {data['qty_base_total']:.2f} {abrev_base}</li><li style='margin-bottom: 5px;'><b>Cantidad Exacta de Compra:</b> {cant_compra_exacta:.2f} {unidad_nombre_final}</li><li style='margin-bottom: 5px; color: #c0392b;'><b>Cantidad a Comprar (Redondeada):</b> <span style='background-color:#f1c40f; padding: 2px 5px; border-radius: 3px; font-weight: bold; color: #2c3e50;'>{int(cant_compra_final)} {unidad_nombre_final}</span></li><li><b>Costo Estimado:</b> ${costo_insumo_final:,.2f}</li></ul></div>"
+
+                items_str = "\n".join(
+                    [
+                        f"• {k} ({v['total_plato']:.2f})"
+                        for k, v in data["items_menu"].items()
+                    ]
+                )
+
+                detalles_db.append(
+                    (
+                        data["categoria"],
+                        data["nombre"],
+                        unidad_nombre_final,
+                        cant_compra_final,
+                        costo_insumo_final,
+                        items_str,
+                        det_html,
+                    )
+                )
+
+            # 4. Eliminar el detalle viejo y reemplazar
+            self.db.execute_query(
+                "DELETE FROM detalle_presupuestos WHERE presupuesto_id = ?",
+                (self.presupuesto_id,),
+            )
+
+            query_det_insert = """
+                INSERT INTO detalle_presupuestos 
+                (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo) 
+                VALUES (?,?,?,?,?,?,?,?)
+            """
+
+            for det in detalles_db:
+                self.db.execute_query(query_det_insert, (self.presupuesto_id, *det))
+
+            for ext in extras:
+                self.db.execute_query(query_det_insert, (self.presupuesto_id, *ext))
+
+            recalcular_total_presupuesto(self.db, self.presupuesto_id)
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                "El presupuesto ha sido recalculado con los precios y recetas actuales.",
+            )
+            self.cargar_detalles()
+
+        except Exception as e:
+            import traceback
+
+            traceback.print_exc()
+            QMessageBox.critical(
+                self, "Error", f"Ha ocurrido un error al recalcular:\n{str(e)}"
+            )
 
     def mostrar_calculo(self, html_content):
         if not html_content:
