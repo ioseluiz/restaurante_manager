@@ -26,7 +26,10 @@ from PyQt5.QtCore import Qt
 class NumericItem(QTableWidgetItem):
     def __lt__(self, other):
         try:
-            return float(self.text()) < float(other.text())
+            # Intenta limpiar el texto de signos de dólar si es un precio
+            val_self = self.text().replace("$", "").replace(",", "").strip()
+            val_other = other.text().replace("$", "").replace(",", "").strip()
+            return float(val_self) < float(val_other)
         except ValueError:
             return super().__lt__(other)
 
@@ -114,9 +117,8 @@ class TabInsumos(QWidget):
         config_filtros = [
             (0, "Filtrar ID"),
             (1, "Filtrar Nombre"),
-            (2, "Filtrar Unidad"),
             (3, "Filtrar Categoría"),
-            (4, "Filtrar Grupo"),
+            (6, "Filtrar Presentación"),
         ]
 
         for col_idx, placeholder in config_filtros:
@@ -131,22 +133,29 @@ class TabInsumos(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "Nombre", "Unidad Base", "Categoría", "Grupo Calc.", "Factor"]
+            [
+                "ID",
+                "Nombre",
+                "Unidad Base",
+                "Categoría",
+                "Grupo Calc.",
+                "Factor",
+                "Presentación",
+            ]
         )
 
-        # --- CORRECCIÓN DE ANCHO DE COLUMNAS ---
+        # --- CORRECCIÓN DE ANCHO DE COLUMNAS Y TEXT WRAP ---
+        self.table.setWordWrap(True)
         header = self.table.horizontalHeader()
-
-        # 1. Hacemos que la columna "Nombre" (índice 1) ocupe el espacio sobrante
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-
-        # 2. Hacemos que el resto de columnas se ajusten a su contenido para que se lea todo
-        # Índices: 0 (ID), 2 (Unidad), 3 (Categoría), 4 (Grupo), 5 (Factor)
-        for col_idx in [0, 2, 3, 4, 5]:
-            header.setSectionResizeMode(col_idx, QHeaderView.ResizeToContents)
-        # ----------------------------------------
+        header.setSectionResizeMode(
+            QHeaderView.Interactive
+        )  # Permite al usuario modificar el ancho
+        header.setStretchLastSection(True)
+        self.table.verticalHeader().setSectionResizeMode(
+            QHeaderView.ResizeToContents
+        )  # Altura automática
 
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -160,8 +169,11 @@ class TabInsumos(QWidget):
     def cargar_datos(self):
         self.table.setSortingEnabled(False)
 
+        # Se agrega validación para saber si tiene presentación de compra definida
         query = """
-            SELECT i.id, i.nombre, u.nombre, c.nombre, i.grupo_calculo, i.factor_calculo
+            SELECT i.id, i.nombre, u.nombre, c.nombre, i.grupo_calculo, i.factor_calculo,
+                   CASE WHEN (SELECT COUNT(p.id) FROM presentaciones_compra p WHERE p.insumo_id = i.id) > 0 
+                        THEN 'Definida' ELSE 'Sin definir' END as estado_presentacion
             FROM insumos i
             LEFT JOIN unidades_medida u ON i.unidad_base_id = u.id
             LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
@@ -191,6 +203,15 @@ class TabInsumos(QWidget):
             # Factor
             val_factor = row[5] if row[5] else 1.0
             self.table.setItem(r_idx, 5, NumericItem(str(val_factor)))
+
+            # Estado Presentación
+            self.table.setItem(r_idx, 6, QTableWidgetItem(str(row[6])))
+
+        # Ajuste inicial de columnas
+        self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().resizeSection(
+            1, 200
+        )  # Dar buen espacio al nombre inicial
 
         self.table.setSortingEnabled(True)
         self.aplicar_filtros()
@@ -368,21 +389,49 @@ class TabPresentaciones(QWidget):
     def __init__(self, db):
         super().__init__()
         self.db = db
+        self.filtros = {}
         self.init_ui()
 
     def init_ui(self):
         layout = QVBoxLayout()
         btn_layout = QHBoxLayout()
+
         btn_add = QPushButton("Definir Presentación")
+        btn_add.setProperty("class", "btn-success")
         btn_add.clicked.connect(self.add)
+
+        btn_edit = QPushButton("Editar Seleccionado")
+        btn_edit.clicked.connect(self.edit)
+
         btn_del = QPushButton("Eliminar")
         btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.delete)
+
         btn_layout.addWidget(btn_add)
+        btn_layout.addWidget(btn_edit)
         btn_layout.addWidget(btn_del)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
+        # --- FILTROS DE BÚSQUEDA ---
+        filter_layout = QHBoxLayout()
+        config_filtros = [
+            (0, "Filtrar ID"),
+            (1, "Filtrar Insumo Base"),
+            (2, "Filtrar Presentación"),
+        ]
+
+        for col_idx, placeholder in config_filtros:
+            inp = QLineEdit()
+            inp.setPlaceholderText(placeholder)
+            inp.setClearButtonEnabled(True)
+            inp.textChanged.connect(self.aplicar_filtros)
+            self.filtros[col_idx] = inp
+            filter_layout.addWidget(inp)
+
+        layout.addLayout(filter_layout)
+
+        # --- TABLA ---
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
@@ -396,18 +445,25 @@ class TabPresentaciones(QWidget):
                 "Costo Calc.",
             ]
         )
-        # Aquí usamos Stretch por defecto, si también se ve mal aquí,
-        # se puede aplicar la misma lógica que en TabInsumos.
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # --- CORRECCIÓN DE ANCHO DE COLUMNAS Y TEXT WRAP ---
+        self.table.setWordWrap(True)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSortingEnabled(True)
+
         layout.addWidget(self.table)
         self.setLayout(layout)
         self.cargar_datos()
 
     def cargar_datos(self):
+        self.table.setSortingEnabled(False)
         query = """
             SELECT p.id, i.nombre, p.nombre, p.precio_compra, p.cantidad_contenido, u.abreviatura, p.costo_unitario_calculado
             FROM presentaciones_compra p
@@ -419,16 +475,49 @@ class TabPresentaciones(QWidget):
         self.table.setRowCount(0)
         for r, row in enumerate(rows):
             self.table.insertRow(r)
-            self.table.setItem(r, 0, QTableWidgetItem(str(row[0])))
+            self.table.setItem(r, 0, NumericItem(str(row[0])))
             self.table.setItem(r, 1, QTableWidgetItem(row[1]))
             self.table.setItem(r, 2, QTableWidgetItem(row[2]))
-            self.table.setItem(r, 3, QTableWidgetItem(f"${row[3]:.2f}"))
-            self.table.setItem(r, 4, QTableWidgetItem(str(row[4])))
+            self.table.setItem(r, 3, NumericItem(f"${row[3]:.2f}"))
+            self.table.setItem(r, 4, NumericItem(str(row[4])))
             self.table.setItem(r, 5, QTableWidgetItem(row[5]))
-            self.table.setItem(r, 6, QTableWidgetItem(f"${row[6]:.4f}"))
+            self.table.setItem(r, 6, NumericItem(f"${row[6]:.4f}"))
+
+        self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().resizeSection(1, 150)
+        self.table.horizontalHeader().resizeSection(2, 150)
+
+        self.table.setSortingEnabled(True)
+        self.aplicar_filtros()
+
+    def aplicar_filtros(self):
+        rows = self.table.rowCount()
+        for row in range(rows):
+            mostrar = True
+            for col, inp in self.filtros.items():
+                texto_filtro = inp.text().lower().strip()
+                if not texto_filtro:
+                    continue
+                item = self.table.item(row, col)
+                if item:
+                    if texto_filtro not in item.text().lower():
+                        mostrar = False
+                        break
+            self.table.setRowHidden(row, not mostrar)
 
     def add(self):
         if PresentacionDialog(self.db, parent=self).exec_():
+            self.cargar_datos()
+
+    def edit(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una presentación para editar."
+            )
+
+        id_pres = int(self.table.item(row, 0).text())
+        if PresentacionDialog(self.db, presentacion_id=id_pres, parent=self).exec_():
             self.cargar_datos()
 
     def delete(self):
@@ -447,28 +536,42 @@ class TabPresentaciones(QWidget):
 
 
 class PresentacionDialog(QDialog):
-    def __init__(self, db, parent=None):
+    def __init__(self, db, presentacion_id=None, parent=None):
         super().__init__(parent)
         self.db = db
-        self.setWindowTitle("Nueva Presentación de Compra")
+        self.presentacion_id = presentacion_id
+
+        titulo = (
+            "Editar Presentación de Compra"
+            if self.presentacion_id
+            else "Nueva Presentación de Compra"
+        )
+        self.setWindowTitle(titulo)
         self.resize(500, 450)
+
         layout = QVBoxLayout()
         form = QFormLayout()
+
         self.cmb_insumo = QComboBox()
         self.cargar_insumos()
         self.cmb_insumo.currentIndexChanged.connect(self.update_labels)
+
         self.txt_nombre = QLineEdit()
         self.txt_nombre.setPlaceholderText("Ej: Caja x12, Bulto 50lb")
+
         self.spin_precio = QDoubleSpinBox()
         self.spin_precio.setMaximum(99999.99)
         self.spin_precio.setPrefix("$ ")
+
         form.addRow("Insumo Base:", self.cmb_insumo)
         form.addRow("Nombre Empaque:", self.txt_nombre)
         form.addRow("Precio Compra:", self.spin_precio)
         layout.addLayout(form)
+
         self.chk_detalle = QCheckBox("Es un empaque compuesto (Ej: Caja con botellas)")
         self.chk_detalle.toggled.connect(self.toggle_detalle)
         layout.addWidget(self.chk_detalle)
+
         self.grp_det = QGroupBox("Contenido Interno")
         f_det = QFormLayout()
         self.txt_sub_nom = QLineEdit()
@@ -480,11 +583,13 @@ class PresentacionDialog(QDialog):
         self.spin_peso_uni.setDecimals(3)
         self.spin_peso_uni.valueChanged.connect(self.calc_total)
         self.lbl_u1 = QLabel("Peso/Vol Unitario:")
+
         f_det.addRow("Nombre Unidad Interna:", self.txt_sub_nom)
         f_det.addRow("Cantidad:", self.spin_cant)
         f_det.addRow(self.lbl_u1, self.spin_peso_uni)
         self.grp_det.setLayout(f_det)
         layout.addWidget(self.grp_det)
+
         self.grp_tot = QGroupBox("Total para Inventario")
         f_tot = QFormLayout()
         self.spin_total = QDoubleSpinBox()
@@ -494,12 +599,18 @@ class PresentacionDialog(QDialog):
         f_tot.addRow(self.lbl_u2, self.spin_total)
         self.grp_tot.setLayout(f_tot)
         layout.addWidget(self.grp_tot)
+
         btn = QPushButton("Guardar Definición")
+        btn.setProperty("class", "btn-success")
         btn.clicked.connect(self.guardar)
         layout.addWidget(btn)
+
         self.setLayout(layout)
         self.toggle_detalle(False)
         self.update_labels()
+
+        if self.presentacion_id:
+            self.cargar_datos_edicion()
 
     def cargar_insumos(self):
         query = "SELECT i.id, i.nombre, u.abreviatura FROM insumos i JOIN unidades_medida u ON i.unidad_base_id = u.id ORDER BY i.nombre"
@@ -525,25 +636,86 @@ class PresentacionDialog(QDialog):
             total = self.spin_cant.value() * self.spin_peso_uni.value()
             self.spin_total.setValue(total)
 
+    def cargar_datos_edicion(self):
+        # Cargar tabla principal de presentación
+        query = "SELECT insumo_id, nombre, precio_compra, cantidad_contenido FROM presentaciones_compra WHERE id=?"
+        rows = self.db.fetch_all(query, (self.presentacion_id,))
+        if rows:
+            row = rows[0]
+
+            # Buscar el insumo en el combobox
+            insumo_id = row[0]
+            for i in range(self.cmb_insumo.count()):
+                data = self.cmb_insumo.itemData(i)
+                if data and data["id"] == insumo_id:
+                    self.cmb_insumo.setCurrentIndex(i)
+                    break
+
+            self.txt_nombre.setText(row[1])
+            self.spin_precio.setValue(row[2])
+            self.spin_total.setValue(row[3])
+
+            # Verificar si tiene composición (empaque compuesto)
+            comp_query = "SELECT nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario FROM composicion_empaque WHERE presentacion_id=?"
+            comp_rows = self.db.fetch_all(comp_query, (self.presentacion_id,))
+
+            if comp_rows:
+                c_row = comp_rows[0]
+                self.chk_detalle.setChecked(True)
+                self.txt_sub_nom.setText(c_row[0])
+                self.spin_cant.setValue(c_row[1])
+                self.spin_peso_uni.setValue(c_row[2])
+            else:
+                self.chk_detalle.setChecked(False)
+
     def guardar(self):
         data_ins = self.cmb_insumo.currentData()
         if not data_ins:
             return
+
         ins_id = data_ins["id"]
-        nom = self.txt_nombre.text()
+        nom = self.txt_nombre.text().strip()
         precio = self.spin_precio.value()
         total = self.spin_total.value()
+
         if total <= 0:
             return QMessageBox.warning(
                 self, "Error", "El contenido total debe ser mayor a 0"
             )
-        costo_u = precio / total
-        try:
-            cur = self.db.execute_query(
-                "INSERT INTO presentaciones_compra (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado) VALUES (?,?,?,?,?)",
-                (ins_id, nom, total, precio, costo_u),
+        if not nom:
+            return QMessageBox.warning(
+                self, "Error", "Debe proporcionar un nombre para el empaque"
             )
-            pid = cur.lastrowid
+
+        costo_u = precio / total
+
+        try:
+            if self.presentacion_id:
+                # Update
+                query_update = """
+                    UPDATE presentaciones_compra 
+                    SET insumo_id=?, nombre=?, cantidad_contenido=?, precio_compra=?, costo_unitario_calculado=? 
+                    WHERE id=?
+                """
+                self.db.execute_query(
+                    query_update,
+                    (ins_id, nom, total, precio, costo_u, self.presentacion_id),
+                )
+                pid = self.presentacion_id
+
+                # Para simplificar la composición, eliminamos la anterior si existía y creamos la nueva
+                self.db.execute_query(
+                    "DELETE FROM composicion_empaque WHERE presentacion_id=?", (pid,)
+                )
+            else:
+                # Insert
+                cur = self.db.execute_query(
+                    "INSERT INTO presentaciones_compra (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado) VALUES (?,?,?,?,?)",
+                    (ins_id, nom, total, precio, costo_u),
+                )
+                pid = cur.lastrowid
+
+            # Insertar composición si aplica (tanto para Update como para Insert)
             if self.chk_detalle.isChecked():
                 self.db.execute_query(
                     "INSERT INTO composicion_empaque (presentacion_id, nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario) VALUES (?,?,?,?)",
@@ -590,11 +762,12 @@ class TabCategorias(QWidget):
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["ID", "Código", "Nombre Categoría"])
 
-        # Aplicamos la misma lógica de re-dimensionado aquí también
+        # Aplicamos la misma lógica interactiva y de envoltura
+        self.table.setWordWrap(True)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(2, QHeaderView.Stretch)  # Nombre estira
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # ID ajusta
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Código ajusta
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -611,6 +784,8 @@ class TabCategorias(QWidget):
             self.table.insertRow(row_idx)
             for col_idx, data in enumerate(row_data):
                 self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
+
+        self.table.resizeColumnsToContents()
 
     def abrir_form_crear(self):
         dialog = QDialog(self)
