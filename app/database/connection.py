@@ -20,7 +20,6 @@ class DatabaseManager:
         Inicializa las tablas de la base de datos.
         """
         # --- TABLAS EXISTENTES ---
-        # 1. Unidades
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS unidades_medida (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +27,6 @@ class DatabaseManager:
                 abreviatura TEXT NOT NULL
             );
         """)
-        # 2. Conversiones
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversiones_unidades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +37,6 @@ class DatabaseManager:
                 FOREIGN KEY (unidad_destino_id) REFERENCES unidades_medida(id)
             );
         """)
-        # 3. Insumos
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +50,6 @@ class DatabaseManager:
                 FOREIGN KEY (unidad_base_id) REFERENCES unidades_medida(id)
             );
         """)
-        # 4. Presentaciones
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS presentaciones_compra (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +61,6 @@ class DatabaseManager:
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
             );
         """)
-        # 5. Composicion Empaque
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS composicion_empaque (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +71,6 @@ class DatabaseManager:
                 FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE CASCADE
             );
         """)
-        # 6. Proveedores
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS proveedores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,7 +80,6 @@ class DatabaseManager:
                 tipo TEXT DEFAULT 'PROVEEDOR'
             );
         """)
-        # 7. Compras
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS compras (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +92,6 @@ class DatabaseManager:
                 FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
             );
         """)
-        # 8. Detalle Compras
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_compras (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,7 +104,6 @@ class DatabaseManager:
                 FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id)
             );
         """)
-        # Categorias Insumos
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS categorias_insumos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,30 +112,26 @@ class DatabaseManager:
             )
         """)
 
-        # --- NUEVA ESTRUCTURA DE REPORTES DE VENTAS (MENSUAL) ---
-
-        # Cabecera del Reporte Mensual
+        # --- ESTRUCTURA DE REPORTES DE VENTAS (MENSUAL) ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP,
                 fecha_inicio_periodo DATE,
                 fecha_fin_periodo DATE,
-                mes INTEGER, -- 1 al 12
+                mes INTEGER, 
                 anio INTEGER,
                 total_venta_reportada REAL DEFAULT 0.0,
                 observaciones TEXT
             )
         """)
-
-        # Detalle del Reporte Mensual (Remplaza a ventas_reporte_semanal)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 reporte_id INTEGER NOT NULL,
                 codigo_producto TEXT,
                 nombre_producto TEXT,
-                dia_semana TEXT, -- Domingo, Lunes, etc.
+                dia_semana TEXT, 
                 cantidad REAL DEFAULT 0.0,
                 promedio_medida REAL DEFAULT 0.0,
                 total_venta REAL DEFAULT 0.0,
@@ -154,7 +141,6 @@ class DatabaseManager:
             )
         """)
 
-        # Menu Items
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS menu_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -164,7 +150,6 @@ class DatabaseManager:
                 es_preparado BOOLEAN DEFAULT 1
             )
         """)
-        # Recetas
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS recetas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,7 +160,6 @@ class DatabaseManager:
                 FOREIGN KEY(insumo_id) REFERENCES insumos(id)
             )
         """)
-        # Ventas (Registro simple, puede ser depurado en el futuro)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -183,7 +167,6 @@ class DatabaseManager:
                 total REAL
             )
         """)
-        # Usuarios
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +176,7 @@ class DatabaseManager:
             )
         """)
 
-        # --- KARDEX (MOVIMIENTOS DE INVENTARIO) ---
+        # KARDEX
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS movimientos_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,7 +192,6 @@ class DatabaseManager:
             );
         """)
 
-        # Registro Diario (Cabecera)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS registro_ventas_diarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,8 +200,6 @@ class DatabaseManager:
                 fecha_registro DATETIME DEFAULT CURRENT_TIMESTAMP
             );
         """)
-
-        # Detalle Ventas (Solo Cantidades)
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_ventas_diarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -231,12 +211,47 @@ class DatabaseManager:
             );
         """)
 
+        # --- NUEVAS TABLAS DE PRESUPUESTO ---
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS presupuestos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero INTEGER,
+                mes INTEGER,
+                anio INTEGER,
+                descripcion TEXT,
+                monto_total REAL DEFAULT 0.0,
+                fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS presupuesto_reportes (
+                presupuesto_id INTEGER,
+                reporte_id INTEGER,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE,
+                FOREIGN KEY (reporte_id) REFERENCES reportes_ventas(id) ON DELETE CASCADE,
+                PRIMARY KEY (presupuesto_id, reporte_id)
+            );
+        """)
+
+        # --- SE AGREGA LA COLUMNA detalle_calculo ---
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_presupuestos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id INTEGER,
+                categoria_nombre TEXT,
+                insumo_nombre TEXT,
+                unidad_nombre TEXT,
+                cantidad_requerida REAL,
+                monto_estimado REAL,
+                items_menu TEXT,
+                detalle_calculo TEXT, 
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+            );
+        """)
+
         self.conn.commit()
 
     def _migrate_tables(self):
-        """
-        Actualizaciones de estructura seguras
-        """
         try:
             self.cursor.execute("ALTER TABLE insumos ADD COLUMN grupo_calculo TEXT")
         except sqlite3.OperationalError:
@@ -245,6 +260,21 @@ class DatabaseManager:
         try:
             self.cursor.execute(
                 "ALTER TABLE insumos ADD COLUMN factor_calculo REAL DEFAULT 1.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVAS MIGRACIONES PARA PROTEGER TUS DATOS DE PRESUPUESTOS ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE detalle_presupuestos ADD COLUMN unidad_nombre TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute(
+                "ALTER TABLE detalle_presupuestos ADD COLUMN detalle_calculo TEXT"
             )
         except sqlite3.OperationalError:
             pass
@@ -282,9 +312,6 @@ class DatabaseManager:
     # --- MÉTODOS DE REPORTES ---
 
     def guardar_reporte_mensual(self, metadata, records):
-        """
-        Guarda un reporte mensual completo: Cabecera y Detalles.
-        """
         try:
             fecha_inicio = metadata.get("desde", "")
             fecha_fin = metadata.get("hasta", "")
@@ -334,25 +361,20 @@ class DatabaseManager:
             return False, f"Error al guardar reporte: {str(e)}"
 
     def obtener_reportes_registrados(self):
-        """Devuelve la lista de reportes cargados para el historial."""
         query = """
             SELECT id, fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, fecha_registro 
-            FROM reportes_ventas 
-            ORDER BY id DESC
+            FROM reportes_ventas ORDER BY id DESC
         """
         return self.fetch_all(query)
 
     def obtener_detalle_reporte(self, reporte_id):
-        """Devuelve los ítems de un reporte específico."""
         query = """
             SELECT codigo_producto, nombre_producto, dia_semana, cantidad, total_venta, total_costo
-            FROM detalle_reportes_ventas
-            WHERE reporte_id = ?
+            FROM detalle_reportes_ventas WHERE reporte_id = ?
         """
         return self.fetch_all(query, (reporte_id,))
 
     def eliminar_reporte(self, reporte_id):
-        """Elimina un reporte y sus detalles (por el ON DELETE CASCADE)."""
         try:
             self.execute_query(
                 "DELETE FROM reportes_ventas WHERE id = ?", (reporte_id,)
@@ -362,12 +384,6 @@ class DatabaseManager:
             return False, str(e)
 
     def obtener_todos_codigos_menu(self):
-        """
-        Devuelve una lista plana con todos los códigos de productos (menu_items)
-        registrados en la base de datos.
-        Utilizado para validaciones al cargar reportes.
-        """
         query = "SELECT codigo FROM menu_items"
         resultados = self.fetch_all(query)
-        # Convertir de lista de tuplas [(COD1,), (COD2,)] a lista simple [COD1, COD2]
         return [r[0] for r in resultados]
