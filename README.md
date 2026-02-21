@@ -8,13 +8,14 @@
 
 El sistema cuenta con los siguientes módulos:
 
-* **🔐 Autenticación:** Sistema de login seguro para usuarios (Administradores y Empleados).
-* **📅 Registro de Ventas Diarias:** Módulo para la carga del cierre de ventas del día (cantidades vendidas por producto), permitiendo la actualización automática del inventario.
-* **📉 Control de Inventario (Kardex):** Sistema de trazabilidad de stock que registra movimientos de entrada (compras), salidas (ventas según recetas) y ajustes, manteniendo el stock actualizado en tiempo real.
-* **📦 Gestión de Insumos:** Control de stock, costos unitarios, unidades de medida y conversiones.
-* **🍲 Recetas y Menú:** Creación de platos y definición de recetas (escandallo) para calcular costos precisos y descarga de insumos.
-* **🛒 Compras:** Gestión de proveedores, registro de facturas y actualización automática de precios y stock.
-* **📊 Reportes:** Análisis de ventas y costos.
+* **🔐 Autenticación y Usuarios:** Sistema de login seguro con roles (Administradores y Empleados). Los administradores pueden gestionar accesos a través de una interfaz de Gestión de Usuarios dedicada.
+* **📈 Módulo de Presupuestos (NUEVO):** Creación de presupuestos de compras proyectados y enlace directo de estos presupuestos con las compras reales ejecutadas.
+* **📅 Módulo de Ventas Consolidado:** Interfaz unificada en pestañas que permite cargar reportes de cierre (vía CSV/Excel), consultar el historial de reportes y registrar las ventas diarias de manera fluida.
+* **📉 Control de Inventario:** Sistema de trazabilidad de stock que registra movimientos de entrada (compras), salidas (ventas según recetas) y ajustes, manteniendo el stock actualizado en tiempo real.
+* **📦 Gestión de Insumos:** Control de stock, costos unitarios, unidades de medida, conversiones, así como grupos y factores de cálculo avanzados.
+* **🍲 Recetas y Menú:** Creación de platos y definición de recetas (escandallo) para calcular costos precisos y descarga de insumos automática.
+* **🛒 Compras y Proveedores:** Gestión integral de proveedores, registro de facturas (contado u otros métodos de pago) vinculadas a presupuestos, y actualización automática de precios y stock.
+* **⚙️ Configuración Dinámica de BD:** Barra de estado inferior indicando el archivo activo y la opción para crear respaldos (backups), cambiar o cargar nuevas bases de datos SQLite desde la interfaz.
 
 ## 🗂️ Estructura del Proyecto
 
@@ -24,15 +25,17 @@ El proyecto sigue una arquitectura organizada separando la lógica de negocio (c
 restaurante_manager/
 ├── app/
 │   ├── controllers/       # Lógica de negocio y autenticación
-│   ├── database/          # Conexión a SQLite y creación de tablas
+│   ├── database/          # Conexión a SQLite, migraciones y configuración
 │   ├── views/             # Interfaz gráfica (Ventanas y Widgets)
-│   │   ├── modulos/       # Módulos específicos (CRUDs, Reportes, etc.)
-│   │   ├── main_window.py # Ventana principal
+│   │   ├── modulos/       # Módulos específicos (Ventas, Presupuestos, CRUDs, etc.)
+│   │   ├── main_window.py # Ventana principal y ruteador
 │   │   └── login_window.py# Ventana de acceso
 │   └── styles.py          # Estilos visuales de la aplicación
 ├── assets/                # Iconos y archivos de datos (Excel/CSV)
-├── data/                  # Base de datos SQLite (generada automáticamente)
+├── data/                  # Base de datos SQLite y respaldos
 ├── diagrama_ER.svg        # Diagrama Entidad-Relación de la BDD
+├── config.json            # Configuración de ruta activa de la Base de Datos
+├── actualizar_db.py       # Script de migraciones estructurales
 ├── main.py                # Punto de entrada de la aplicación
 ├── requirements.txt       # Dependencias del proyecto
 └── README.md              # Documentación del proyecto
@@ -44,7 +47,7 @@ El sistema utiliza SQLite como motor de base de datos. El esquema incluye tablas
 
 Maestros: Insumos, Proveedores, Recetas, Menú.
 
-Transaccionales: Compras, Detalle de Compras, Registro de Ventas Diarias, Movimientos de Inventario (Kardex).
+Transaccionales: Compras, Detalle de Compras, Registro de Ventas Diarias, Movimientos de Inventario.
 
 ![Diagrama ER de la Base de Datos](./diagrama_ER.svg)
 
