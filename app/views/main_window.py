@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QMessageBox,
     QFileDialog,
+    QButtonGroup,  # <--- NUEVA IMPORTACIÓN
 )
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt, QSize
@@ -27,7 +28,7 @@ from app.views.modulos.presupuestos import (
     PresupuestosView,
 )
 from app.views.modulos.compras_crud import ComprasCRUD
-from app.views.modulos.ventas import VentasModulo  # <--- IMPORTACIÓN DEL NUEVO MÓDULO
+from app.views.modulos.ventas import VentasModulo
 
 from app.views.modulos.inventario_view import InventarioView
 from app.views.dashboard import DashboardView
@@ -54,7 +55,6 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Sistema de Gestión de Restaurante")
         self.resize(1200, 800)
-        # APLICACIÓN DE resource_path AL ICONO PRINCIPAL
         self.setWindowIcon(QIcon(resource_path("assets/icons/app.ico")))
 
         self.init_ui()
@@ -69,22 +69,18 @@ class MainWindow(QMainWindow):
 
     def actualizar_info_bd(self):
         """Actualiza los textos de la interfaz para confirmar qué base de datos se usa."""
-        # Obtener usuario actual
         user_display = self.auth.current_user
         if isinstance(user_display, (list, tuple)) and len(user_display) > 1:
             username = user_display[1]
         else:
             username = "Desconocido"
 
-        # Obtener ruta actual
         ruta_bd = getattr(self.db, "db_path", "Ruta Desconocida")
 
-        # 1. Actualizar texto de la barra de estado
         self.statusBar().showMessage(
             f"Usuario: {username}  |  Base de Datos Activa: {ruta_bd}"
         )
 
-        # 2. Actualizar la etiqueta del menú lateral (si ya fue creada)
         if hasattr(self, "lbl_db_info"):
             self.lbl_db_info.setText(f"📁 BD Actual:\n{ruta_bd}")
 
@@ -95,6 +91,11 @@ class MainWindow(QMainWindow):
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
+
+        # --- GRUPO DE BOTONES DE NAVEGACIÓN ---
+        # Esto permite que solo un botón esté "marcado" a la vez
+        self.nav_button_group = QButtonGroup(self)
+        self.nav_button_group.setExclusive(True)
 
         # --- SIDEBAR ---
         sidebar_frame = QFrame()
@@ -133,6 +134,7 @@ class MainWindow(QMainWindow):
         self.btn_inventario = self.create_nav_button(
             "Inventario", "assets/icons/inventario.png", self.show_inventario
         )
+        # Re-aplicar el borde manteniendo los estilos previos (ahora dinámicos)
         self.btn_inventario.setStyleSheet(
             self.btn_inventario.styleSheet() + "border: 1px solid #3498db;"
         )
@@ -181,7 +183,6 @@ class MainWindow(QMainWindow):
         if isinstance(user_data, (list, tuple)) and len(user_data) > 2:
             user_rol = str(user_data[2]).lower()
 
-        # Solo si es admin o administrador se muestran estos botones
         if user_rol in ["admin", "administrador"]:
             self.btn_usuarios = self.create_nav_button(
                 "Gestión de Usuarios", "assets/icons/icon_user.png", self.show_usuarios
@@ -192,24 +193,22 @@ class MainWindow(QMainWindow):
                 "Configurar BD",
                 "assets/icons/db_settings.png",
                 self.manage_db_connection,
+                checkable=False,  # <-- CAMBIO: Las opciones de diálogo no deben quedar marcadas
             )
             self.btn_db_config.setStyleSheet(
                 self.btn_db_config.styleSheet() + "color: #f1c40f;"
             )
             sidebar_layout.addWidget(self.btn_db_config)
 
-        # --- NUEVA ETIQUETA INFORMATIVA DE BASE DE DATOS ---
         self.lbl_db_info = QLabel()
         self.lbl_db_info.setStyleSheet(
             "color: #7f8c8d; font-size: 10px; margin-top: 5px; margin-bottom: 5px; margin-left: 5px;"
         )
         self.lbl_db_info.setWordWrap(True)
         sidebar_layout.addWidget(self.lbl_db_info)
-        # Inicializar el texto
         self.actualizar_info_bd()
 
         btn_logout = QPushButton("  Cerrar Sesión")
-        # APLICACIÓN DE resource_path AL ICONO DE LOGOUT
         btn_logout.setIcon(QIcon(resource_path("assets/icons/logout.png")))
         btn_logout.setIconSize(QSize(24, 24))
         btn_logout.setStyleSheet("""
@@ -232,12 +231,19 @@ class MainWindow(QMainWindow):
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
 
+        # <-- CAMBIO: Inicializamos marcando el botón de Dashboard por defecto
+        self.btn_inicio.setChecked(True)
         self.show_dashboard()
 
-    def create_nav_button(self, text, icon_path, callback):
+    # <-- CAMBIO: Nuevo parámetro checkable
+    def create_nav_button(self, text, icon_path, callback, checkable=True):
         btn = QPushButton(f"  {text}")
 
-        # APLICACIÓN DE resource_path A TODOS LOS ICONOS DEL SIDEBAR
+        # Agregamos la lógica para agrupar botones checkeables
+        if checkable:
+            btn.setCheckable(True)
+            self.nav_button_group.addButton(btn)
+
         abs_icon_path = resource_path(icon_path) if icon_path else ""
 
         if abs_icon_path and os.path.exists(abs_icon_path):
@@ -247,6 +253,7 @@ class MainWindow(QMainWindow):
             btn.setIcon(QIcon(resource_path("assets/icons/app.ico")))
             btn.setIconSize(QSize(32, 32))
 
+        # <-- CAMBIO: Agregado el pseudo-estado QPushButton:checked
         btn.setStyleSheet("""
             QPushButton {
                 text-align: left;
@@ -263,13 +270,18 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: #2980b9;
             }
+            QPushButton:checked {
+                background-color: #2980b9;
+                font-weight: bold;
+                border-left: 4px solid #f1c40f; 
+                color: white;
+            }
         """)
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(callback)
         return btn
 
     def manage_db_connection(self):
-        """Muestra opciones para cambiar, crear o respaldar la base de datos."""
         msg = QMessageBox(self)
         msg.setWindowTitle("Gestión de Base de Datos")
         msg.setText("¿Qué acción desea realizar con la base de datos?")
@@ -287,15 +299,16 @@ class MainWindow(QMainWindow):
             if path:
                 self.db.switch_database(path)
 
-                # --- ACTUALIZAR LA INTERFAZ CON LA NUEVA RUTA ---
                 self.actualizar_info_bd()
 
                 QMessageBox.information(
                     self, "Éxito", f"Conectado exitosamente a:\n{path}"
                 )
-                # Reiniciar módulos para que recarguen datos de la nueva conexión
                 self.modules = {}
                 self.show_dashboard()
+                self.btn_inicio.setChecked(
+                    True
+                )  # <-- CAMBIO: Si recargamos la BD, aseguramos que el botón de inicio se marque
 
         elif msg.clickedButton() == btn_backup:
             folder = QFileDialog.getExistingDirectory(
@@ -332,7 +345,6 @@ class MainWindow(QMainWindow):
         elif hasattr(module_data["instance"], "cargar_inventario"):
             module_data["instance"].cargar_inventario()
 
-    # <--- FUNCIÓN ACTUALIZADA PARA CARGAR EL MÓDULO CONSOLIDADO --->
     def show_ventas(self):
         self.load_module(
             "ventas",
