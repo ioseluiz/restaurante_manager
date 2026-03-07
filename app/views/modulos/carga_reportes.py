@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor  # Importación necesaria para el color
+from PyQt5.QtGui import QColor
 from app.controllers.report_parser import ReportParser
 
 
@@ -104,11 +104,22 @@ class PestanaCarga(QWidget):
         info_group.addWidget(self.lbl_registros)
         layout.addLayout(info_group)
 
-        # Tabla de Previsualización
+        # Tabla de Previsualización (Muestra las 10 columnas)
         self.table = QTableWidget()
-        self.table.setColumnCount(6)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels(
-            ["Código", "Descripción", "Día", "Cant.", "Venta ($)", "Costo ($)"]
+            [
+                "Código",
+                "Descripción",
+                "Día",
+                "Cant.",
+                "Prom/Med",
+                "Estim/Med",
+                "Venta ($)",
+                "Costo ($)",
+                "Utilidad ($)",
+                "% Utilidad",
+            ]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         layout.addWidget(self.table)
@@ -126,7 +137,6 @@ class PestanaCarga(QWidget):
             "background-color: #6c757d; color: white; padding: 10px;"
         )
 
-        # CORRECCIÓN: Conectamos siempre a la función local, no condicionalmente
         btn_cancelar.clicked.connect(self.accion_cancelar)
 
         actions_layout.addWidget(btn_cancelar)
@@ -160,43 +170,50 @@ class PestanaCarga(QWidget):
         self.lbl_fechas.setText(f"Periodo Detectado: {inicio} al {fin}")
         self.lbl_registros.setText(f"Registros: {len(records)}")
 
-        # Limitar visualización para rendimiento
-        limit = min(len(records), 500)
-        self.table.setRowCount(limit)
+        # Mostrar TODOS los registros (Se eliminó el límite de 500)
+        self.table.setRowCount(len(records))
 
         color_alerta = QColor("#ffcccc")  # Rojo claro
 
-        for r_idx in range(limit):
-            row = records[r_idx]
-            codigo_reporte = str(row["code"]).strip()
+        for r_idx, row in enumerate(records):
+            codigo_reporte = str(row.get("code", "")).strip()
 
-            # Crear items
+            # Crear items extrayendo todas las llaves del diccionario de ReportParser
             item_code = QTableWidgetItem(codigo_reporte)
-            item_desc = QTableWidgetItem(str(row["desc"]))
-            item_day = QTableWidgetItem(str(row["day"]))
-            item_qty = QTableWidgetItem(str(row["qty"]))
-            item_venta = QTableWidgetItem(f"{row['total_venta']:.2f}")
-            item_costo = QTableWidgetItem(f"{row['total_costo']:.2f}")
+            item_desc = QTableWidgetItem(str(row.get("desc", "")))
+            item_day = QTableWidgetItem(str(row.get("day", "")))
+            item_qty = QTableWidgetItem(str(row.get("qty", "")))
+            item_prom = QTableWidgetItem(str(row.get("prom_med", "")))
+            item_estim = QTableWidgetItem(str(row.get("estim_med", "")))
+            item_venta = QTableWidgetItem(f"{float(row.get('total_venta', 0)):.2f}")
+            item_costo = QTableWidgetItem(f"{float(row.get('total_costo', 0)):.2f}")
+            item_utilidad = QTableWidgetItem(
+                f"{float(row.get('total_utilidad', 0)):.2f}"
+            )
+            item_pct = QTableWidgetItem(str(row.get("pct_utilidad", "")))
+
+            items_fila = [
+                item_code,
+                item_desc,
+                item_day,
+                item_qty,
+                item_prom,
+                item_estim,
+                item_venta,
+                item_costo,
+                item_utilidad,
+                item_pct,
+            ]
 
             # VALIDACIÓN: Si el código NO está en la lista de la BD, pintar de rojo
             if codigo_reporte not in codigos_bd:
-                for item in [
-                    item_code,
-                    item_desc,
-                    item_day,
-                    item_qty,
-                    item_venta,
-                    item_costo,
-                ]:
+                for item in items_fila:
                     item.setBackground(color_alerta)
                     item.setToolTip("Este código no existe en el menú actual.")
 
-            self.table.setItem(r_idx, 0, item_code)
-            self.table.setItem(r_idx, 1, item_desc)
-            self.table.setItem(r_idx, 2, item_day)
-            self.table.setItem(r_idx, 3, item_qty)
-            self.table.setItem(r_idx, 4, item_venta)
-            self.table.setItem(r_idx, 5, item_costo)
+            # Insertar elementos en la fila
+            for c_idx, item in enumerate(items_fila):
+                self.table.setItem(r_idx, c_idx, item)
 
     def guardar_en_bd(self):
         if not self.current_records:
@@ -282,10 +299,20 @@ class PestanaHistorial(QWidget):
         self.lbl_detalle = QLabel("<b>2. Detalle de Ventas</b>")
         bottom_layout.addWidget(self.lbl_detalle)
 
+        # Las 8 columnas soportadas por la BD para el historial
         self.tabla_detalle = QTableWidget()
-        self.tabla_detalle.setColumnCount(6)
+        self.tabla_detalle.setColumnCount(8)
         self.tabla_detalle.setHorizontalHeaderLabels(
-            ["Código", "Producto", "Día", "Cant.", "Venta ($)", "Costo ($)"]
+            [
+                "Código",
+                "Producto",
+                "Día",
+                "Cant.",
+                "Prom/Med",
+                "Venta ($)",
+                "Costo ($)",
+                "Utilidad ($)",
+            ]
         )
         self.tabla_detalle.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeToContents
@@ -307,12 +334,11 @@ class PestanaHistorial(QWidget):
 
         for i, row in enumerate(reportes):
             self.tabla_reportes.insertRow(i)
-            # row: id, inicio, fin, total, fecha_carga
             id_rep = str(row[0])
             self.tabla_reportes.setItem(i, 0, QTableWidgetItem(id_rep))
             self.tabla_reportes.setItem(i, 1, QTableWidgetItem(str(row[1])))
             self.tabla_reportes.setItem(i, 2, QTableWidgetItem(str(row[2])))
-            self.tabla_reportes.setItem(i, 3, QTableWidgetItem(f"{row[3]:.2f}"))
+            self.tabla_reportes.setItem(i, 3, QTableWidgetItem(f"{float(row[3]):.2f}"))
             self.tabla_reportes.setItem(i, 4, QTableWidgetItem(str(row[4])))
 
     def cargar_detalle_reporte(self, item):
@@ -332,8 +358,10 @@ class PestanaHistorial(QWidget):
             self.tabla_detalle.setItem(i, 1, QTableWidgetItem(str(row[1])))
             self.tabla_detalle.setItem(i, 2, QTableWidgetItem(str(row[2])))
             self.tabla_detalle.setItem(i, 3, QTableWidgetItem(str(row[3])))
-            self.tabla_detalle.setItem(i, 4, QTableWidgetItem(f"{row[4]:.2f}"))
-            self.tabla_detalle.setItem(i, 5, QTableWidgetItem(f"{row[5]:.2f}"))
+            self.tabla_detalle.setItem(i, 4, QTableWidgetItem(str(row[4])))
+            self.tabla_detalle.setItem(i, 5, QTableWidgetItem(f"{float(row[5]):.2f}"))
+            self.tabla_detalle.setItem(i, 6, QTableWidgetItem(f"{float(row[6]):.2f}"))
+            self.tabla_detalle.setItem(i, 7, QTableWidgetItem(f"{float(row[7]):.2f}"))
 
     def eliminar_reporte(self):
         filas = self.tabla_reportes.selectionModel().selectedRows()

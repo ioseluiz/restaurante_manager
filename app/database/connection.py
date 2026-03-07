@@ -403,8 +403,9 @@ class DatabaseManager:
         return self.fetch_all(query)
 
     def obtener_detalle_reporte(self, reporte_id):
+        # AQUI ESTA LA CORRECCION: Se agregaron promedio_medida y total_utilidad al SELECT
         query = """
-            SELECT codigo_producto, nombre_producto, dia_semana, cantidad, total_venta, total_costo
+            SELECT codigo_producto, nombre_producto, dia_semana, cantidad, promedio_medida, total_venta, total_costo, total_utilidad
             FROM detalle_reportes_ventas WHERE reporte_id = ?
         """
         return self.fetch_all(query, (reporte_id,))

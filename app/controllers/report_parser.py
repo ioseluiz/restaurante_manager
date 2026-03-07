@@ -68,15 +68,6 @@ class ReportParser:
             "sabado",
         ]
 
-        # Índices esperados (basados en el ejemplo proporcionado)
-        # Código: col 1
-        # Desc Header: col 5
-        # Día: col 7 (índice 7 si empieza en 0)
-        # Cantidad: col 10
-        # Promedio: col 12 (aprox)
-        # Total Venta: col 26 (aprox)
-        # Costo y Utilidad: suelen estar después de Venta
-
         try:
             for line_idx, line in enumerate(lines):
                 cells = [c.strip() for c in line.split(";")]
@@ -105,46 +96,48 @@ class ReportParser:
 
                 norm_day = ReportParser.normalize_text(col_7_day)
 
-                # CASO A: Fila de Encabezado de Producto (Tiene descripción en col 5, código vacío en col 1)
-                # Ejemplo: ;;;;;PAPITAS FRITAS;;;;...
+                # CASO A: Fila de Encabezado de Producto
                 if (
                     not col_1_code
                     and col_5_desc
                     and "promed" not in ReportParser.normalize_text(col_5_desc)
                 ):
-                    # Evitar capturar encabezados de tabla como "Descripción"
                     if "descripcion" not in ReportParser.normalize_text(col_5_desc):
                         current_product_desc = col_5_desc
 
-                # CASO B: Fila de Datos (Tiene Código y tiene Día válido)
-                # Ejemplo: ;ACOMP01;;;;;;Domingo...
+                # CASO B: Fila de Datos
                 if col_1_code and norm_day in valid_days_norm:
-                    # Extracción de valores numéricos
-                    # Cantidad suele estar en índice 10
                     qty_raw = cells[10] if len(cells) > 10 else "0"
 
-                    # Promedio suele estar alrededor del 12
                     prom_raw = "0"
+                    estim_raw = "0"
+
+                    # Extracción heurística de Promedio y Estimado
                     if len(cells) > 12:
-                        # Buscar alrededor del índice 12
                         for offset in range(3):
                             idx = 12 + offset
                             if idx < len(cells) and cells[idx].strip():
                                 prom_raw = cells[idx]
+                                # Buscar el estimado en la siguiente celda no vacía
+                                for j in range(idx + 1, min(idx + 4, len(cells))):
+                                    if cells[j].strip():
+                                        estim_raw = cells[j]
+                                        break
                                 break
 
-                    # Total Venta suele estar lejos, índice 26 o buscamos "B/."
                     total_venta_raw = "0"
                     total_costo_raw = "0"
                     total_util_raw = "0"
+                    pct_util_raw = "0%"
 
-                    # Búsqueda heurística de montos monetarios desde la columna del día hacia adelante
+                    # Búsqueda heurística de montos monetarios y porcentajes
                     money_values = []
                     for k in range(14, len(cells)):
                         if "B/." in cells[k] or "B/" in cells[k]:
                             money_values.append(cells[k])
+                        elif "%" in cells[k]:
+                            pct_util_raw = cells[k].strip()
 
-                    # Asignación tentativa (Venta, Costo, Utilidad)
                     if len(money_values) >= 1:
                         total_venta_raw = money_values[0]
                     if len(money_values) >= 2:
@@ -152,7 +145,6 @@ class ReportParser:
                     if len(money_values) >= 3:
                         total_util_raw = money_values[2]
 
-                    # Parsear floats
                     try:
                         qty = float(qty_raw.replace(",", ""))
                         prom = (
@@ -167,13 +159,16 @@ class ReportParser:
                         records.append(
                             {
                                 "code": col_1_code,
-                                "desc": current_product_desc,  # Usamos la descripción capturada previamente
+                                "desc": current_product_desc,
                                 "day": col_7_day,
                                 "qty": qty,
-                                "prom": prom,
+                                "prom": prom,  # Para compatibilidad con connection.py
+                                "prom_med": prom_raw,  # Para la UI
+                                "estim_med": estim_raw,  # Nuevo
                                 "total_venta": total_venta,
                                 "total_costo": total_costo,
                                 "total_utilidad": total_util,
+                                "pct_utilidad": pct_util_raw,  # Nuevo
                             }
                         )
 
