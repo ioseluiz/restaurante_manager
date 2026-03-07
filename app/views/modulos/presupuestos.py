@@ -741,7 +741,7 @@ class CrearPresupuestoDialog(QDialog):
         try:
             placeholders = ",".join(["?"] * len(reportes_ids))
             query_ventas = f"""
-                SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(cantidad) as cant
+                SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(promedio_medida) as cant
                 FROM detalle_reportes_ventas 
                 WHERE reporte_id IN ({placeholders})
                 GROUP BY reporte_id, codigo_producto, LOWER(dia_semana)
@@ -1242,7 +1242,7 @@ class VerPresupuestoDialog(QDialog):
 
             placeholders = ",".join(["?"] * len(reportes_ids))
             query_ventas = f"""
-                SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(cantidad) as cant
+                SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(promedio_medida) as cant
                 FROM detalle_reportes_ventas 
                 WHERE reporte_id IN ({placeholders})
                 GROUP BY reporte_id, codigo_producto, LOWER(dia_semana)

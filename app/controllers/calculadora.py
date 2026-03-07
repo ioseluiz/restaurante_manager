@@ -10,10 +10,12 @@ class CalculadoraInsumos:
         Calcula el promedio de ventas por producto y día de semana
         basado en los reportes históricos.
         """
+        # --- CORRECCIÓN: Usamos la tabla real detalle_reportes_ventas y la columna promedio_medida ---
+        # --- Además se normaliza el día con LOWER() para que haga match con la lógica de los diccionarios ---
         query = """
-            SELECT codigo_producto, dia_semana, AVG(cantidad) 
-            FROM ventas_reporte_semanal
-            GROUP BY codigo_producto, dia_semana
+            SELECT codigo_producto, LOWER(dia_semana), AVG(promedio_medida) 
+            FROM detalle_reportes_ventas
+            GROUP BY codigo_producto, LOWER(dia_semana)
         """
         rows = self.db.fetch_all(query)
 
