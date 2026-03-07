@@ -99,8 +99,15 @@ class PestanaCarga(QWidget):
         info_group = QHBoxLayout()
         self.lbl_fechas = QLabel("Periodo Detectado: -")
         self.lbl_fechas.setStyleSheet("font-weight: bold; color: #007bff;")
+
+        # --- NUEVO: Etiqueta para % Sugerido ---
+        self.lbl_sugerido = QLabel("% Sugerido: -")
+        self.lbl_sugerido.setStyleSheet("font-weight: bold; color: #28a745;")
+
         self.lbl_registros = QLabel("Registros: 0")
+
         info_group.addWidget(self.lbl_fechas)
+        info_group.addWidget(self.lbl_sugerido)
         info_group.addWidget(self.lbl_registros)
         layout.addLayout(info_group)
 
@@ -167,7 +174,10 @@ class PestanaCarga(QWidget):
         # UI Info
         inicio = metadata.get("desde", "N/A")
         fin = metadata.get("hasta", "N/A")
+        pct_sugerido = metadata.get("pct_sugerido", 0.0)  # NUEVO
+
         self.lbl_fechas.setText(f"Periodo Detectado: {inicio} al {fin}")
+        self.lbl_sugerido.setText(f"% Sugerido: {pct_sugerido}%")  # NUEVO
         self.lbl_registros.setText(f"Registros: {len(records)}")
 
         # Mostrar TODOS los registros (Se eliminó el límite de 500)
@@ -246,6 +256,7 @@ class PestanaCarga(QWidget):
         self.current_metadata = {}
         self.table.setRowCount(0)
         self.lbl_fechas.setText("Periodo Detectado: -")
+        self.lbl_sugerido.setText("% Sugerido: -")  # NUEVO
         self.lbl_registros.setText("Registros: 0")
 
 
@@ -273,9 +284,18 @@ class PestanaHistorial(QWidget):
         )
 
         self.tabla_reportes = QTableWidget()
-        self.tabla_reportes.setColumnCount(5)
+
+        # --- MODIFICADO: Incremento a 6 columnas y se agrega '% Sugerido' ---
+        self.tabla_reportes.setColumnCount(6)
         self.tabla_reportes.setHorizontalHeaderLabels(
-            ["ID", "Inicio Periodo", "Fin Periodo", "Total Ventas ($)", "Fecha Carga"]
+            [
+                "ID",
+                "Inicio Periodo",
+                "Fin Periodo",
+                "Total Ventas ($)",
+                "% Sugerido",
+                "Fecha Carga",
+            ]
         )
         self.tabla_reportes.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla_reportes.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -339,7 +359,11 @@ class PestanaHistorial(QWidget):
             self.tabla_reportes.setItem(i, 1, QTableWidgetItem(str(row[1])))
             self.tabla_reportes.setItem(i, 2, QTableWidgetItem(str(row[2])))
             self.tabla_reportes.setItem(i, 3, QTableWidgetItem(f"{float(row[3]):.2f}"))
-            self.tabla_reportes.setItem(i, 4, QTableWidgetItem(str(row[4])))
+
+            # --- NUEVO: Asignar % Sugerido a la columna 4 y Fecha a la 5 ---
+            pct_sug = float(row[4] or 0.0)
+            self.tabla_reportes.setItem(i, 4, QTableWidgetItem(f"{pct_sug:.2f}%"))
+            self.tabla_reportes.setItem(i, 5, QTableWidgetItem(str(row[5])))
 
     def cargar_detalle_reporte(self, item):
         row_idx = item.row()

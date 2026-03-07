@@ -112,7 +112,6 @@ class DatabaseManager:
             );
         """)
 
-        # --- MODIFICADO: Se agrega presupuesto_id ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS compras (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,6 +147,7 @@ class DatabaseManager:
             )
         """)
 
+        # --- MODIFICADO: Se agrega porcentaje_sugerido ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -157,6 +157,7 @@ class DatabaseManager:
                 mes INTEGER, 
                 anio INTEGER,
                 total_venta_reportada REAL DEFAULT 0.0,
+                porcentaje_sugerido REAL DEFAULT 0.0,
                 observaciones TEXT
             )
         """)
@@ -310,9 +311,16 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
-        # --- NUEVO: Migración interna para presupuesto_id en compras ---
         try:
             self.cursor.execute("ALTER TABLE compras ADD COLUMN presupuesto_id INTEGER")
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: Migración interna para porcentaje_sugerido en reportes_ventas ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE reportes_ventas ADD COLUMN porcentaje_sugerido REAL DEFAULT 0.0"
+            )
         except sqlite3.OperationalError:
             pass
 
@@ -350,15 +358,25 @@ class DatabaseManager:
         try:
             fecha_inicio = metadata.get("desde", "")
             fecha_fin = metadata.get("hasta", "")
+            pct_sugerido = metadata.get(
+                "pct_sugerido", 0.0
+            )  # NUEVO: Se obtiene de metadata
             total_global = sum(r["total_venta"] for r in records)
 
             query_header = """
                 INSERT INTO reportes_ventas 
-                (fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, observaciones)
-                VALUES (?, ?, ?, ?)
+                (fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, porcentaje_sugerido, observaciones)
+                VALUES (?, ?, ?, ?, ?)
             """
             self.cursor.execute(
-                query_header, (fecha_inicio, fecha_fin, total_global, "Carga desde CSV")
+                query_header,
+                (
+                    fecha_inicio,
+                    fecha_fin,
+                    total_global,
+                    pct_sugerido,
+                    "Carga desde CSV",
+                ),
             )
             reporte_id = self.cursor.lastrowid
 
@@ -396,14 +414,14 @@ class DatabaseManager:
             return False, f"Error al guardar reporte: {str(e)}"
 
     def obtener_reportes_registrados(self):
+        # MODIFICADO: Se incluye el campo porcentaje_sugerido
         query = """
-            SELECT id, fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, fecha_registro 
+            SELECT id, fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, porcentaje_sugerido, fecha_registro 
             FROM reportes_ventas ORDER BY id DESC
         """
         return self.fetch_all(query)
 
     def obtener_detalle_reporte(self, reporte_id):
-        # AQUI ESTA LA CORRECCION: Se agregaron promedio_medida y total_utilidad al SELECT
         query = """
             SELECT codigo_producto, nombre_producto, dia_semana, cantidad, promedio_medida, total_venta, total_costo, total_utilidad
             FROM detalle_reportes_ventas WHERE reporte_id = ?

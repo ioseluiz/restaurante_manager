@@ -40,7 +40,11 @@ class ReportParser:
 
     @staticmethod
     def parse_csv(file_path):
-        metadata = {"desde": "N/A", "hasta": "N/A"}
+        metadata = {
+            "desde": "N/A",
+            "hasta": "N/A",
+            "pct_sugerido": 0.0,
+        }  # NUEVO: pct_sugerido
         records = []
 
         lines = []
@@ -73,7 +77,7 @@ class ReportParser:
                 cells = [c.strip() for c in line.split(";")]
                 cells_norm = [ReportParser.normalize_text(c) for c in cells]
 
-                # 1. Extracción de Metadatos (Fechas)
+                # 1. Extracción de Metadatos (Fechas y % Sugerido)
                 if line_idx < 15:
                     for i, cell in enumerate(cells_norm):
                         if "desde" in cell and i + 1 < len(cells):
@@ -85,6 +89,16 @@ class ReportParser:
                             val = ReportParser._find_next_value(cells, i)
                             if val:
                                 metadata["hasta"] = val
+                        # --- NUEVO: Capturar el % Sugerido ---
+                        if "sugerido" in cell and i + 1 < len(cells):
+                            val = ReportParser._find_next_value(cells, i)
+                            if val:
+                                try:
+                                    metadata["pct_sugerido"] = float(
+                                        val.replace(",", ".").replace("%", "")
+                                    )
+                                except ValueError:
+                                    pass
 
                 # 2. Detección de filas
                 if len(cells) < 8:
