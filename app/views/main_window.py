@@ -32,6 +32,7 @@ from app.views.modulos.ventas import VentasModulo
 
 from app.views.modulos.inventario_view import InventarioView
 from app.views.dashboard import DashboardView
+from app.views.modulos.consolidados_view import ConsolidadosView
 
 
 def resource_path(relative_path):
@@ -163,6 +164,14 @@ class MainWindow(QMainWindow):
             self.show_presupuestos,
         )
         sidebar_layout.addWidget(self.btn_presupuestos)
+
+        self.btn_consolidados = self.create_nav_button(
+            "Consolidados",
+            "assets/icons/icon_reportes.png",
+            self.show_consolidados,
+            checkable=False
+        )
+        sidebar_layout.addWidget(self.btn_consolidados)
 
         sidebar_layout.addStretch()
 
@@ -373,6 +382,11 @@ class MainWindow(QMainWindow):
     def show_presupuestos(self):
         self.load_module(
             "presupuestos", PresupuestosView, "Gestión de Presupuestos", needs_db=True
+        )
+
+    def show_consolidados(self):
+        self.load_module(
+            "consolidados", ConsolidadosView, "Módulo de Consolidados", needs_db=True
         )
 
     def show_unidades(self):

@@ -23,9 +23,8 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QColor, QFont  # --- NUEVO: Para dar color al árbol ---
+from PyQt5.QtGui import QColor, QFont
 
-# --- ESTILOS COMUNES PARA DIÁLOGOS ---
 DIALOG_STYLES = """
     QDialog {
         background-color: #f0f2f5;
@@ -91,12 +90,10 @@ class PresupuestosView(QWidget):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
 
-        # --- Header ---
         header = QLabel("<h2>Gestión de Presupuestos</h2>")
         header.setAlignment(Qt.AlignCenter)
         layout.addWidget(header)
 
-        # --- Botonera ---
         btn_layout = QHBoxLayout()
 
         btn_nuevo = QPushButton(" Nuevo Presupuesto")
@@ -111,7 +108,6 @@ class PresupuestosView(QWidget):
         )
         btn_ver.clicked.connect(self.ver_presupuesto)
 
-        # --- NUEVO BOTÓN: Control Presupuestal ---
         btn_control = QPushButton(" Control Presupuestal")
         btn_control.setStyleSheet(
             "background-color: #8e44ad; color: white; padding: 8px; border-radius: 4px; font-weight: bold;"
@@ -132,13 +128,12 @@ class PresupuestosView(QWidget):
 
         btn_layout.addWidget(btn_nuevo)
         btn_layout.addWidget(btn_ver)
-        btn_layout.addWidget(btn_control)  # --- NUEVO ---
+        btn_layout.addWidget(btn_control)
         btn_layout.addWidget(btn_editar_gen)
         btn_layout.addWidget(btn_eliminar)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
-        # --- Tabla ---
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
@@ -205,7 +200,6 @@ class PresupuestosView(QWidget):
         dlg.exec_()
         self.cargar_datos()
 
-    # --- NUEVO MÉTODO DE CONTROL ---
     def abrir_control_presupuesto(self):
         row = self.table.currentRow()
         if row < 0:
@@ -267,7 +261,6 @@ class PresupuestosView(QWidget):
             self.cargar_datos()
 
 
-# --- NUEVO DIÁLOGO: CONTROL PRESUPUESTARIO ---
 class ControlPresupuestoDialog(QDialog):
     def __init__(self, db_manager, presupuesto_id, numero, mes, anio, parent=None):
         super().__init__(parent)
@@ -287,12 +280,10 @@ class ControlPresupuestoDialog(QDialog):
     def init_ui(self):
         layout = QVBoxLayout(self)
 
-        # Encabezado informativo
         lbl_head = QLabel(f"<h3>Análisis y Control: Presupuesto N° {self.numero}</h3>")
         lbl_head.setAlignment(Qt.AlignCenter)
         layout.addWidget(lbl_head)
 
-        # Árbol de datos
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
             [
@@ -309,14 +300,12 @@ class ControlPresupuestoDialog(QDialog):
         self.tree.setAlternatingRowColors(True)
         layout.addWidget(self.tree)
 
-        # Resumen general abajo
         self.lbl_resumen = QLabel("Cargando datos...")
         self.lbl_resumen.setStyleSheet(
             "font-size: 14px; padding: 10px; background-color: white; border: 1px solid #bdc3c7; border-radius: 4px;"
         )
         layout.addWidget(self.lbl_resumen)
 
-        # Botón Cerrar
         btn_cerrar = QPushButton("Cerrar")
         btn_cerrar.setStyleSheet(
             "background-color: #bdc3c7; font-weight: bold; padding: 8px;"
@@ -327,7 +316,6 @@ class ControlPresupuestoDialog(QDialog):
     def cargar_datos_control(self):
         self.tree.clear()
 
-        # 1. Obtener Presupuestado Original
         query_pres = """
             SELECT categoria_nombre, insumo_nombre, monto_estimado 
             FROM detalle_presupuestos 
@@ -335,7 +323,6 @@ class ControlPresupuestoDialog(QDialog):
         """
         datos_presupuesto = self.db.fetch_all(query_pres, (self.presupuesto_id,))
 
-        # 2. Obtener Comprado/Ejecutado cruzando compras -> detalle -> insumo -> categoría
         query_compras = """
             SELECT 
                 COALESCE(cat.nombre, 'Sin Categoría') as categoria,
@@ -351,10 +338,8 @@ class ControlPresupuestoDialog(QDialog):
         """
         datos_compras = self.db.fetch_all(query_compras, (self.presupuesto_id,))
 
-        # 3. Estructurar en diccionario principal
         diccionario = {}
 
-        # Agregar los presupuestados
         for d in datos_presupuesto:
             cat_nom = d[0] if d[0] else "Sin Categoría"
             ins_nom = d[1]
@@ -367,7 +352,6 @@ class ControlPresupuestoDialog(QDialog):
 
             diccionario[cat_nom][ins_nom]["presupuestado"] += monto_pres
 
-        # Cruzar y agregar los ejecutados
         for c in datos_compras:
             cat_nom = c[0]
             ins_nom = c[1]
@@ -380,7 +364,6 @@ class ControlPresupuestoDialog(QDialog):
 
             diccionario[cat_nom][ins_nom]["ejecutado"] += monto_ejec
 
-        # 4. Renderizar Árbol
         gran_total_presupuestado = 0.0
         gran_total_ejecutado = 0.0
 
@@ -392,7 +375,6 @@ class ControlPresupuestoDialog(QDialog):
             cat_item.setText(0, cat.upper())
             cat_item.setFont(0, font_bold)
 
-            # Formatear la fila de la categoría en color oscuro
             for i in range(4):
                 cat_item.setBackground(i, Qt.lightGray)
 
@@ -413,15 +395,13 @@ class ControlPresupuestoDialog(QDialog):
                 hijo.setText(1, f"${m_pres:,.2f}")
                 hijo.setText(2, f"${m_ejec:,.2f}")
 
-                # Lógica de color de la diferencia
                 if dif < 0:
                     hijo.setText(3, f"-${abs(dif):,.2f} (Excedido)")
-                    hijo.setForeground(3, QColor("#c0392b"))  # Rojo
+                    hijo.setForeground(3, QColor("#c0392b"))
                 else:
                     hijo.setText(3, f"${dif:,.2f}")
-                    hijo.setForeground(3, QColor("#2980b9"))  # Azul
+                    hijo.setForeground(3, QColor("#2980b9"))
 
-            # Setear los totales de la categoría en el padre
             dif_cat = total_cat_pres - total_cat_ejec
             cat_item.setText(1, f"${total_cat_pres:,.2f}")
             cat_item.setText(2, f"${total_cat_ejec:,.2f}")
@@ -437,7 +417,6 @@ class ControlPresupuestoDialog(QDialog):
 
         self.tree.expandAll()
 
-        # 5. Generar y mostrar resumen de totales generales
         dif_global = gran_total_presupuestado - gran_total_ejecutado
         color_saldo = "red" if dif_global < 0 else "blue"
         texto_saldo = (
@@ -452,9 +431,6 @@ class ControlPresupuestoDialog(QDialog):
             <b>Saldo Global:</b> <span style='color:{color_saldo}; font-weight:bold;'>{texto_saldo}</span>
         """
         self.lbl_resumen.setText(html_res)
-
-
-# --- DIÁLOGOS DE EDICIÓN ---
 
 
 class EditarGeneralDialog(QDialog):
@@ -505,6 +481,48 @@ class EditarGeneralDialog(QDialog):
         self.db.execute_query(
             "UPDATE presupuestos SET mes=?, anio=?, descripcion=? WHERE id=?",
             (m, a, d, self.p_id),
+        )
+        self.accept()
+
+
+# --- NUEVO DIÁLOGO PARA AJUSTAR PORCENTAJE ---
+class AjustarPorcentajeDialog(QDialog):
+    def __init__(self, db, detalle_id, nombre, pct_actual, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.detalle_id = detalle_id
+        self.setWindowTitle(f"Ajustar Porcentaje: {nombre}")
+        self.resize(350, 150)
+        self.setStyleSheet(DIALOG_STYLES)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(f"<b>Insumo:</b> {nombre}"))
+
+        layout.addWidget(QLabel("Porcentaje Sugerido a Aplicar (%):"))
+        self.spin_pct = QDoubleSpinBox()
+        self.spin_pct.setRange(-100.0, 1000.0)
+        self.spin_pct.setValue(pct_actual if pct_actual is not None else 0.0)
+        layout.addWidget(self.spin_pct)
+
+        btn_layout = QHBoxLayout()
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.clicked.connect(self.reject)
+
+        btn_guardar = QPushButton("Guardar y Recalcular")
+        btn_guardar.setStyleSheet(
+            "background-color: #9b59b6; color: white; font-weight: bold;"
+        )
+        btn_guardar.clicked.connect(self.guardar)
+
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_cancelar)
+        btn_layout.addWidget(btn_guardar)
+        layout.addLayout(btn_layout)
+
+    def guardar(self):
+        self.db.execute_query(
+            "UPDATE detalle_presupuestos SET porcentaje_usado=? WHERE id=?",
+            (self.spin_pct.value(), self.detalle_id),
         )
         self.accept()
 
@@ -631,16 +649,14 @@ class AgregarInsumoManualDialog(QDialog):
         det = "<h3 style='color:#27ae60;'>Insumo Agregado Manualmente</h3><p>Este artículo no proviene del cálculo automático, fue agregado manualmente al presupuesto por el usuario.</p>"
 
         query = """
-            INSERT INTO detalle_presupuestos (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO detalle_presupuestos (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo, porcentaje_usado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         self.db.execute_query(
-            query, (self.presupuesto_id, cat, ins, uni, c, m, "Agregado Extra", det)
+            query,
+            (self.presupuesto_id, cat, ins, uni, c, m, "Agregado Extra", det, 0.0),
         )
         self.accept()
-
-
-# --- DIÁLOGOS DE CREACIÓN Y VISTA DE DETALLE ---
 
 
 class CrearPresupuestoDialog(QDialog):
@@ -740,6 +756,12 @@ class CrearPresupuestoDialog(QDialog):
 
         try:
             placeholders = ",".join(["?"] * len(reportes_ids))
+
+            # --- MODIFICADO: Calculamos el promedio del porcentaje_sugerido de los reportes ---
+            query_pct = f"SELECT AVG(porcentaje_sugerido) FROM reportes_ventas WHERE id IN ({placeholders})"
+            avg_pct_row = self.db.fetch_one(query_pct, tuple(reportes_ids))
+            avg_pct = float(avg_pct_row[0]) if avg_pct_row and avg_pct_row[0] else 0.0
+
             query_ventas = f"""
                 SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(promedio_medida) as cant
                 FROM detalle_reportes_ventas 
@@ -806,8 +828,9 @@ class CrearPresupuestoDialog(QDialog):
                 if ventas_totales <= 0:
                     continue
 
+                # --- MODIFICADO: Ya no buscamos factor_calculo de insumos, sino aplicamos pct global del reporte ---
                 query_recetas = """
-                    SELECT r.insumo_id, i.nombre, i.factor_calculo, c.nombre as categoria, 
+                    SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
                            r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
                     FROM recetas r
                     JOIN menu_items m ON r.menu_item_id = m.id
@@ -819,21 +842,22 @@ class CrearPresupuestoDialog(QDialog):
                 recetas = self.db.fetch_all(query_recetas, (cod,))
 
                 for rec in recetas:
-                    ins_id, ins_nom, factor, cat_nom, cant_nec, menu_nom, abrev_uni = (
-                        rec
-                    )
-                    factor = factor if factor else 1.0
+                    ins_id, ins_nom, cat_nom, cant_nec, menu_nom, abrev_uni = rec
                     cat_nom = cat_nom if cat_nom else "Sin Categoría"
                     abrev_uni = abrev_uni if abrev_uni else "Und."
 
-                    cant_amplificada = (ventas_totales * cant_nec) * factor
+                    pct_usado = avg_pct
+                    factor_val = 1.0 + (pct_usado / 100.0)
+
+                    cant_amplificada = (ventas_totales * cant_nec) * factor_val
 
                     if ins_id not in insumos_calc:
                         insumos_calc[ins_id] = {
                             "nombre": ins_nom,
                             "categoria": cat_nom,
                             "unidad_base": abrev_uni,
-                            "factor": factor,
+                            "pct_usado": pct_usado,
+                            "factor": factor_val,
                             "qty_base_total": 0.0,
                             "items_menu": {},
                         }
@@ -858,6 +882,7 @@ class CrearPresupuestoDialog(QDialog):
             for ins_id, data in insumos_calc.items():
                 abrev_base = data["unidad_base"]
                 factor_val = data["factor"]
+                pct_val = data["pct_usado"]
 
                 query_pres = "SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY id ASC LIMIT 1"
                 pres = self.db.fetch_one(query_pres, (ins_id,))
@@ -874,7 +899,7 @@ class CrearPresupuestoDialog(QDialog):
                 det_html += (
                     f"<td width='50%'><b>Unidad Base Recetas:</b> {abrev_base}</td>"
                 )
-                det_html += f"<td width='50%'><b>Factor de Insumo (Merma):</b> {factor_val:.2f}</td>"
+                det_html += f"<td width='50%'><b>Porcentaje Sugerido Aplicado:</b> {pct_val:.2f}% (Factor: {factor_val:.2f})</td>"
                 det_html += f"</tr></table>"
 
                 if pres and pres[0] > 0:
@@ -924,13 +949,11 @@ class CrearPresupuestoDialog(QDialog):
                     det_html += (
                         f"<b style='color:#2c3e50; font-size: 14px;'>{m_nom}</b><br>"
                     )
-
                     det_html += f"<table width='100%' style='font-size: 12px; margin-top: 5px; color: #555;'>"
                     det_html += f"<tr><td width='35%'><b>Ventas Diario (Promedio):</b></td><td>[{dias_format}]</td></tr>"
                     det_html += f"<tr><td><b>Ventas Mensual Proyectado:</b></td><td>{m_info['ventas_mensual']:.2f} platos vendidos</td></tr>"
                     det_html += f"<tr><td><b>Requerido en Receta:</b></td><td>{m_info['receta_cant']:.4f} {abrev_base} por plato</td></tr>"
                     det_html += f"</table>"
-
                     det_html += f"<div style='margin-top: 6px; padding-top: 6px; border-top: 1px dashed #ccc; font-family: monospace; font-size: 13px;'>"
                     det_html += f"Fórmula: {m_info['ventas_mensual']:.2f} platos x {m_info['receta_cant']:.4f} {abrev_base}{factor_str} = <b style='color: #c0392b;'>{m_info['total_plato']:.2f} {abrev_base}</b>"
                     det_html += f"</div></div>"
@@ -961,6 +984,7 @@ class CrearPresupuestoDialog(QDialog):
                         costo_insumo_final,
                         items_str,
                         det_html,
+                        data["pct_usado"],
                     )
                 )
 
@@ -983,8 +1007,8 @@ class CrearPresupuestoDialog(QDialog):
 
             query_det_insert = """
                 INSERT INTO detalle_presupuestos 
-                (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo) 
-                VALUES (?,?,?,?,?,?,?,?)
+                (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo, porcentaje_usado) 
+                VALUES (?,?,?,?,?,?,?,?,?)
             """
             for det in detalles_db:
                 self.db.execute_query(query_det_insert, (presupuesto_id, *det))
@@ -1089,7 +1113,7 @@ class VerPresupuestoDialog(QDialog):
         self.tree.setColumnWidth(1, 150)
         self.tree.setColumnWidth(2, 120)
         self.tree.setColumnWidth(3, 300)
-        self.tree.setColumnWidth(4, 220)
+        self.tree.setColumnWidth(4, 250)
         self.tree.setAlternatingRowColors(True)
         self.tree.setWordWrap(True)
         layout.addWidget(self.tree)
@@ -1124,7 +1148,7 @@ class VerPresupuestoDialog(QDialog):
         self.actualizar_encabezado()
 
         query = """
-            SELECT id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo 
+            SELECT id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo, porcentaje_usado
             FROM detalle_presupuestos 
             WHERE presupuesto_id = ? 
             ORDER BY categoria_nombre, insumo_nombre
@@ -1133,7 +1157,17 @@ class VerPresupuestoDialog(QDialog):
 
         agrupado = {}
         for d in detalles:
-            det_id, cat_nom, ins_nom, uni_nom, cant, monto, items, det_calc = d
+            (
+                det_id,
+                cat_nom,
+                ins_nom,
+                uni_nom,
+                cant,
+                monto,
+                items,
+                det_calc,
+                pct_usado,
+            ) = d
             if cat_nom not in agrupado:
                 agrupado[cat_nom] = {"items": [], "total_monto": 0}
             agrupado[cat_nom]["items"].append(d)
@@ -1152,7 +1186,17 @@ class VerPresupuestoDialog(QDialog):
                 cat_item.setFont(i, font)
 
             for d in data["items"]:
-                det_id, cat_nom, ins_nom, uni_nom, cant, monto, items, det_calc = d
+                (
+                    det_id,
+                    cat_nom,
+                    ins_nom,
+                    uni_nom,
+                    cant,
+                    monto,
+                    items,
+                    det_calc,
+                    pct_usado,
+                ) = d
 
                 hijo = QTreeWidgetItem(cat_item)
                 hijo.setText(0, ins_nom)
@@ -1175,6 +1219,18 @@ class VerPresupuestoDialog(QDialog):
                 btn_detalle.setCursor(Qt.PointingHandCursor)
                 btn_detalle.clicked.connect(
                     lambda checked, html=det_calc: self.mostrar_calculo(html)
+                )
+
+                # --- NUEVO BOTON: Ajustar Porcentaje ---
+                btn_porcentaje = QPushButton("Ajustar %")
+                btn_porcentaje.setStyleSheet(
+                    "background-color: #9b59b6; color: white; border-radius: 3px; padding: 4px; font-weight: bold; font-size: 11px;"
+                )
+                btn_porcentaje.setCursor(Qt.PointingHandCursor)
+                btn_porcentaje.clicked.connect(
+                    lambda checked, d_id=det_id, nom=ins_nom, pct=pct_usado: (
+                        self.abrir_ajuste_porcentaje(d_id, nom, pct)
+                    )
                 )
 
                 btn_editar = QPushButton("Editar")
@@ -1200,6 +1256,7 @@ class VerPresupuestoDialog(QDialog):
                 )
 
                 layout_acciones.addWidget(btn_detalle)
+                layout_acciones.addWidget(btn_porcentaje)
                 layout_acciones.addWidget(btn_editar)
                 layout_acciones.addWidget(btn_borrar)
 
@@ -1207,18 +1264,25 @@ class VerPresupuestoDialog(QDialog):
 
         self.tree.expandAll()
 
-    def recalcular_automatico(self):
-        resp = QMessageBox.question(
-            self,
-            "Confirmar Recálculo",
-            "¿Desea recalcular todo el presupuesto usando los PRECIOS y RECETAS actuales?\n\n"
-            "• Los insumos 'Extras' agregados manualmente se conservarán.\n"
-            "• Las ediciones manuales a insumos calculados se sobreescribirán.",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+    def abrir_ajuste_porcentaje(self, det_id, nombre, pct_actual):
+        dlg = AjustarPorcentajeDialog(self.db, det_id, nombre, pct_actual, self)
+        if dlg.exec_():
+            self.recalcular_automatico(confirmar=False)
 
-        if resp != QMessageBox.Yes:
-            return
+    def recalcular_automatico(self, confirmar=True):
+        if confirmar:
+            resp = QMessageBox.question(
+                self,
+                "Confirmar Recálculo",
+                "¿Desea recalcular todo el presupuesto usando los PRECIOS y RECETAS actuales?\n\n"
+                "• Los insumos 'Extras' agregados manualmente se conservarán.\n"
+                "• Las ediciones manuales a insumos calculados se sobreescribirán.\n"
+                "• Los porcentajes personalizados de cada insumo se conservarán.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+
+            if resp != QMessageBox.Yes:
+                return
 
         try:
             query_reps = (
@@ -1228,19 +1292,33 @@ class VerPresupuestoDialog(QDialog):
             reportes_ids = [str(r[0]) for r in reps]
 
             if not reportes_ids:
-                QMessageBox.warning(
-                    self, "Error", "No se encontraron reportes base para recalcular."
-                )
+                if confirmar:
+                    QMessageBox.warning(
+                        self,
+                        "Error",
+                        "No se encontraron reportes base para recalcular.",
+                    )
                 return
 
+            query_pct_existentes = "SELECT insumo_nombre, porcentaje_usado FROM detalle_presupuestos WHERE presupuesto_id = ?"
+            pcts_existentes = {}
+            for row in self.db.fetch_all(query_pct_existentes, (self.presupuesto_id,)):
+                if row[1] is not None:
+                    pcts_existentes[row[0]] = float(row[1])
+
+            placeholders = ",".join(["?"] * len(reportes_ids))
+
+            query_avg_pct = f"SELECT AVG(porcentaje_sugerido) FROM reportes_ventas WHERE id IN ({placeholders})"
+            avg_pct_row = self.db.fetch_one(query_avg_pct, tuple(reportes_ids))
+            avg_pct = float(avg_pct_row[0]) if avg_pct_row and avg_pct_row[0] else 0.0
+
             query_extras = """
-                SELECT categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo 
+                SELECT categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo, porcentaje_usado
                 FROM detalle_presupuestos 
                 WHERE presupuesto_id = ? AND items_menu = 'Agregado Extra'
             """
             extras = self.db.fetch_all(query_extras, (self.presupuesto_id,))
 
-            placeholders = ",".join(["?"] * len(reportes_ids))
             query_ventas = f"""
                 SELECT reporte_id, codigo_producto, LOWER(dia_semana), SUM(promedio_medida) as cant
                 FROM detalle_reportes_ventas 
@@ -1304,7 +1382,7 @@ class VerPresupuestoDialog(QDialog):
                     continue
 
                 query_recetas = """
-                    SELECT r.insumo_id, i.nombre, i.factor_calculo, c.nombre as categoria, 
+                    SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
                            r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
                     FROM recetas r
                     JOIN menu_items m ON r.menu_item_id = m.id
@@ -1316,21 +1394,22 @@ class VerPresupuestoDialog(QDialog):
                 recetas = self.db.fetch_all(query_recetas, (cod,))
 
                 for rec in recetas:
-                    ins_id, ins_nom, factor, cat_nom, cant_nec, menu_nom, abrev_uni = (
-                        rec
-                    )
-                    factor = factor if factor else 1.0
+                    ins_id, ins_nom, cat_nom, cant_nec, menu_nom, abrev_uni = rec
                     cat_nom = cat_nom if cat_nom else "Sin Categoría"
                     abrev_uni = abrev_uni if abrev_uni else "Und."
 
-                    cant_amplificada = (ventas_totales * cant_nec) * factor
+                    pct_usado = pcts_existentes.get(ins_nom, avg_pct)
+                    factor_val = 1.0 + (pct_usado / 100.0)
+
+                    cant_amplificada = (ventas_totales * cant_nec) * factor_val
 
                     if ins_id not in insumos_calc:
                         insumos_calc[ins_id] = {
                             "nombre": ins_nom,
                             "categoria": cat_nom,
                             "unidad_base": abrev_uni,
-                            "factor": factor,
+                            "pct_usado": pct_usado,
+                            "factor": factor_val,
                             "qty_base_total": 0.0,
                             "items_menu": {},
                         }
@@ -1355,6 +1434,7 @@ class VerPresupuestoDialog(QDialog):
             for ins_id, data in insumos_calc.items():
                 abrev_base = data["unidad_base"]
                 factor_val = data["factor"]
+                pct_val = data["pct_usado"]
 
                 query_pres = "SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY id ASC LIMIT 1"
                 pres = self.db.fetch_one(query_pres, (ins_id,))
@@ -1366,7 +1446,7 @@ class VerPresupuestoDialog(QDialog):
 
                 det_html = f"<div style='font-family: Arial, sans-serif;'>"
                 det_html += f"<h3 style='color:#2c3e50; border-bottom: 2px solid #bdc3c7; padding-bottom: 5px;'>Detalle de Cálculo: {data['nombre']}</h3>"
-                det_html += f"<table width='100%' style='margin-bottom: 15px;'><tr><td width='50%'><b>Unidad Base Recetas:</b> {abrev_base}</td><td width='50%'><b>Factor de Insumo (Merma):</b> {factor_val:.2f}</td></tr></table>"
+                det_html += f"<table width='100%' style='margin-bottom: 15px;'><tr><td width='50%'><b>Unidad Base Recetas:</b> {abrev_base}</td><td width='50%'><b>Porcentaje Sugerido Aplicado:</b> {pct_val:.2f}% (Factor: {factor_val:.2f})</td></tr></table>"
 
                 if pres and pres[0] > 0:
                     cant_contenido, precio_pres, nombre_pres = pres
@@ -1421,6 +1501,7 @@ class VerPresupuestoDialog(QDialog):
                         costo_insumo_final,
                         items_str,
                         det_html,
+                        data["pct_usado"],
                     )
                 )
 
@@ -1431,8 +1512,8 @@ class VerPresupuestoDialog(QDialog):
 
             query_det_insert = """
                 INSERT INTO detalle_presupuestos 
-                (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo) 
-                VALUES (?,?,?,?,?,?,?,?)
+                (presupuesto_id, categoria_nombre, insumo_nombre, unidad_nombre, cantidad_requerida, monto_estimado, items_menu, detalle_calculo, porcentaje_usado) 
+                VALUES (?,?,?,?,?,?,?,?,?)
             """
 
             for det in detalles_db:
@@ -1443,20 +1524,22 @@ class VerPresupuestoDialog(QDialog):
 
             recalcular_total_presupuesto(self.db, self.presupuesto_id)
 
-            QMessageBox.information(
-                self,
-                "Éxito",
-                "El presupuesto ha sido recalculado con los precios y recetas actuales.",
-            )
+            if confirmar:
+                QMessageBox.information(
+                    self,
+                    "Éxito",
+                    "El presupuesto ha sido recalculado con los precios y recetas actuales.",
+                )
             self.cargar_detalles()
 
         except Exception as e:
             import traceback
 
             traceback.print_exc()
-            QMessageBox.critical(
-                self, "Error", f"Ha ocurrido un error al recalcular:\n{str(e)}"
-            )
+            if confirmar:
+                QMessageBox.critical(
+                    self, "Error", f"Ha ocurrido un error al recalcular:\n{str(e)}"
+                )
 
     def mostrar_calculo(self, html_content):
         if not html_content:

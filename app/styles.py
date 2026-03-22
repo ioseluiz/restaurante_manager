@@ -31,6 +31,12 @@ GLOBAL_STYLES = f"""
         background-color: {COLORS["background"]};
     }}
 
+    /* --- SCROLL AREA --- */
+    QScrollArea, QScrollArea > QWidget > QWidget {{
+        background-color: {COLORS["background"]};
+        border: none;
+    }}
+
     /* --- BOTONES ESTÁNDAR --- */
     QPushButton {{
         background-color: {COLORS["primary"]};
@@ -132,14 +138,14 @@ GLOBAL_STYLES = f"""
     }}
 
     /* --- INPUTS --- */
-    QLineEdit, QComboBox, QDoubleSpinBox, QDateEdit {{
+    QLineEdit, QTextEdit, QComboBox, QDoubleSpinBox, QSpinBox, QDateEdit {{
         padding: 6px;
         border: 1px solid {COLORS["border"]};
         border-radius: 4px;
         background-color: white;
         color: {COLORS["text"]}; 
     }}
-    QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {{
+    QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus {{
         border: 2px solid {COLORS["primary"]};
     }}
 

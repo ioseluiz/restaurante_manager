@@ -147,7 +147,6 @@ class DatabaseManager:
             )
         """)
 
-        # --- MODIFICADO: Se agrega porcentaje_sugerido ---
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS reportes_ventas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -277,13 +276,102 @@ class DatabaseManager:
                 cantidad_requerida REAL,
                 monto_estimado REAL,
                 items_menu TEXT,
-                detalle_calculo TEXT, 
+                detalle_calculo TEXT,
+                porcentaje_usado REAL DEFAULT 0.0,
                 FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
             );
         """)
 
-        self.conn.commit()
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chequera (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE NOT NULL,
+                no_ck TEXT,
+                nombre_cheque TEXT,
+                detalle TEXT,
+                deposito REAL DEFAULT 0.0,
+                monto REAL DEFAULT 0.0
+            );
+        """)
 
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tarjetas_credito (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero TEXT NOT NULL,
+                tipo TEXT NOT NULL,
+                banco TEXT NOT NULL
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transacciones_tarjeta (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tarjeta_id INTEGER NOT NULL,
+                fecha DATE NOT NULL,
+                comercio TEXT,
+                descripcion TEXT,
+                tipo_transaccion TEXT NOT NULL,
+                monto REAL DEFAULT 0.0,
+                FOREIGN KEY(tarjeta_id) REFERENCES tarjetas_credito(id) ON DELETE CASCADE
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pagos_efectivo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE NOT NULL,
+                proveedor TEXT,
+                descripcion TEXT,
+                total REAL DEFAULT 0.0,
+                costo_viveres REAL DEFAULT 0.0,
+                costo_carnes REAL DEFAULT 0.0,
+                desayunos REAL DEFAULT 0.0,
+                otros REAL DEFAULT 0.0,
+                planilla REAL DEFAULT 0.0,
+                gastos_propietarios REAL DEFAULT 0.0,
+                honorarios REAL DEFAULT 0.0,
+                reparaciones_mantenimiento REAL DEFAULT 0.0,
+                atencion_empleados REAL DEFAULT 0.0,
+                combustible REAL DEFAULT 0.0,
+                medicamentos REAL DEFAULT 0.0
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS yappy_cuentas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                numero TEXT NOT NULL
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS transacciones_yappy (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                yappy_id INTEGER NOT NULL,
+                fecha DATE NOT NULL,
+                proveedor TEXT,
+                descripcion TEXT,
+                monto REAL DEFAULT 0.0,
+                FOREIGN KEY(yappy_id) REFERENCES yappy_cuentas(id) ON DELETE CASCADE
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS diario_ventas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE NOT NULL,
+                total_ventas REAL DEFAULT 0.0,
+                yappy REAL DEFAULT 0.0,
+                pedidos_ya REAL DEFAULT 0.0,
+                no_facturas INTEGER DEFAULT 0,
+                sobrante REAL DEFAULT 0.0,
+                faltante REAL DEFAULT 0.0,
+                depositos REAL DEFAULT 0.0
+            );
+        """)
+
+        self.conn.commit()
     def _migrate_tables(self):
         try:
             self.cursor.execute("ALTER TABLE insumos ADD COLUMN grupo_calculo TEXT")
@@ -316,10 +404,17 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
-        # --- NUEVO: Migración interna para porcentaje_sugerido en reportes_ventas ---
         try:
             self.cursor.execute(
                 "ALTER TABLE reportes_ventas ADD COLUMN porcentaje_sugerido REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: Migración para añadir el porcentaje_usado por insumo en el presupuesto ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE detalle_presupuestos ADD COLUMN porcentaje_usado REAL DEFAULT 0.0"
             )
         except sqlite3.OperationalError:
             pass
@@ -358,9 +453,7 @@ class DatabaseManager:
         try:
             fecha_inicio = metadata.get("desde", "")
             fecha_fin = metadata.get("hasta", "")
-            pct_sugerido = metadata.get(
-                "pct_sugerido", 0.0
-            )  # NUEVO: Se obtiene de metadata
+            pct_sugerido = metadata.get("pct_sugerido", 0.0)
             total_global = sum(r["total_venta"] for r in records)
 
             query_header = """
@@ -414,7 +507,6 @@ class DatabaseManager:
             return False, f"Error al guardar reporte: {str(e)}"
 
     def obtener_reportes_registrados(self):
-        # MODIFICADO: Se incluye el campo porcentaje_sugerido
         query = """
             SELECT id, fecha_inicio_periodo, fecha_fin_periodo, total_venta_reportada, porcentaje_sugerido, fecha_registro 
             FROM reportes_ventas ORDER BY id DESC

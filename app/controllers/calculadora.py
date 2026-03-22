@@ -10,8 +10,6 @@ class CalculadoraInsumos:
         Calcula el promedio de ventas por producto y día de semana
         basado en los reportes históricos.
         """
-        # --- CORRECCIÓN: Usamos la tabla real detalle_reportes_ventas y la columna promedio_medida ---
-        # --- Además se normaliza el día con LOWER() para que haga match con la lógica de los diccionarios ---
         query = """
             SELECT codigo_producto, LOWER(dia_semana), AVG(promedio_medida) 
             FROM detalle_reportes_ventas
@@ -52,22 +50,22 @@ class CalculadoraInsumos:
         query += " ORDER BY m.nombre"
         return self.db.fetch_all(query, tuple(params))
 
-    def calcular_requerimiento(self, grupo_filtro=None, ventas_manuales=None):
+    def calcular_requerimiento(
+        self, grupo_filtro=None, ventas_manuales=None, porcentaje_global=0.0
+    ):
         """
-        Realiza el cálculo maestro.
+        Realiza el cálculo maestro usando el porcentaje sugerido global.
         :param ventas_manuales: (Opcional) Diccionario con ventas simuladas.
-                                Estructura: {'CODIGO': {'Lunes': 10, ...}}
+        :param porcentaje_global: Porcentaje sugerido a aplicar a la base.
         """
 
-        # A. Decidir fuente de datos de ventas
         if ventas_manuales:
             ventas_promedio = ventas_manuales
         else:
             ventas_promedio = self.obtener_promedio_ventas_semanales()
 
-        # B. Obtener Insumos a calcular
         query_insumos = """
-            SELECT id, nombre, unidad_base_id, factor_calculo 
+            SELECT id, nombre, unidad_base_id 
             FROM insumos 
             WHERE 1=1
         """
@@ -82,18 +80,17 @@ class CalculadoraInsumos:
 
         reporte = []
 
-        for ins in insumos:
-            ins_id, ins_nombre, u_base_id, factor = ins
-            if not factor:
-                factor = 1.0
+        # --- CORRECCIÓN: Se usa el porcentaje global en lugar del factor del insumo ---
+        factor_val = 1.0 + (porcentaje_global / 100.0)
 
-            # Obtener nombre de unidad
+        for ins in insumos:
+            ins_id, ins_nombre, u_base_id = ins
+
             u_row = self.db.fetch_all(
                 "SELECT abreviatura FROM unidades_medida WHERE id=?", (u_base_id,)
             )
             unidad_nombre = u_row[0][0] if u_row else "??"
 
-            # C. Buscar en qué Items de Menu se usa este insumo
             query_recetas = """
                 SELECT m.codigo, m.nombre, r.cantidad_necesaria 
                 FROM recetas r
@@ -110,11 +107,9 @@ class CalculadoraInsumos:
                 nom_prod = uso[1]
                 cant_receta = uso[2]
 
-                # Calcular consumo semanal para este plato
                 consumo_plato_semanal = 0.0
 
                 if cod_prod in ventas_promedio:
-                    # Sumar las ventas (sea histórico diario o total simulado)
                     dias_venta = ventas_promedio[cod_prod]
                     total_ventas_item_semana = sum(dias_venta.values())
 
@@ -129,13 +124,9 @@ class CalculadoraInsumos:
             if total_semanal_base == 0:
                 continue
 
-            # D. Aplicar Factor de Insumo (Merma / Seguridad)
-            total_semanal_ajustado = total_semanal_base * factor
-
-            # E. Proyección Mensual (x4 semanas)
+            total_semanal_ajustado = total_semanal_base * factor_val
             total_mensual = total_semanal_ajustado * 4
 
-            # F. Calcular Sugerencia de Compra
             compra_sugerida = self.calcular_presentacion_compra(
                 ins_id, total_mensual, unidad_nombre
             )
@@ -147,7 +138,8 @@ class CalculadoraInsumos:
                     "semanal": total_semanal_ajustado,
                     "mensual": total_mensual,
                     "compra": compra_sugerida,
-                    "detalle": "\n".join(detalle_uso) + f"\n(Factor: {factor})",
+                    "detalle": "\n".join(detalle_uso)
+                    + f"\n(Factor aplicado: {factor_val:.2f} por {porcentaje_global}%)",
                 }
             )
 
