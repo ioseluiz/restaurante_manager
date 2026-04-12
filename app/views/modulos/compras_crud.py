@@ -114,6 +114,8 @@ class DetalleCompraDialog(QDialog):
         self.lbl_total.setText(f"Total Compra: ${gran_total:.2f}")
 
 
+from app.views.modulos.abastecimiento_interno import TabAbastecimientoInterno
+
 class ComprasCRUD(QWidget):
     def __init__(self, db_manager):
         super().__init__()
@@ -133,11 +135,13 @@ class ComprasCRUD(QWidget):
         self.tab_proveedores = TabProveedores(self.db)
         self.tab_resumen = TabResumenSemanal(self.db)
         self.tab_resumen_mensual = TabResumenMensual(self.db)
+        self.tab_abastecimiento = TabAbastecimientoInterno(self.db)
 
         self.tabs.addTab(self.tab_compras, "1. Registro de Compras")
         self.tabs.addTab(self.tab_proveedores, "2. Proveedores")
         self.tabs.addTab(self.tab_resumen, "3. Resumen Semanal")
         self.tabs.addTab(self.tab_resumen_mensual, "4. Resumen Mensual")
+        self.tabs.addTab(self.tab_abastecimiento, "5. Abastecimiento Interno")
 
         layout.addWidget(self.tabs)
         self.setLayout(layout)
@@ -147,6 +151,7 @@ class ComprasCRUD(QWidget):
         self.tab_proveedores.cargar_proveedores()
         self.tab_resumen.cargar_datos()
         self.tab_resumen_mensual.cargar_datos()
+        self.tab_abastecimiento.cargar_datos()
 
 
 class TabGestionCompras(QWidget):

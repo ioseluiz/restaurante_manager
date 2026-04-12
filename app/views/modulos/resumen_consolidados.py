@@ -6,10 +6,13 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem,
     QLabel,
     QHeaderView,
-    QPushButton
+    QPushButton,
+    QFileDialog,
+    QMessageBox
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
+import csv
 
 class NumericItem(QTableWidgetItem):
     """Permite ordenar columnas numéricas correctamente."""
@@ -36,6 +39,11 @@ class ResumenConsolidadosView(QWidget):
         header_layout.addWidget(title)
         
         header_layout.addStretch()
+
+        btn_exportar = QPushButton("📄 Exportar CSV")
+        btn_exportar.setCursor(Qt.PointingHandCursor)
+        btn_exportar.clicked.connect(self.exportar_csv)
+        header_layout.addWidget(btn_exportar)
         
         btn_refresh = QPushButton("Actualizar Datos")
         btn_refresh.setCursor(Qt.PointingHandCursor)
@@ -76,6 +84,10 @@ class ResumenConsolidadosView(QWidget):
         
         layout.addWidget(self.table)
         self.setLayout(layout)
+
+    def exportar_csv(self):
+        from app.views.modulos.export_utils import exportar_tabla_por_mes
+        exportar_tabla_por_mes(self, self.table, "resumen_consolidados.csv", 0)
 
     def cargar_datos(self):
         self.table.setSortingEnabled(False)

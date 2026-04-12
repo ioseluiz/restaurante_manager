@@ -14,10 +14,12 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QDateEdit,
     QDoubleSpinBox,
-    QComboBox
+    QComboBox,
+    QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
+import csv
 
 class NumericItem(QTableWidgetItem):
     """Permite ordenar columnas numéricas correctamente."""
@@ -352,8 +354,12 @@ class PagosYappyView(QWidget):
         btn_del_trans = QPushButton("Eliminar")
         btn_del_trans.setProperty("class", "btn-danger")
         btn_del_trans.clicked.connect(self.eliminar_transaccion)
+
+        btn_export_trans = QPushButton("📄 Exportar CSV")
+        btn_export_trans.clicked.connect(self.exportar_csv)
         
         trans_header.addStretch()
+        trans_header.addWidget(btn_export_trans)
         trans_header.addWidget(btn_add_trans)
         trans_header.addWidget(btn_edit_trans)
         trans_header.addWidget(btn_del_trans)
@@ -391,6 +397,10 @@ class PagosYappyView(QWidget):
         self.setLayout(main_layout)
         
         self.container_widget.setEnabled(False)
+
+    def exportar_csv(self):
+        from app.views.modulos.export_utils import exportar_tabla_por_mes
+        exportar_tabla_por_mes(self, self.table_transacciones, "transacciones_yappy.csv", 1)
 
     def cargar_datos(self):
         self.actualizar_combo_yappy()

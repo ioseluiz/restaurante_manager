@@ -289,7 +289,6 @@ class DatabaseManager:
                 no_ck TEXT,
                 nombre_cheque TEXT,
                 detalle TEXT,
-                deposito REAL DEFAULT 0.0,
                 monto REAL DEFAULT 0.0
             );
         """)
@@ -299,7 +298,10 @@ class DatabaseManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 numero TEXT NOT NULL,
                 tipo TEXT NOT NULL,
-                banco TEXT NOT NULL
+                banco TEXT NOT NULL,
+                fecha_corte TEXT,
+                fecha_pago TEXT,
+                tasa_interes REAL
             );
         """)
 
@@ -364,10 +366,58 @@ class DatabaseManager:
                 total_ventas REAL DEFAULT 0.0,
                 yappy REAL DEFAULT 0.0,
                 pedidos_ya REAL DEFAULT 0.0,
+                clave REAL DEFAULT 0.0,
+                visa_mastercard REAL DEFAULT 0.0,
+                vale REAL DEFAULT 0.0,
+                vale_descripcion TEXT,
                 no_facturas INTEGER DEFAULT 0,
                 sobrante REAL DEFAULT 0.0,
                 faltante REAL DEFAULT 0.0,
                 depositos REAL DEFAULT 0.0
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS configuracion_comisiones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                metodo TEXT UNIQUE,
+                porcentaje REAL DEFAULT 0.0,
+                frecuencia TEXT DEFAULT 'Mensual'
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sucursales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                direccion TEXT,
+                telefono TEXT,
+                es_principal INTEGER DEFAULT 0
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS abastecimiento_interno (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE NOT NULL,
+                sucursal_origen_id INTEGER NOT NULL,
+                sucursal_destino_id INTEGER NOT NULL,
+                estado TEXT DEFAULT 'COMPLETADO',
+                FOREIGN KEY(sucursal_origen_id) REFERENCES sucursales(id),
+                FOREIGN KEY(sucursal_destino_id) REFERENCES sucursales(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_abastecimiento (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                abastecimiento_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                cantidad REAL NOT NULL,
+                unidad_id INTEGER NOT NULL,
+                FOREIGN KEY(abastecimiento_id) REFERENCES abastecimiento_interno(id) ON DELETE CASCADE,
+                FOREIGN KEY(insumo_id) REFERENCES insumos(id),
+                FOREIGN KEY(unidad_id) REFERENCES unidades_medida(id)
             );
         """)
 

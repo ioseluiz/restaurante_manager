@@ -15,18 +15,23 @@ from PyQt5.QtWidgets import (
     QDateEdit,
     QDoubleSpinBox,
     QComboBox,
-    QSplitter
+    QSplitter,
+    QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
+import csv
+
 
 class NumericItem(QTableWidgetItem):
     """Permite ordenar columnas numéricas correctamente."""
+
     def __lt__(self, other):
         try:
             return float(self.text()) < float(other.text())
         except ValueError:
             return super().__lt__(other)
+
 
 class TarjetaDialog(QDialog):
     def __init__(self, db_manager, data=None, parent=None):
@@ -43,15 +48,31 @@ class TarjetaDialog(QDialog):
 
         self.numero_input = QLineEdit()
         self.numero_input.setPlaceholderText("Ej: 1234567890123456")
-        
+
         self.tipo_input = QComboBox()
-        self.tipo_input.addItems(["Visa", "MasterCard", "American Express", "Diners Club", "Otra"])
-        
+        self.tipo_input.addItems(
+            ["Visa", "MasterCard", "American Express", "Diners Club", "Otra"]
+        )
+
         self.banco_input = QLineEdit()
+
+        self.fecha_corte_input = QLineEdit()
+        self.fecha_corte_input.setPlaceholderText("Ej: 15")
+
+        self.fecha_pago_input = QLineEdit()
+        self.fecha_pago_input.setPlaceholderText("Ej: 5")
+
+        self.tasa_interes_input = QDoubleSpinBox()
+        self.tasa_interes_input.setRange(0.0, 100.0)
+        self.tasa_interes_input.setSuffix(" %")
+        self.tasa_interes_input.setDecimals(2)
 
         form.addRow("Número:", self.numero_input)
         form.addRow("Tipo:", self.tipo_input)
         form.addRow("Banco:", self.banco_input)
+        form.addRow("Día/Fecha de Corte:", self.fecha_corte_input)
+        form.addRow("Día/Fecha de Pago:", self.fecha_pago_input)
+        form.addRow("Tasa de Interés:", self.tasa_interes_input)
 
         if self.data:
             self.numero_input.setText(self.data.get("numero", ""))
@@ -62,6 +83,11 @@ class TarjetaDialog(QDialog):
             else:
                 self.tipo_input.setEditText(tipo)
             self.banco_input.setText(self.data.get("banco", ""))
+            self.fecha_corte_input.setText(self.data.get("fecha_corte", ""))
+            self.fecha_pago_input.setText(self.data.get("fecha_pago", ""))
+            self.tasa_interes_input.setValue(
+                float(self.data.get("tasa_interes") or 0.0)
+            )
 
         layout.addLayout(form)
 
@@ -69,7 +95,7 @@ class TarjetaDialog(QDialog):
         btn_save = QPushButton("Guardar")
         btn_save.setProperty("class", "btn-success")
         btn_save.clicked.connect(self.save)
-        
+
         btn_cancel = QPushButton("Cancelar")
         btn_cancel.clicked.connect(self.reject)
 
@@ -83,18 +109,34 @@ class TarjetaDialog(QDialog):
         numero = self.numero_input.text().strip()
         tipo = self.tipo_input.currentText()
         banco = self.banco_input.text().strip()
+        fecha_corte = self.fecha_corte_input.text().strip()
+        fecha_pago = self.fecha_pago_input.text().strip()
+        tasa_interes = self.tasa_interes_input.value()
 
         if not numero or not banco:
             QMessageBox.warning(self, "Aviso", "Número y Banco son requeridos.")
             return
 
         if self.data:
-            query = "UPDATE tarjetas_credito SET numero=?, tipo=?, banco=? WHERE id=?"
-            self.db.cursor.execute(query, (numero, tipo, banco, self.data["id"]))
+            query = "UPDATE tarjetas_credito SET numero=?, tipo=?, banco=?, fecha_corte=?, fecha_pago=?, tasa_interes=? WHERE id=?"
+            self.db.cursor.execute(
+                query,
+                (
+                    numero,
+                    tipo,
+                    banco,
+                    fecha_corte,
+                    fecha_pago,
+                    tasa_interes,
+                    self.data["id"],
+                ),
+            )
         else:
-            query = "INSERT INTO tarjetas_credito (numero, tipo, banco) VALUES (?, ?, ?)"
-            self.db.cursor.execute(query, (numero, tipo, banco))
-            
+            query = "INSERT INTO tarjetas_credito (numero, tipo, banco, fecha_corte, fecha_pago, tasa_interes) VALUES (?, ?, ?, ?, ?, ?)"
+            self.db.cursor.execute(
+                query, (numero, tipo, banco, fecha_corte, fecha_pago, tasa_interes)
+            )
+
         self.db.conn.commit()
         self.accept()
 
@@ -109,7 +151,7 @@ class GestionTarjetasDialog(QDialog):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        
+
         lbl_info = QLabel("Administre aquí las tarjetas de crédito disponibles.")
         layout.addWidget(lbl_info)
 
@@ -117,14 +159,14 @@ class GestionTarjetasDialog(QDialog):
         btn_add = QPushButton("+ Nueva Tarjeta")
         btn_add.setProperty("class", "btn-success")
         btn_add.clicked.connect(self.abrir_crear_tarjeta)
-        
+
         btn_edit = QPushButton("Editar")
         btn_edit.clicked.connect(self.abrir_editar_tarjeta)
-        
+
         btn_del = QPushButton("Eliminar")
         btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.eliminar_tarjeta)
-        
+
         btn_layout.addWidget(btn_add)
         btn_layout.addWidget(btn_edit)
         btn_layout.addWidget(btn_del)
@@ -132,8 +174,10 @@ class GestionTarjetasDialog(QDialog):
         layout.addLayout(btn_layout)
 
         self.table_tarjetas = QTableWidget()
-        self.table_tarjetas.setColumnCount(4)
-        self.table_tarjetas.setHorizontalHeaderLabels(["ID", "Banco", "Tipo", "Número"])
+        self.table_tarjetas.setColumnCount(7)
+        self.table_tarjetas.setHorizontalHeaderLabels(
+            ["ID", "Banco", "Tipo", "Número", "F. Corte", "F. Pago", "Tasa Int."]
+        )
         self.table_tarjetas.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_tarjetas.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_tarjetas.setSelectionMode(QTableWidget.SingleSelection)
@@ -149,22 +193,29 @@ class GestionTarjetasDialog(QDialog):
         self.cargar_tarjetas()
 
     def cargar_tarjetas(self):
-        self.db.cursor.execute("SELECT id, banco, tipo, numero FROM tarjetas_credito ORDER BY id DESC")
+        self.db.cursor.execute(
+            "SELECT id, banco, tipo, numero, fecha_corte, fecha_pago, tasa_interes FROM tarjetas_credito ORDER BY id DESC"
+        )
         rows = self.db.cursor.fetchall()
         self.table_tarjetas.setRowCount(0)
-        
+
         for r_idx, row in enumerate(rows):
             self.table_tarjetas.insertRow(r_idx)
             self.table_tarjetas.setItem(r_idx, 0, QTableWidgetItem(str(row[0])))
             self.table_tarjetas.setItem(r_idx, 1, QTableWidgetItem(row[1]))
             self.table_tarjetas.setItem(r_idx, 2, QTableWidgetItem(row[2]))
-            
+
             num = row[3]
             if len(num) >= 4:
                 masked = f"**** **** **** {num[-4:]}"
             else:
                 masked = f"**** {num}"
             self.table_tarjetas.setItem(r_idx, 3, QTableWidgetItem(masked))
+            self.table_tarjetas.setItem(r_idx, 4, QTableWidgetItem(str(row[4] or "")))
+            self.table_tarjetas.setItem(r_idx, 5, QTableWidgetItem(str(row[5] or "")))
+
+            tasa = row[6] if row[6] is not None else 0.0
+            self.table_tarjetas.setItem(r_idx, 6, NumericItem(f"{tasa}%"))
 
     def abrir_crear_tarjeta(self):
         dlg = TarjetaDialog(self.db, parent=self)
@@ -174,15 +225,28 @@ class GestionTarjetasDialog(QDialog):
     def abrir_editar_tarjeta(self):
         row = self.table_tarjetas.currentRow()
         if row < 0:
-            return QMessageBox.warning(self, "Aviso", "Seleccione una tarjeta para editar.")
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una tarjeta para editar."
+            )
 
         tarjeta_id = self.table_tarjetas.item(row, 0).text()
-        
-        self.db.cursor.execute("SELECT id, numero, tipo, banco FROM tarjetas_credito WHERE id=?", (tarjeta_id,))
+
+        self.db.cursor.execute(
+            "SELECT id, numero, tipo, banco, fecha_corte, fecha_pago, tasa_interes FROM tarjetas_credito WHERE id=?",
+            (tarjeta_id,),
+        )
         row_data = self.db.cursor.fetchone()
-        
+
         if row_data:
-            data = {"id": row_data[0], "numero": row_data[1], "tipo": row_data[2], "banco": row_data[3]}
+            data = {
+                "id": row_data[0],
+                "numero": row_data[1],
+                "tipo": row_data[2],
+                "banco": row_data[3],
+                "fecha_corte": row_data[4],
+                "fecha_pago": row_data[5],
+                "tasa_interes": row_data[6],
+            }
             dlg = TarjetaDialog(self.db, data=data, parent=self)
             if dlg.exec_():
                 self.cargar_tarjetas()
@@ -190,14 +254,23 @@ class GestionTarjetasDialog(QDialog):
     def eliminar_tarjeta(self):
         row = self.table_tarjetas.currentRow()
         if row < 0:
-            return QMessageBox.warning(self, "Aviso", "Seleccione una tarjeta para eliminar.")
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una tarjeta para eliminar."
+            )
 
         tarjeta_id = self.table_tarjetas.item(row, 0).text()
-        reply = QMessageBox.question(self, 'Confirmar', '¿Eliminar tarjeta y todas sus transacciones?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "Confirmar",
+            "¿Eliminar tarjeta y todas sus transacciones?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
-            self.db.cursor.execute("DELETE FROM tarjetas_credito WHERE id=?", (tarjeta_id,))
+            self.db.cursor.execute(
+                "DELETE FROM tarjetas_credito WHERE id=?", (tarjeta_id,)
+            )
             self.db.conn.commit()
             self.cargar_tarjetas()
 
@@ -220,15 +293,15 @@ class TransaccionDialog(QDialog):
         self.fecha_input.setCalendarPopup(True)
         self.fecha_input.setDisplayFormat("yyyy-MM-dd")
         self.fecha_input.setDate(QDate.currentDate())
-        
+
         self.tipo_input = QComboBox()
         self.tipo_input.addItems(["COMPRA", "PAGO"])
         self.tipo_input.currentTextChanged.connect(self.toggle_comercio)
-        
+
         self.comercio_input = QLineEdit()
         self.descripcion_input = QTextEdit()
         self.descripcion_input.setMinimumHeight(60)
-        
+
         self.monto_input = QDoubleSpinBox()
         self.monto_input.setMaximum(999999999.99)
         self.monto_input.setDecimals(2)
@@ -240,7 +313,9 @@ class TransaccionDialog(QDialog):
         form.addRow("Monto:", self.monto_input)
 
         if self.data:
-            self.fecha_input.setDate(QDate.fromString(self.data.get("fecha", ""), "yyyy-MM-dd"))
+            self.fecha_input.setDate(
+                QDate.fromString(self.data.get("fecha", ""), "yyyy-MM-dd")
+            )
             self.tipo_input.setCurrentText(self.data.get("tipo_transaccion", "COMPRA"))
             self.comercio_input.setText(self.data.get("comercio", ""))
             self.descripcion_input.setPlainText(self.data.get("descripcion", ""))
@@ -252,12 +327,12 @@ class TransaccionDialog(QDialog):
         btn_save = QPushButton("Guardar")
         btn_save.setProperty("class", "btn-success")
         btn_save.clicked.connect(self.save)
-        
+
         btn_save_and_add = QPushButton("Guardar y Añadir Otro")
         btn_save_and_add.clicked.connect(self.save_and_add)
         if self.data:
             btn_save_and_add.hide()
-        
+
         btn_cancel = QPushButton("Cancelar")
         btn_cancel.clicked.connect(self.reject)
 
@@ -293,14 +368,18 @@ class TransaccionDialog(QDialog):
                 SET fecha=?, comercio=?, descripcion=?, tipo_transaccion=?, monto=?
                 WHERE id=?
             """
-            self.db.cursor.execute(query, (fecha, comercio, descripcion, tipo, monto, self.data["id"]))
+            self.db.cursor.execute(
+                query, (fecha, comercio, descripcion, tipo, monto, self.data["id"])
+            )
         else:
             query = """
                 INSERT INTO transacciones_tarjeta (tarjeta_id, fecha, comercio, descripcion, tipo_transaccion, monto)
                 VALUES (?, ?, ?, ?, ?, ?)
             """
-            self.db.cursor.execute(query, (self.tarjeta_id, fecha, comercio, descripcion, tipo, monto))
-            
+            self.db.cursor.execute(
+                query, (self.tarjeta_id, fecha, comercio, descripcion, tipo, monto)
+            )
+
         self.db.conn.commit()
         return True
 
@@ -334,19 +413,19 @@ class TarjetasCreditoView(QWidget):
 
         # --- HEADER / SELECTOR DE TARJETA ---
         header_layout = QHBoxLayout()
-        
+
         lbl_selector = QLabel("<b>Tarjeta Seleccionada:</b>")
         lbl_selector.setStyleSheet("font-size: 14px;")
         header_layout.addWidget(lbl_selector)
-        
+
         self.combo_tarjetas = QComboBox()
         self.combo_tarjetas.setMinimumWidth(300)
         self.combo_tarjetas.setStyleSheet("padding: 5px; font-size: 14px;")
         self.combo_tarjetas.currentIndexChanged.connect(self.on_tarjeta_changed)
         header_layout.addWidget(self.combo_tarjetas)
-        
+
         header_layout.addStretch()
-        
+
         btn_gestionar_tarjetas = QPushButton("💳 Gestionar Tarjetas")
         btn_gestionar_tarjetas.setCursor(Qt.PointingHandCursor)
         btn_gestionar_tarjetas.setStyleSheet("padding: 8px 15px; font-weight: bold;")
@@ -354,6 +433,11 @@ class TarjetasCreditoView(QWidget):
         header_layout.addWidget(btn_gestionar_tarjetas)
 
         main_layout.addLayout(header_layout)
+
+        # --- INFO TARJETA ---
+        self.lbl_info_tarjeta = QLabel("")
+        self.lbl_info_tarjeta.setStyleSheet("color: #555; font-size: 13px; margin-bottom: 10px;")
+        main_layout.addWidget(self.lbl_info_tarjeta)
 
         # --- CONTENEDOR PRINCIPAL (Se habilita solo si hay tarjeta seleccionada) ---
         self.container_widget = QWidget()
@@ -364,53 +448,67 @@ class TarjetasCreditoView(QWidget):
         # --- PANEL SUPERIOR: BALANCE MENSUAL ---
         lbl_resumen = QLabel("<h3>Balance Mensual (Gastado vs Pagado)</h3>")
         container_layout.addWidget(lbl_resumen)
-        
+
         self.table_resumen = QTableWidget()
         self.table_resumen.setColumnCount(4)
-        self.table_resumen.setHorizontalHeaderLabels(["Mes/Año", "Total Compras", "Total Pagos", "Balance"])
+        self.table_resumen.setHorizontalHeaderLabels(
+            ["Mes/Año", "Total Compras", "Total Pagos", "Balance"]
+        )
         self.table_resumen.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_resumen.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table_resumen.setMaximumHeight(200) # Un poco más alto para ver más meses
+        self.table_resumen.setMaximumHeight(200)  # Un poco más alto para ver más meses
         container_layout.addWidget(self.table_resumen)
 
         # --- PANEL INFERIOR: TRANSACCIONES ---
         trans_header = QHBoxLayout()
         lbl_transacciones = QLabel("<h3>Transacciones de la Tarjeta</h3>")
         trans_header.addWidget(lbl_transacciones)
-        
+
         btn_add_trans = QPushButton("+ Nueva Transacción")
         btn_add_trans.setProperty("class", "btn-success")
         btn_add_trans.clicked.connect(self.abrir_crear_transaccion)
-        
+
         btn_edit_trans = QPushButton("Editar")
         btn_edit_trans.clicked.connect(self.abrir_editar_transaccion)
-        
+
         btn_del_trans = QPushButton("Eliminar")
         btn_del_trans.setProperty("class", "btn-danger")
         btn_del_trans.clicked.connect(self.eliminar_transaccion)
-        
+
+        btn_export_trans = QPushButton("📄 Exportar CSV")
+        btn_export_trans.clicked.connect(self.exportar_csv)
+
         trans_header.addStretch()
+        trans_header.addWidget(btn_export_trans)
         trans_header.addWidget(btn_add_trans)
         trans_header.addWidget(btn_edit_trans)
         trans_header.addWidget(btn_del_trans)
-        
+
         container_layout.addLayout(trans_header)
 
         self.table_transacciones = QTableWidget()
         self.table_transacciones.setColumnCount(7)
-        self.table_transacciones.setHorizontalHeaderLabels(["ID", "Fecha", "Tipo", "Comercio", "Descripción", "Monto", ""])
-        self.table_transacciones.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_transacciones.setHorizontalHeaderLabels(
+            ["ID", "Fecha", "Tipo", "Comercio", "Descripción", "Monto", ""]
+        )
+        self.table_transacciones.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
         self.table_transacciones.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_transacciones.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table_transacciones.hideColumn(0)
-        self.table_transacciones.hideColumn(6) # Para colorear sin ensuciar datos
+        self.table_transacciones.hideColumn(6)  # Para colorear sin ensuciar datos
         self.table_transacciones.setSortingEnabled(True)
         container_layout.addWidget(self.table_transacciones)
 
         main_layout.addWidget(self.container_widget)
         self.setLayout(main_layout)
-        
+
         self.container_widget.setEnabled(False)
+
+    def exportar_csv(self):
+        from app.views.modulos.export_utils import exportar_tabla_por_mes
+        exportar_tabla_por_mes(self, self.table_transacciones, "transacciones_tarjeta.csv", 1)
 
     def cargar_datos(self):
         self.actualizar_combo_tarjetas()
@@ -418,17 +516,21 @@ class TarjetasCreditoView(QWidget):
     def actualizar_combo_tarjetas(self):
         # Guardar ID seleccionado actualmente si existe
         current_id = self.combo_tarjetas.currentData()
-        
-        self.db.cursor.execute("SELECT id, banco, tipo, numero FROM tarjetas_credito ORDER BY id DESC")
+
+        self.db.cursor.execute("SELECT id, banco, tipo, numero, fecha_corte, fecha_pago, tasa_interes FROM tarjetas_credito ORDER BY id DESC")
         rows = self.db.cursor.fetchall()
-        
+
         self.combo_tarjetas.blockSignals(True)
         self.combo_tarjetas.clear()
-        
+
+        # Guardar info de tarjetas para acceso rápido
+        self.tarjetas_info = {}
+
         if not rows:
             self.combo_tarjetas.addItem("No hay tarjetas registradas", None)
             self.container_widget.setEnabled(False)
             self.tarjeta_seleccionada_id = None
+            self.lbl_info_tarjeta.setText("")
         else:
             index_to_select = 0
             for i, row in enumerate(rows):
@@ -436,31 +538,51 @@ class TarjetasCreditoView(QWidget):
                 banco = row[1]
                 tipo = row[2]
                 num = row[3]
+                f_corte = row[4] or "N/D"
+                f_pago = row[5] or "N/D"
+                tasa = row[6] if row[6] is not None else 0.0
+
+                self.tarjetas_info[t_id] = {
+                    "fecha_corte": f_corte,
+                    "fecha_pago": f_pago,
+                    "tasa_interes": tasa
+                }
+
                 masked = f"**** {num[-4:]}" if len(num) >= 4 else f"**** {num}"
                 display_text = f"{banco} - {tipo} ({masked})"
-                
+
                 self.combo_tarjetas.addItem(display_text, t_id)
-                
+
                 if current_id == t_id:
                     index_to_select = i
-            
+
             self.combo_tarjetas.setCurrentIndex(index_to_select)
             self.tarjeta_seleccionada_id = self.combo_tarjetas.currentData()
+            self.actualizar_info_label()
             self.container_widget.setEnabled(True)
             self.cargar_resumen()
             self.cargar_transacciones()
-            
+
         self.combo_tarjetas.blockSignals(False)
+
+    def actualizar_info_label(self):
+        if self.tarjeta_seleccionada_id and hasattr(self, 'tarjetas_info') and self.tarjeta_seleccionada_id in self.tarjetas_info:
+            info = self.tarjetas_info[self.tarjeta_seleccionada_id]
+            self.lbl_info_tarjeta.setText(f"📅 <b>Corte:</b> {info['fecha_corte']}  |  🗓️ <b>Pago:</b> {info['fecha_pago']}  |  📈 <b>Interés:</b> {info['tasa_interes']}%")
+        else:
+            self.lbl_info_tarjeta.setText("")
 
     def on_tarjeta_changed(self):
         card_id = self.combo_tarjetas.currentData()
         if card_id is not None:
             self.tarjeta_seleccionada_id = card_id
+            self.actualizar_info_label()
             self.container_widget.setEnabled(True)
             self.cargar_resumen()
             self.cargar_transacciones()
         else:
             self.tarjeta_seleccionada_id = None
+            self.lbl_info_tarjeta.setText("")
             self.container_widget.setEnabled(False)
             self.table_transacciones.setRowCount(0)
             self.table_resumen.setRowCount(0)
@@ -474,42 +596,52 @@ class TarjetasCreditoView(QWidget):
     def cargar_transacciones(self):
         if not self.tarjeta_seleccionada_id:
             return
-            
+
         self.table_transacciones.setSortingEnabled(False)
-        self.db.cursor.execute("""
+        self.db.cursor.execute(
+            """
             SELECT id, fecha, tipo_transaccion, comercio, descripcion, monto 
             FROM transacciones_tarjeta 
             WHERE tarjeta_id = ? 
             ORDER BY fecha DESC, id DESC
-        """, (self.tarjeta_seleccionada_id,))
+        """,
+            (self.tarjeta_seleccionada_id,),
+        )
         rows = self.db.cursor.fetchall()
         self.table_transacciones.setRowCount(0)
 
         for r_idx, row in enumerate(rows):
             self.table_transacciones.insertRow(r_idx)
-            
+
             tipo = row[2]
             color = QColor("#fdeaea") if tipo == "COMPRA" else QColor("#eafdef")
-            
+
             self.table_transacciones.setItem(r_idx, 0, QTableWidgetItem(str(row[0])))
             self.table_transacciones.setItem(r_idx, 1, QTableWidgetItem(str(row[1])))
             self.table_transacciones.setItem(r_idx, 2, QTableWidgetItem(tipo))
-            self.table_transacciones.setItem(r_idx, 3, QTableWidgetItem(str(row[3] or "")))
-            self.table_transacciones.setItem(r_idx, 4, QTableWidgetItem(str(row[4] or "")))
-            self.table_transacciones.setItem(r_idx, 5, NumericItem(f"{float(row[5]):.2f}"))
-            
+            self.table_transacciones.setItem(
+                r_idx, 3, QTableWidgetItem(str(row[3] or ""))
+            )
+            self.table_transacciones.setItem(
+                r_idx, 4, QTableWidgetItem(str(row[4] or ""))
+            )
+            self.table_transacciones.setItem(
+                r_idx, 5, NumericItem(f"{float(row[5]):.2f}")
+            )
+
             for col in range(6):
                 item = self.table_transacciones.item(r_idx, col)
                 if item:
                     item.setBackground(color)
-                    
+
         self.table_transacciones.setSortingEnabled(True)
 
     def cargar_resumen(self):
         if not self.tarjeta_seleccionada_id:
             return
-            
-        self.db.cursor.execute("""
+
+        self.db.cursor.execute(
+            """
             SELECT 
                 strftime('%Y-%m', fecha) as mes_anio,
                 SUM(CASE WHEN tipo_transaccion = 'COMPRA' THEN monto ELSE 0 END) as total_compras,
@@ -518,29 +650,31 @@ class TarjetasCreditoView(QWidget):
             WHERE tarjeta_id = ?
             GROUP BY mes_anio
             ORDER BY mes_anio DESC
-        """, (self.tarjeta_seleccionada_id,))
-        
+        """,
+            (self.tarjeta_seleccionada_id,),
+        )
+
         rows = self.db.cursor.fetchall()
         self.table_resumen.setRowCount(0)
-        
+
         for r_idx, row in enumerate(rows):
             self.table_resumen.insertRow(r_idx)
-            
+
             mes_anio = row[0]
             compras = float(row[1] or 0.0)
             pagos = float(row[2] or 0.0)
             balance = compras - pagos
-            
+
             self.table_resumen.setItem(r_idx, 0, QTableWidgetItem(mes_anio))
             self.table_resumen.setItem(r_idx, 1, NumericItem(f"{compras:.2f}"))
             self.table_resumen.setItem(r_idx, 2, NumericItem(f"{pagos:.2f}"))
-            
+
             bal_item = NumericItem(f"{balance:.2f}")
             if balance > 0:
                 bal_item.setForeground(QColor("red"))
             elif balance < 0:
                 bal_item.setForeground(QColor("green"))
-                
+
             self.table_resumen.setItem(r_idx, 3, bal_item)
 
     # --- TRANSACCIONES CRUD ---
@@ -555,10 +689,12 @@ class TarjetasCreditoView(QWidget):
     def abrir_editar_transaccion(self):
         if not self.tarjeta_seleccionada_id:
             return
-            
+
         row = self.table_transacciones.currentRow()
         if row < 0:
-            return QMessageBox.warning(self, "Aviso", "Seleccione una transacción para editar.")
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una transacción para editar."
+            )
 
         data = {
             "id": self.table_transacciones.item(row, 0).text(),
@@ -569,7 +705,9 @@ class TarjetasCreditoView(QWidget):
             "monto": self.table_transacciones.item(row, 5).text(),
         }
 
-        dlg = TransaccionDialog(self.db, self.tarjeta_seleccionada_id, data=data, parent=self)
+        dlg = TransaccionDialog(
+            self.db, self.tarjeta_seleccionada_id, data=data, parent=self
+        )
         if dlg.exec_():
             self.cargar_transacciones()
             self.cargar_resumen()
@@ -577,14 +715,23 @@ class TarjetasCreditoView(QWidget):
     def eliminar_transaccion(self):
         row = self.table_transacciones.currentRow()
         if row < 0:
-            return QMessageBox.warning(self, "Aviso", "Seleccione una transacción para eliminar.")
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una transacción para eliminar."
+            )
 
         trans_id = self.table_transacciones.item(row, 0).text()
-        reply = QMessageBox.question(self, 'Confirmar', '¿Eliminar esta transacción?',
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(
+            self,
+            "Confirmar",
+            "¿Eliminar esta transacción?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
 
         if reply == QMessageBox.Yes:
-            self.db.cursor.execute("DELETE FROM transacciones_tarjeta WHERE id=?", (trans_id,))
+            self.db.cursor.execute(
+                "DELETE FROM transacciones_tarjeta WHERE id=?", (trans_id,)
+            )
             self.db.conn.commit()
             self.cargar_transacciones()
             self.cargar_resumen()

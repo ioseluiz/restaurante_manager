@@ -13,10 +13,13 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QDateEdit,
     QDoubleSpinBox,
-    QSpinBox
+    QSpinBox,
+    QComboBox,
+    QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
+import csv
 
 class NumericItem(QTableWidgetItem):
     """Permite ordenar columnas numéricas correctamente."""
@@ -50,6 +53,9 @@ class DiarioVentasDialog(QDialog):
         font = self.total_ventas_input.font()
         font.setBold(True)
         self.total_ventas_input.setFont(font)
+        self.total_ventas_input.setReadOnly(True)
+        self.total_ventas_input.setButtonSymbols(QDoubleSpinBox.NoButtons)
+        self.total_ventas_input.setStyleSheet("background-color: #f0f0f0; color: #333;")
         
         self.yappy_input = QDoubleSpinBox()
         self.yappy_input.setMaximum(999999999.99)
@@ -58,6 +64,14 @@ class DiarioVentasDialog(QDialog):
         self.pedidos_ya_input = QDoubleSpinBox()
         self.pedidos_ya_input.setMaximum(999999999.99)
         self.pedidos_ya_input.setDecimals(2)
+
+        self.clave_input = QDoubleSpinBox()
+        self.clave_input.setMaximum(999999999.99)
+        self.clave_input.setDecimals(2)
+
+        self.visa_mastercard_input = QDoubleSpinBox()
+        self.visa_mastercard_input.setMaximum(999999999.99)
+        self.visa_mastercard_input.setDecimals(2)
         
         self.no_facturas_input = QSpinBox()
         self.no_facturas_input.setMaximum(9999999)
@@ -70,6 +84,17 @@ class DiarioVentasDialog(QDialog):
         self.faltante_input.setMaximum(999999999.99)
         self.faltante_input.setDecimals(2)
         
+        self.vale_input = QDoubleSpinBox()
+        self.vale_input.setMaximum(999999999.99)
+        self.vale_input.setDecimals(2)
+        self.vale_input.valueChanged.connect(self.on_vale_changed)
+
+        self.vale_descripcion_input = QLineEdit()
+        self.vale_descripcion_input.setPlaceholderText("Descripción del vale...")
+        self.vale_descripcion_input.setVisible(False)
+        self.lbl_vale_desc = QLabel("Desc. Vale:")
+        self.lbl_vale_desc.setVisible(False)
+        
         self.depositos_input = QDoubleSpinBox()
         self.depositos_input.setMaximum(999999999.99)
         self.depositos_input.setDecimals(2)
@@ -78,6 +103,10 @@ class DiarioVentasDialog(QDialog):
         form.addRow("TOTAL VENTAS:", self.total_ventas_input)
         form.addRow("Pagos Yappy:", self.yappy_input)
         form.addRow("Pagos Pedidos Ya:", self.pedidos_ya_input)
+        form.addRow("Pagos Clave:", self.clave_input)
+        form.addRow("Pagos Visa/MC:", self.visa_mastercard_input)
+        form.addRow("Vale:", self.vale_input)
+        form.addRow(self.lbl_vale_desc, self.vale_descripcion_input)
         form.addRow("No. Facturas:", self.no_facturas_input)
         form.addRow("Sobrante Caja:", self.sobrante_input)
         form.addRow("Faltante Caja:", self.faltante_input)
@@ -88,10 +117,21 @@ class DiarioVentasDialog(QDialog):
             self.total_ventas_input.setValue(float(self.data.get("total_ventas", 0.0)))
             self.yappy_input.setValue(float(self.data.get("yappy", 0.0)))
             self.pedidos_ya_input.setValue(float(self.data.get("pedidos_ya", 0.0)))
+            self.clave_input.setValue(float(self.data.get("clave", 0.0)))
+            self.visa_mastercard_input.setValue(float(self.data.get("visa_mastercard", 0.0)))
+            self.vale_input.setValue(float(self.data.get("vale", 0.0)))
+            self.vale_descripcion_input.setText(self.data.get("vale_descripcion") or "")
             self.no_facturas_input.setValue(int(self.data.get("no_facturas", 0)))
             self.sobrante_input.setValue(float(self.data.get("sobrante", 0.0)))
             self.faltante_input.setValue(float(self.data.get("faltante", 0.0)))
             self.depositos_input.setValue(float(self.data.get("depositos", 0.0)))
+            self.on_vale_changed()
+
+        # Conectar señales para calcular el total automáticamente
+        for input_box in [self.yappy_input, self.pedidos_ya_input, self.clave_input, self.visa_mastercard_input, self.vale_input, self.sobrante_input, self.faltante_input]:
+            input_box.valueChanged.connect(self.calcular_total_ventas)
+
+        self.calcular_total_ventas()
 
         layout.addLayout(form)
 
@@ -115,11 +155,30 @@ class DiarioVentasDialog(QDialog):
         layout.addLayout(btn_layout)
         self.setLayout(layout)
 
+    def on_vale_changed(self):
+        has_vale = self.vale_input.value() > 0
+        self.vale_descripcion_input.setVisible(has_vale)
+        self.lbl_vale_desc.setVisible(has_vale)
+
+    def calcular_total_ventas(self):
+        total = (self.yappy_input.value() + 
+                 self.pedidos_ya_input.value() + 
+                 self.clave_input.value() + 
+                 self.visa_mastercard_input.value() + 
+                 self.vale_input.value() +
+                 self.sobrante_input.value() + 
+                 self.faltante_input.value())
+        self.total_ventas_input.setValue(total)
+
     def guardar_registro(self):
         fecha = self.fecha_input.date().toString("yyyy-MM-dd")
         total_ventas = self.total_ventas_input.value()
         yappy = self.yappy_input.value()
         pedidos_ya = self.pedidos_ya_input.value()
+        clave = self.clave_input.value()
+        visa_mastercard = self.visa_mastercard_input.value()
+        vale = self.vale_input.value()
+        vale_descripcion = self.vale_descripcion_input.text().strip() if vale > 0 else ""
         no_facturas = self.no_facturas_input.value()
         sobrante = self.sobrante_input.value()
         faltante = self.faltante_input.value()
@@ -128,16 +187,16 @@ class DiarioVentasDialog(QDialog):
         if self.data:
             query = """
                 UPDATE diario_ventas 
-                SET fecha=?, total_ventas=?, yappy=?, pedidos_ya=?, no_facturas=?, sobrante=?, faltante=?, depositos=?
+                SET fecha=?, total_ventas=?, yappy=?, pedidos_ya=?, clave=?, visa_mastercard=?, vale=?, vale_descripcion=?, no_facturas=?, sobrante=?, faltante=?, depositos=?
                 WHERE id=?
             """
-            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, no_facturas, sobrante, faltante, depositos, self.data["id"]))
+            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos, self.data["id"]))
         else:
             query = """
-                INSERT INTO diario_ventas (fecha, total_ventas, yappy, pedidos_ya, no_facturas, sobrante, faltante, depositos)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO diario_ventas (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
-            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, no_facturas, sobrante, faltante, depositos))
+            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos))
             
         self.db.conn.commit()
         return True
@@ -151,11 +210,100 @@ class DiarioVentasDialog(QDialog):
             self.total_ventas_input.setValue(0.0)
             self.yappy_input.setValue(0.0)
             self.pedidos_ya_input.setValue(0.0)
+            self.clave_input.setValue(0.0)
+            self.visa_mastercard_input.setValue(0.0)
+            self.vale_input.setValue(0.0)
+            self.vale_descripcion_input.clear()
             self.no_facturas_input.setValue(0)
             self.sobrante_input.setValue(0.0)
             self.faltante_input.setValue(0.0)
             self.depositos_input.setValue(0.0)
-            self.total_ventas_input.setFocus()
+            # Ya no se hace focus a total_ventas_input porque es read-only
+            self.yappy_input.setFocus()
+
+
+class ComisionesConfigDialog(QDialog):
+    def __init__(self, db_manager, parent=None):
+        super().__init__(parent)
+        self.db = db_manager
+        self.setWindowTitle("Configuración de Comisiones")
+        self.setMinimumWidth(400)
+        self.metodos = ["Clave", "Visa/Master Card", "Pedidos Ya", "Yappy"]
+        self.frecuencias = ["Mensual", "Semanal", "Bi-semanal", "Quincenal", "Diario"]
+        self.inputs = {}
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        form = QFormLayout()
+
+        # Inicializar datos desde la BD
+        config_data = self.cargar_configuracion()
+
+        for metodo in self.metodos:
+            container = QHBoxLayout()
+            
+            spin_pct = QDoubleSpinBox()
+            spin_pct.setRange(0.0, 100.0)
+            spin_pct.setDecimals(2)
+            spin_pct.setSuffix(" %")
+            
+            combo_frec = QComboBox()
+            combo_frec.addItems(self.frecuencias)
+            
+            # Cargar datos guardados si existen
+            if metodo in config_data:
+                spin_pct.setValue(config_data[metodo]["porcentaje"])
+                idx = combo_frec.findText(config_data[metodo]["frecuencia"])
+                if idx >= 0:
+                    combo_frec.setCurrentIndex(idx)
+                    
+            container.addWidget(spin_pct)
+            container.addWidget(combo_frec)
+            
+            self.inputs[metodo] = (spin_pct, combo_frec)
+            form.addRow(metodo + ":", container)
+
+        layout.addLayout(form)
+
+        btn_layout = QHBoxLayout()
+        btn_save = QPushButton("Guardar")
+        btn_save.setProperty("class", "btn-success")
+        btn_save.clicked.connect(self.save)
+        
+        btn_cancel = QPushButton("Cancelar")
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_cancel)
+
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+
+    def cargar_configuracion(self):
+        self.db.cursor.execute("SELECT metodo, porcentaje, frecuencia FROM configuracion_comisiones")
+        rows = self.db.cursor.fetchall()
+        data = {}
+        for r in rows:
+            data[r[0]] = {"porcentaje": r[1], "frecuencia": r[2]}
+        return data
+
+    def save(self):
+        # Insertar o actualizar
+        for metodo, (spin_pct, combo_frec) in self.inputs.items():
+            pct = spin_pct.value()
+            frec = combo_frec.currentText()
+            
+            self.db.cursor.execute("SELECT id FROM configuracion_comisiones WHERE metodo=?", (metodo,))
+            row = self.db.cursor.fetchone()
+            
+            if row:
+                self.db.cursor.execute("UPDATE configuracion_comisiones SET porcentaje=?, frecuencia=? WHERE id=?", (pct, frec, row[0]))
+            else:
+                self.db.cursor.execute("INSERT INTO configuracion_comisiones (metodo, porcentaje, frecuencia) VALUES (?, ?, ?)", (metodo, pct, frec))
+                
+        self.db.conn.commit()
+        self.accept()
 
 
 class DiarioVentasView(QWidget):
@@ -190,6 +338,16 @@ class DiarioVentasView(QWidget):
         btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.eliminar)
 
+        btn_config = QPushButton("⚙️ Configurar Comisiones")
+        btn_config.setCursor(Qt.PointingHandCursor)
+        btn_config.clicked.connect(self.abrir_configurar_comisiones)
+
+        btn_exportar = QPushButton("📄 Exportar CSV")
+        btn_exportar.setCursor(Qt.PointingHandCursor)
+        btn_exportar.clicked.connect(self.exportar_csv)
+
+        header_layout.addWidget(btn_exportar)
+        header_layout.addWidget(btn_config)
         header_layout.addWidget(btn_add)
         header_layout.addWidget(btn_edit)
         header_layout.addWidget(btn_del)
@@ -225,10 +383,10 @@ class DiarioVentasView(QWidget):
         self.table = QTableWidget()
         
         self.columnas = [
-            "ID", "FECHA", "TOTAL VENTAS", "YAPPY", "PEDIDOS YA", "NO FACT", "SOBRANTE", "FALTANTE", "DEPOSITOS"
+            "ID", "FECHA", "TOTAL VENTAS", "YAPPY", "PEDIDOS YA", "CLAVE", "VISA/MC", "VALE", "DESC VALE", "NO FACT", "SOBRANTE", "FALTANTE", "DEPOSITOS"
         ]
         self.db_columns = [
-            "id", "fecha", "total_ventas", "yappy", "pedidos_ya", "no_facturas", "sobrante", "faltante", "depositos"
+            "id", "fecha", "total_ventas", "yappy", "pedidos_ya", "clave", "visa_mastercard", "vale", "vale_descripcion", "no_facturas", "sobrante", "faltante", "depositos"
         ]
         
         self.table.setColumnCount(len(self.columnas))
@@ -251,6 +409,10 @@ class DiarioVentasView(QWidget):
         
         layout.addWidget(self.table)
         self.setLayout(layout)
+
+    def exportar_csv(self):
+        from app.views.modulos.export_utils import exportar_tabla_por_mes
+        exportar_tabla_por_mes(self, self.table, "diario_ventas.csv", 1)
 
     def cargar_datos(self):
         self.cargar_resumen()
@@ -279,22 +441,26 @@ class DiarioVentasView(QWidget):
             # Montos
             self.table.setItem(r_idx, 3, NumericItem(f"{float(row[3] or 0.0):.2f}"))
             self.table.setItem(r_idx, 4, NumericItem(f"{float(row[4] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 5, NumericItem(f"{float(row[5] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 6, NumericItem(f"{float(row[6] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 7, NumericItem(f"{float(row[7] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 8, QTableWidgetItem(str(row[8] or "")))
             
             # NO FACT (entero)
-            self.table.setItem(r_idx, 5, NumericItem(str(row[5] or 0)))
+            self.table.setItem(r_idx, 9, NumericItem(str(row[9] or 0)))
             
             # Sobrante / Faltante / Depositos
-            item_sob = NumericItem(f"{float(row[6] or 0.0):.2f}")
-            if float(row[6] or 0.0) > 0:
+            item_sob = NumericItem(f"{float(row[10] or 0.0):.2f}")
+            if float(row[10] or 0.0) > 0:
                 item_sob.setForeground(QColor("green"))
-            self.table.setItem(r_idx, 6, item_sob)
+            self.table.setItem(r_idx, 10, item_sob)
             
-            item_falt = NumericItem(f"{float(row[7] or 0.0):.2f}")
-            if float(row[7] or 0.0) > 0:
+            item_falt = NumericItem(f"{float(row[11] or 0.0):.2f}")
+            if float(row[11] or 0.0) > 0:
                 item_falt.setForeground(QColor("red"))
-            self.table.setItem(r_idx, 7, item_falt)
+            self.table.setItem(r_idx, 11, item_falt)
             
-            self.table.setItem(r_idx, 8, NumericItem(f"{float(row[8] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 12, NumericItem(f"{float(row[12] or 0.0):.2f}"))
 
         self.table.setSortingEnabled(True)
         self.aplicar_filtros()
@@ -347,6 +513,10 @@ class DiarioVentasView(QWidget):
         dlg = DiarioVentasDialog(self.db, parent=self)
         if dlg.exec_():
             self.cargar_datos()
+
+    def abrir_configurar_comisiones(self):
+        dlg = ComisionesConfigDialog(self.db, parent=self)
+        dlg.exec_()
 
     def abrir_editar(self):
         row = self.table.currentRow()

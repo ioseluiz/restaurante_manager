@@ -33,6 +33,7 @@ from app.views.modulos.ventas import VentasModulo
 from app.views.modulos.inventario_view import InventarioView
 from app.views.dashboard import DashboardView
 from app.views.modulos.consolidados_view import ConsolidadosView
+from app.views.modulos.sucursales_crud import SucursalesCRUD
 
 
 def resource_path(relative_path):
@@ -168,8 +169,7 @@ class MainWindow(QMainWindow):
         self.btn_consolidados = self.create_nav_button(
             "Consolidados",
             "assets/icons/icon_reportes.png",
-            self.show_consolidados,
-            checkable=False
+            self.show_consolidados
         )
         sidebar_layout.addWidget(self.btn_consolidados)
 
@@ -185,6 +185,11 @@ class MainWindow(QMainWindow):
             "Unidades de Medida", "assets/icons/icon_unidades.png", self.show_unidades
         )
         sidebar_layout.addWidget(self.btn_unidades)
+
+        self.btn_sucursales = self.create_nav_button(
+            "Sucursales", "assets/icons/home.png", self.show_sucursales
+        )
+        sidebar_layout.addWidget(self.btn_sucursales)
 
         # --- RESTRICCIÓN DE ROLES ---
         user_rol = ""
@@ -391,6 +396,9 @@ class MainWindow(QMainWindow):
 
     def show_unidades(self):
         self.load_module("unidades", UnidadesCRUD, "Unidades de Medida", needs_db=True)
+
+    def show_sucursales(self):
+        self.load_module("sucursales", SucursalesCRUD, "Gestión de Sucursales", needs_db=True)
 
     def show_usuarios(self):
         self.load_module(

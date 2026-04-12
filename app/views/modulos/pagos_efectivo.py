@@ -15,10 +15,12 @@ from PyQt5.QtWidgets import (
     QDateEdit,
     QDoubleSpinBox,
     QScrollArea,
-    QComboBox
+    QComboBox,
+    QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
+import csv
 
 class NumericItem(QTableWidgetItem):
     def __lt__(self, other):
@@ -337,6 +339,11 @@ class PagosEfectivoView(QWidget):
         btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.eliminar)
 
+        btn_exportar = QPushButton("📄 Exportar CSV")
+        btn_exportar.setCursor(Qt.PointingHandCursor)
+        btn_exportar.clicked.connect(self.exportar_csv)
+
+        header_layout.addWidget(btn_exportar)
         header_layout.addWidget(btn_add)
         header_layout.addWidget(btn_edit)
         header_layout.addWidget(btn_del)
@@ -407,6 +414,10 @@ class PagosEfectivoView(QWidget):
         
         layout.addWidget(self.table)
         self.setLayout(layout)
+
+    def exportar_csv(self):
+        from app.views.modulos.export_utils import exportar_tabla_por_mes
+        exportar_tabla_por_mes(self, self.table, "pagos_efectivo.csv", 1)
 
     def cargar_datos(self):
         self.cargar_resumen()
