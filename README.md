@@ -1,116 +1,103 @@
 # Restaurante Italos Manager 🍽️
 
-
-
-**Restaurante Manager** es una aplicación de escritorio desarrollada en Python diseñada para optimizar la gestión operativa de un restaurante. Permite administrar inventarios, recetas, costos, menús y analizar reportes de ventas, todo integrado en una interfaz gráfica intuitiva.
+**Restaurante Manager** es una aplicación de escritorio robusta desarrollada en Python, diseñada para la gestión integral y operativa de un restaurante. Permite administrar inventarios, recetas, finanzas, ventas y personal a través de una interfaz gráfica moderna e intuitiva.
 
 ## 📋 Características Principales
 
-El sistema cuenta con los siguientes módulos:
+El sistema está organizado en módulos especializados para cubrir todas las áreas del negocio:
 
-* **🔐 Autenticación y Usuarios:** Sistema de login seguro con roles (Administradores y Empleados). Los administradores pueden gestionar accesos a través de una interfaz de Gestión de Usuarios dedicada.
-* **📈 Módulo de Presupuestos (NUEVO):** Creación de presupuestos de compras proyectados y enlace directo de estos presupuestos con las compras reales ejecutadas.
-* **📅 Módulo de Ventas Consolidado:** Interfaz unificada en pestañas que permite cargar reportes de cierre (vía CSV/Excel), consultar el historial de reportes y registrar las ventas diarias de manera fluida.
-* **📉 Control de Inventario:** Sistema de trazabilidad de stock que registra movimientos de entrada (compras), salidas (ventas según recetas) y ajustes, manteniendo el stock actualizado en tiempo real.
-* **📦 Gestión de Insumos:** Control de stock, costos unitarios, unidades de medida, conversiones, así como grupos y factores de cálculo avanzados.
-* **🍲 Recetas y Menú:** Creación de platos y definición de recetas (escandallo) para calcular costos precisos y descarga de insumos automática.
-* **🛒 Compras y Proveedores:** Gestión integral de proveedores, registro de facturas (contado u otros métodos de pago) vinculadas a presupuestos, y actualización automática de precios y stock.
-* **⚙️ Configuración Dinámica de BD:** Barra de estado inferior indicando el archivo activo y la opción para crear respaldos (backups), cambiar o cargar nuevas bases de datos SQLite desde la interfaz.
+### 📦 Gestión de Inventario y Abastecimiento
+*   **📉 Inventario en Tiempo Real:** Control de stock, movimientos de entrada/salida y ajustes automáticos.
+*   **🚜 Insumos y Unidades:** Gestión detallada de insumos, categorías y conversiones de unidades de medida.
+*   **🚚 Abastecimiento Interno:** Control de transferencia de insumos entre diferentes áreas o sucursales.
+*   **🛒 Compras y Proveedores:** Registro de facturas vinculadas a presupuestos, con actualización automática de costos.
+
+### 🍲 Gestión Gastronómica
+*   **🍳 Recetas (Escandallo):** Definición técnica de platos para calcular costos precisos y descarga automática de stock.
+*   **📜 Gestión de Menú:** Administración dinámica de los platos ofrecidos al público.
+
+### 💰 Finanzas y Pagos
+*   **💵 Control de Caja:** Módulos específicos para pagos en **Efectivo**, **Yappy** y **Tarjetas de Crédito**.
+*   **📓 Chequera:** Gestión y seguimiento de pagos realizados mediante cheques.
+*   **📊 Presupuestos:** Proyección de compras mensuales y comparativa contra el gasto real.
+
+### 📈 Ventas y Reportes
+*   **📅 Diario de Ventas:** Registro detallado de la operación diaria.
+*   **📥 Carga de Reportes:** Importación masiva de datos desde archivos externos (CSV/Excel).
+*   **📂 Consolidados:** Resúmenes operativos para la toma de decisiones gerenciales.
+
+### 🔐 Seguridad y Configuración
+*   **👤 Usuarios y Roles:** Control de acceso basado en permisos (Admin/Empleado).
+*   **⚙️ Gestión de DB:** Herramientas integradas para respaldos, cambio de base de datos y migraciones.
 
 ## 🗂️ Estructura del Proyecto
-
-El proyecto sigue una arquitectura organizada separando la lógica de negocio (controladores), la interfaz (vistas) y los datos.
 
 ```text
 restaurante_manager/
 ├── app/
-│   ├── controllers/       # Lógica de negocio y autenticación
-│   ├── database/          # Conexión a SQLite, migraciones y configuración
-│   ├── views/             # Interfaz gráfica (Ventanas y Widgets)
-│   │   ├── modulos/       # Módulos específicos (Ventas, Presupuestos, CRUDs, etc.)
-│   │   ├── main_window.py # Ventana principal y ruteador
-│   │   └── login_window.py# Ventana de acceso
-│   └── styles.py          # Estilos visuales de la aplicación
-├── assets/                # Iconos y archivos de datos (Excel/CSV)
-├── data/                  # Base de datos SQLite y respaldos
-├── diagrama_ER.svg        # Diagrama Entidad-Relación de la BDD
-├── config.json            # Configuración de ruta activa de la Base de Datos
-├── actualizar_db.py       # Script de migraciones estructurales
-├── main.py                # Punto de entrada de la aplicación
-├── requirements.txt       # Dependencias del proyecto
-└── README.md              # Documentación del proyecto
-
+│   ├── controllers/       # Lógica de negocio (Reportes, Kardex, Autenticación)
+│   ├── database/          # Conexión, configuración y modelos de SQLite
+│   ├── reports/           # Generación de reportes PDF y documentos
+│   ├── utils/             # Funciones auxiliares e iconos de botones
+│   ├── views/             # Ventanas principales (Login, Dashboard)
+│   │   └── modulos/       # Todos los módulos funcionales (Ventas, CRUDs, etc.)
+│   └── styles.py          # Definición visual y estilos de la aplicación
+├── assets/                # Recursos (Iconos, imágenes y datos de ejemplo)
+├── data/                  # Almacenamiento local de Base de Datos
+├── docs/                  # Documentación técnica adicional por módulo
+├── main.py                # Punto de entrada principal
+└── requirements.txt       # Dependencias del sistema
 ```
 
-## 🗃️ Modelo de Base de Datos
-El sistema utiliza SQLite como motor de base de datos. El esquema incluye tablas relacionales para:
+## 🚀 Instalación y Configuración
 
-Maestros: Insumos, Proveedores, Recetas, Menú.
+### 1. Prerrequisitos
+*   **Python 3.8+** instalado.
+*   Git (opcional, para clonar).
 
-Transaccionales: Compras, Detalle de Compras, Registro de Ventas Diarias, Movimientos de Inventario.
-
-![Diagrama ER de la Base de Datos](./diagrama_ER.svg)
-
-
-
-## 🚀 Instalación y Requisitos
-Para ejecutar este proyecto en tu máquina local, sigue estos pasos:
-
-1. Prerrequisitos
-Asegúrate de tener instalado Python 3.8 o superior.
-
-2. Clonar el repositorio
-Descarga el código fuente o clona el repositorio:
-
-```
-Bash
-
-git clone <URL_DE_TU_REPOSITORIO>
+### 2. Configuración del Entorno
+Clona el repositorio o descarga el código y navega a la carpeta:
+```bash
 cd restaurante_manager
 ```
-3. Crear un entorno virtual (Recomendado)
-```
-Bash
 
-### En Windows
+Crea y activa un entorno virtual:
+```bash
+# Windows
 python -m venv venv
 venv\Scripts\activate
 
-### En macOS/Linux
+# macOS/Linux
 python3 -m venv venv
 source venv/bin/activate
 ```
-4. Instalar dependencias
-Instala las librerías necesarias listadas en requirements.txt:
 
-```Bash
-
+### 3. Instalar Dependencias
+```bash
 pip install -r requirements.txt
 ```
-💻 Ejecución
-Para iniciar la aplicación, ejecuta el archivo principal desde la raíz del proyecto:
 
-```Bash
+### 4. Configuración Inicial
+La aplicación utiliza un archivo `config.json` para localizar la base de datos. Si es la primera vez que se ejecuta, el sistema intentará crear una base de datos por defecto en `data/restaurante.db`.
 
+## 💻 Ejecución
+
+Para iniciar la aplicación, simplemente ejecuta:
+```bash
 python main.py
 ```
-Al iniciar por primera vez:
 
-Se creará automáticamente la carpeta data/ y la base de datos restaurante.db.
-
-Se creará un usuario administrador por defecto (si así está configurado):
-
-Usuario: admin
-
-Contraseña: admin123 (Se recomienda cambiarla en producción)
+**Credenciales por defecto:**
+*   **Usuario:** `admin`
+*   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
 
 ## 🛠️ Tecnologías Utilizadas
-Lenguaje: Python 3
+*   **Lenguaje:** Python 3
+*   **Interfaz Gráfica:** PyQt5 (Modernizada con estilos personalizados)
+*   **Base de Datos:** SQLite
+*   **Análisis de Datos:** Pandas
+*   **Generación de Documentos:** ReportLab (para PDFs)
+*   **Empaquetado:** PyInstaller
 
-Interfaz Gráfica (GUI): PyQt5
-
-Base de Datos: SQLite
-
-Manipulación de Datos: Pandas
-
-Desarrollado para la gestión eficiente de restaurantes.
+---
+Desarrollado para optimizar la eficiencia operativa de **Italos Manager**.

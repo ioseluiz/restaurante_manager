@@ -1066,7 +1066,7 @@ class VerPresupuestoDialog(QDialog):
         self.anio = anio
         self.desc = desc
         self.setWindowTitle(f"Detalle Presupuesto N° {numero}")
-        self.resize(1150, 700)
+        self.resize(1200, 700)
         self.setStyleSheet(DIALOG_STYLES)
 
         self.init_ui()
@@ -1110,10 +1110,10 @@ class VerPresupuestoDialog(QDialog):
             ]
         )
         self.tree.setColumnWidth(0, 250)
-        self.tree.setColumnWidth(1, 150)
+        self.tree.setColumnWidth(1, 140)
         self.tree.setColumnWidth(2, 120)
-        self.tree.setColumnWidth(3, 300)
-        self.tree.setColumnWidth(4, 250)
+        self.tree.setColumnWidth(3, 270)
+        self.tree.setColumnWidth(4, 310)
         self.tree.setAlternatingRowColors(True)
         self.tree.setWordWrap(True)
         layout.addWidget(self.tree)
@@ -1212,21 +1212,27 @@ class VerPresupuestoDialog(QDialog):
                 layout_acciones.setContentsMargins(0, 0, 0, 0)
                 layout_acciones.setSpacing(5)
 
-                btn_detalle = QPushButton("Detalle")
-                btn_detalle.setStyleSheet(
-                    "background-color: #3498db; color: white; border-radius: 3px; padding: 4px; font-weight: bold; font-size: 11px;"
+                _btn_style = (
+                    "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+                    "padding:5px 10px;font-weight:bold;font-size:11px;border:none;}}"
+                    "QPushButton:hover{{background-color:{hov};}}"
+                    "QPushButton:pressed{{background-color:{prs};}}"
                 )
+
+                btn_detalle = QPushButton("Detalle")
+                btn_detalle.setProperty("skip-auto-icon", True)
+                btn_detalle.setStyleSheet(_btn_style.format(bg="#3498db", hov="#2176ae", prs="#1a5f8a"))
                 btn_detalle.setCursor(Qt.PointingHandCursor)
+                btn_detalle.setMinimumWidth(68)
                 btn_detalle.clicked.connect(
                     lambda checked, html=det_calc: self.mostrar_calculo(html)
                 )
 
-                # --- NUEVO BOTON: Ajustar Porcentaje ---
                 btn_porcentaje = QPushButton("Ajustar %")
-                btn_porcentaje.setStyleSheet(
-                    "background-color: #9b59b6; color: white; border-radius: 3px; padding: 4px; font-weight: bold; font-size: 11px;"
-                )
+                btn_porcentaje.setProperty("skip-auto-icon", True)
+                btn_porcentaje.setStyleSheet(_btn_style.format(bg="#9b59b6", hov="#7d3c98", prs="#6c3483"))
                 btn_porcentaje.setCursor(Qt.PointingHandCursor)
+                btn_porcentaje.setMinimumWidth(78)
                 btn_porcentaje.clicked.connect(
                     lambda checked, d_id=det_id, nom=ins_nom, pct=pct_usado: (
                         self.abrir_ajuste_porcentaje(d_id, nom, pct)
@@ -1234,21 +1240,21 @@ class VerPresupuestoDialog(QDialog):
                 )
 
                 btn_editar = QPushButton("Editar")
-                btn_editar.setStyleSheet(
-                    "background-color: #f39c12; color: white; border-radius: 3px; padding: 4px; font-weight: bold; font-size: 11px;"
-                )
+                btn_editar.setProperty("skip-auto-icon", True)
+                btn_editar.setStyleSheet(_btn_style.format(bg="#f39c12", hov="#c87f0a", prs="#9a6008"))
                 btn_editar.setCursor(Qt.PointingHandCursor)
+                btn_editar.setMinimumWidth(60)
                 btn_editar.clicked.connect(
                     lambda checked, d_id=det_id, nom=ins_nom, c=cant, m=monto, uni=uni_nom: (
                         self.editar_insumo(d_id, nom, c, m, uni)
                     )
                 )
 
-                btn_borrar = QPushButton(" X ")
-                btn_borrar.setStyleSheet(
-                    "background-color: #c0392b; color: white; border-radius: 3px; padding: 4px; font-weight: bold; font-size: 11px;"
-                )
+                btn_borrar = QPushButton("Borrar")
+                btn_borrar.setProperty("skip-auto-icon", True)
+                btn_borrar.setStyleSheet(_btn_style.format(bg="#c0392b", hov="#96281b", prs="#6e1c13"))
                 btn_borrar.setCursor(Qt.PointingHandCursor)
+                btn_borrar.setMinimumWidth(60)
                 btn_borrar.clicked.connect(
                     lambda checked, d_id=det_id, nom=ins_nom: self.eliminar_insumo(
                         d_id, nom

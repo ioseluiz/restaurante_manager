@@ -35,7 +35,7 @@ class PagoEfectivoDialog(QDialog):
         self.db = db_manager
         self.data = data
         self.setWindowTitle("Registro de Pago en Efectivo")
-        self.setMinimumWidth(550)
+        self.setMinimumWidth(640)
         
         self.etiquetas_db = {
             "Costo de Víveres": "costo_viveres",

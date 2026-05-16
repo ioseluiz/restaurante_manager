@@ -35,7 +35,7 @@ class ChequeraDialog(QDialog):
         self.db = db_manager
         self.data = data
         self.setWindowTitle("Registro en Chequera")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
         self.init_ui()
 
     def init_ui(self):

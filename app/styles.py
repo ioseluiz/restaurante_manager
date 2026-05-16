@@ -1,21 +1,19 @@
 # app/styles.py
 
-# Paleta de colores "Clean Professional"
+# Paleta de colores — Branding Restaurante Italos
 COLORS = {
-    "primary": "#3498db",  # Azul corporativo
-    "primary_hover": "#2980b9",
-    "success": "#2ecc71",  # Verde acción positiva
-    "success_hover": "#27ae60",
-    "danger": "#e74c3c",  # Rojo peligro/eliminar
-    # --- AGREGA ESTAS DOS LÍNEAS ---
-    "warning": "#f1c40f",  # Amarillo/Naranja para editar/precaución
-    "warning_hover": "#f39c12",
-    # -------------------------------
-    "danger_hover": "#c0392b",
-    "background": "#ecf0f1",  # Gris muy claro para fondo de ventana
-    "surface": "#ffffff",  # Blanco para tarjetas/tablas
-    "text": "#2c3e50",  # Gris oscuro para texto (no negro puro)
-    "border": "#bdc3c7",
+    "primary":        "#a20f22",  # Rojo marca
+    "primary_hover":  "#7d0b1a",  # Rojo oscuro
+    "success":        "#d0741d",  # Naranja fuerte (agregar / guardar)
+    "success_hover":  "#b05f16",
+    "danger":         "#a20f22",  # Rojo peligro = rojo marca
+    "danger_hover":   "#7d0b1a",
+    "warning":        "#db9930",  # Naranja suave (editar / precaución)
+    "warning_hover":  "#b8801f",
+    "background":     "#ecf0f1",  # Gris claro para fondo de ventana
+    "surface":        "#ffffff",  # Blanco para tarjetas/tablas
+    "text":           "#2c3e50",  # Gris oscuro para texto
+    "border":         "#bdc3c7",
 }
 
 # Hoja de estilos QSS global
@@ -50,9 +48,9 @@ GLOBAL_STYLES = f"""
         background-color: {COLORS["primary_hover"]};
     }}
     QPushButton:pressed {{
-        background-color: #1abc9c;
+        background-color: #5e0814;
     }}
-    
+
     /* Botones específicos usando Propiedades Dinámicas */
     QPushButton[class="btn-primary"] {{
         background-color: {COLORS["primary"]};
@@ -74,7 +72,14 @@ GLOBAL_STYLES = f"""
     QPushButton[class="btn-danger"]:hover {{
         background-color: {COLORS["danger_hover"]};
     }}
-    
+
+    QPushButton[class="btn-warning"] {{
+        background-color: {COLORS["warning"]};
+    }}
+    QPushButton[class="btn-warning"]:hover {{
+        background-color: {COLORS["warning_hover"]};
+    }}
+
     /* Botones del Dashboard (Tarjetas Grandes) */
     QPushButton[class="btn-dashboard"] {{
         background-color: {COLORS["surface"]};
@@ -94,13 +99,13 @@ GLOBAL_STYLES = f"""
     QToolBar {{
         background-color: {COLORS["surface"]};
         border-bottom: 1px solid {COLORS["border"]};
-        padding: 8px; 
+        padding: 8px;
         spacing: 10px;
     }}
-    
+
     /* Botón de "Volver al Inicio" */
     QPushButton[class="btn-navbar"] {{
-        background-color: {COLORS["text"]}; 
+        background-color: {COLORS["text"]};
         color: white;
         border: none;
         border-radius: 5px;
@@ -109,11 +114,9 @@ GLOBAL_STYLES = f"""
         font-size: 14px;
         min-width: 120px;
     }}
-    
     QPushButton[class="btn-navbar"]:hover {{
-        background-color: #34495e; 
+        background-color: #34495e;
     }}
-    
     QPushButton[class="btn-navbar"]:pressed {{
         background-color: #1a252f;
     }}
@@ -121,19 +124,19 @@ GLOBAL_STYLES = f"""
     /* --- TABLAS --- */
     QTableWidget {{
         background-color: {COLORS["surface"]};
-        alternate-background-color: #f9f9f9;
+        alternate-background-color: #fdf5f5;
         gridline-color: {COLORS["background"]};
         selection-background-color: {COLORS["primary"]};
         selection-color: white;
         border: 1px solid {COLORS["border"]};
         border-radius: 4px;
     }}
-    
+
     QHeaderView::section {{
-        background-color: {COLORS["background"]}; 
-        color: {COLORS["text"]};                  
+        background-color: {COLORS["background"]};
+        color: {COLORS["text"]};
         padding: 8px;
-        border: 1px solid {COLORS["border"]};     
+        border: 1px solid {COLORS["border"]};
         font-weight: bold;
     }}
 
@@ -143,14 +146,13 @@ GLOBAL_STYLES = f"""
         border: 1px solid {COLORS["border"]};
         border-radius: 4px;
         background-color: white;
-        color: {COLORS["text"]}; 
+        color: {COLORS["text"]};
     }}
     QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, QSpinBox:focus, QDateEdit:focus {{
         border: 2px solid {COLORS["primary"]};
     }}
 
     /* --- CORRECCIÓN LISTAS DESPLEGABLES (COMBOBOX) --- */
-    /* Fuerza el fondo blanco en la lista que se despliega */
     QComboBox QAbstractItemView {{
         background-color: white;
         color: {COLORS["text"]};
@@ -173,7 +175,7 @@ GLOBAL_STYLES = f"""
         background-color: white;
         color: {COLORS["text"]};
     }}
-    
+
     QCalendarWidget QWidget#qt_calendar_navigationbar {{
         background-color: {COLORS["background"]};
         border-bottom: 1px solid {COLORS["border"]};
@@ -191,7 +193,7 @@ GLOBAL_STYLES = f"""
         background-color: #bdc3c7;
         border-radius: 4px;
     }}
-    
+
     QCalendarWidget QMenu {{
         background-color: white;
         color: {COLORS["text"]};
@@ -203,7 +205,7 @@ GLOBAL_STYLES = f"""
         selection-background-color: {COLORS["primary"]};
         selection-color: white;
     }}
-    
+
     QCalendarWidget QAbstractItemView:enabled {{
         background-color: white;
         color: {COLORS["text"]};

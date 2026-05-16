@@ -35,7 +35,7 @@ class YappyDialog(QDialog):
         self.db = db_manager
         self.data = data
         self.setWindowTitle("Registro de Cuenta Yappy")
-        self.setMinimumWidth(350)
+        self.setMinimumWidth(460)
         self.init_ui()
 
     def init_ui(self):
@@ -95,7 +95,7 @@ class GestionYappyDialog(QDialog):
         super().__init__(parent)
         self.db = db_manager
         self.setWindowTitle("Gestión de Cuentas Yappy")
-        self.resize(500, 300)
+        self.resize(580, 340)
         self.init_ui()
 
     def init_ui(self):
@@ -193,7 +193,7 @@ class TransaccionYappyDialog(QDialog):
         self.yappy_id = yappy_id
         self.data = data
         self.setWindowTitle("Transacción Yappy")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
         self.init_ui()
 
     def init_ui(self):

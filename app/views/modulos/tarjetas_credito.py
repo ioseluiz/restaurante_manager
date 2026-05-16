@@ -39,7 +39,7 @@ class TarjetaDialog(QDialog):
         self.db = db_manager
         self.data = data
         self.setWindowTitle("Registro de Tarjeta de Crédito")
-        self.setMinimumWidth(350)
+        self.setMinimumWidth(460)
         self.init_ui()
 
     def init_ui(self):
@@ -146,7 +146,7 @@ class GestionTarjetasDialog(QDialog):
         super().__init__(parent)
         self.db = db_manager
         self.setWindowTitle("Gestión de Tarjetas de Crédito")
-        self.resize(600, 400)
+        self.resize(680, 420)
         self.init_ui()
 
     def init_ui(self):
@@ -282,7 +282,7 @@ class TransaccionDialog(QDialog):
         self.tarjeta_id = tarjeta_id
         self.data = data
         self.setWindowTitle("Transacción de Tarjeta")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
         self.init_ui()
 
     def init_ui(self):

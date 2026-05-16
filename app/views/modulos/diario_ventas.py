@@ -35,7 +35,7 @@ class DiarioVentasDialog(QDialog):
         self.db = db_manager
         self.data = data
         self.setWindowTitle("Registro de Diario de Ventas")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
         self.init_ui()
 
     def init_ui(self):
@@ -227,7 +227,7 @@ class ComisionesConfigDialog(QDialog):
         super().__init__(parent)
         self.db = db_manager
         self.setWindowTitle("Configuración de Comisiones")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(520)
         self.metodos = ["Clave", "Visa/Master Card", "Pedidos Ya", "Yappy"]
         self.frecuencias = ["Mensual", "Semanal", "Bi-semanal", "Quincenal", "Diario"]
         self.inputs = {}

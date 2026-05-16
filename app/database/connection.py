@@ -421,6 +421,36 @@ class DatabaseManager:
             );
         """)
 
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conteos_inventario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fecha DATE NOT NULL,
+                descripcion TEXT,
+                categoria_id INTEGER,
+                estado TEXT DEFAULT 'BORRADOR',
+                fecha_cierre DATETIME,
+                FOREIGN KEY (categoria_id) REFERENCES categorias_insumos(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_conteo_inventario (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conteo_id INTEGER NOT NULL,
+                insumo_id INTEGER NOT NULL,
+                categoria_nombre TEXT,
+                unidad_nombre TEXT,
+                stock_teorico REAL NOT NULL,
+                cantidad_contada REAL,
+                diferencia REAL,
+                aprobado INTEGER DEFAULT 0,
+                ajuste_aplicado INTEGER DEFAULT 0,
+                motivo_ajuste TEXT,
+                FOREIGN KEY (conteo_id) REFERENCES conteos_inventario(id) ON DELETE CASCADE,
+                FOREIGN KEY (insumo_id) REFERENCES insumos(id)
+            );
+        """)
+
         self.conn.commit()
     def _migrate_tables(self):
         try:
