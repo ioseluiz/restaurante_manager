@@ -17,6 +17,8 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -26,7 +28,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from app.reports.conteo_pdf import generar_pdf_conteo
+from app.reports.conteo_excel import generar_excel_conteo
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -65,7 +67,7 @@ def _registrar_ajuste_kardex(db, insumo_id, diferencia, conteo_id, motivo):
     )
 
 
-def _open_pdf(path):
+def _open_file(path):
     try:
         if sys.platform == "win32":
             os.startfile(path)
@@ -77,6 +79,26 @@ def _open_pdf(path):
         pass
 
 
+def _resolver_cat_nombre(db, categoria_id, categorias_ids, max_names=3):
+    """Return display string for category selection stored in a session."""
+    if categorias_ids:
+        ids = [int(x) for x in categorias_ids.split(",") if x.strip()]
+        if ids:
+            names = db.fetch_all(
+                f"SELECT nombre FROM categorias_insumos WHERE id IN ({','.join('?' * len(ids))}) ORDER BY nombre",
+                tuple(ids),
+            )
+            names_list = [n[0] for n in names]
+            if len(names_list) <= max_names:
+                return ", ".join(names_list)
+            return f"{len(names_list)} categorías"
+    if categoria_id:
+        r = db.fetch_one("SELECT nombre FROM categorias_insumos WHERE id = ?", (categoria_id,))
+        if r:
+            return r[0]
+    return "Todas las categorías"
+
+
 # ── NuevoConteoDialog ─────────────────────────────────────────────────────────
 
 class NuevoConteoDialog(QDialog):
@@ -84,7 +106,7 @@ class NuevoConteoDialog(QDialog):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Nuevo Conteo de Inventario")
-        self.setMinimumWidth(460)
+        self.setMinimumSize(460, 440)
         self._build_ui()
         self._load_categorias()
 
@@ -108,15 +130,21 @@ class NuevoConteoDialog(QDialog):
         self.txt_desc.setPlaceholderText("Descripción opcional del conteo")
         form.addRow("Descripción:", self.txt_desc)
 
-        self.cmb_categoria = QComboBox()
-        form.addRow("Categoría:", self.cmb_categoria)
+        layout.addLayout(form)
+
+        lbl_cat = QLabel("Categorías a incluir:")
+        lbl_cat.setStyleSheet("font-weight:bold; margin-top:4px;")
+        layout.addWidget(lbl_cat)
+
+        self.lst_categorias = QListWidget()
+        self.lst_categorias.setMaximumHeight(190)
+        self.lst_categorias.setSelectionMode(QListWidget.NoSelection)
+        self.lst_categorias.itemChanged.connect(self._on_item_changed)
+        layout.addWidget(self.lst_categorias)
 
         self.lbl_preview = QLabel("0 insumos incluidos")
         self.lbl_preview.setStyleSheet("color:#666666; font-size:11px;")
-        form.addRow("", self.lbl_preview)
-
-        layout.addLayout(form)
-        self.cmb_categoria.currentIndexChanged.connect(self._actualizar_preview)
+        layout.addWidget(self.lbl_preview)
 
         sep = QFrame()
         sep.setFrameShape(QFrame.HLine)
@@ -124,55 +152,110 @@ class NuevoConteoDialog(QDialog):
         layout.addWidget(sep)
 
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        btns.button(QDialogButtonBox.Ok).setText("Crear y Generar PDF")
+        btns.button(QDialogButtonBox.Ok).setText("Crear y Generar Excel")
         btns.accepted.connect(self._crear)
         btns.rejected.connect(self.reject)
         layout.addWidget(btns)
 
     def _load_categorias(self):
-        self.cmb_categoria.blockSignals(True)
-        self.cmb_categoria.clear()
-        self.cmb_categoria.addItem("Todas las categorías", None)
+        self.lst_categorias.blockSignals(True)
+        self.lst_categorias.clear()
+
+        item_todas = QListWidgetItem("Todas las categorías")
+        item_todas.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+        item_todas.setCheckState(Qt.Checked)
+        item_todas.setData(Qt.UserRole, None)
+        f = item_todas.font()
+        f.setBold(True)
+        item_todas.setFont(f)
+        self.lst_categorias.addItem(item_todas)
+
         rows = self.db.fetch_all("SELECT id, nombre FROM categorias_insumos ORDER BY nombre")
-        for r in rows:
-            self.cmb_categoria.addItem(r[1], r[0])
-        self.cmb_categoria.blockSignals(False)
+        for row in rows:
+            item = QListWidgetItem(row[1])
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Checked)
+            item.setData(Qt.UserRole, row[0])
+            self.lst_categorias.addItem(item)
+
+        self.lst_categorias.blockSignals(False)
         self._actualizar_preview()
 
-    def _actualizar_preview(self):
-        cat_id = self.cmb_categoria.currentData()
-        if cat_id:
-            count = self.db.fetch_one(
-                "SELECT COUNT(*) FROM insumos WHERE categoria_id = ?", (cat_id,)
-            )
+    def _on_item_changed(self, item):
+        self.lst_categorias.blockSignals(True)
+        all_item = self.lst_categorias.item(0)
+        if item is all_item:
+            state = item.checkState()
+            for i in range(1, self.lst_categorias.count()):
+                self.lst_categorias.item(i).setCheckState(state)
         else:
+            all_checked = all(
+                self.lst_categorias.item(i).checkState() == Qt.Checked
+                for i in range(1, self.lst_categorias.count())
+            )
+            all_item.setCheckState(Qt.Checked if all_checked else Qt.Unchecked)
+        self.lst_categorias.blockSignals(False)
+        self._actualizar_preview()
+
+    def _get_selected_ids(self):
+        return [
+            self.lst_categorias.item(i).data(Qt.UserRole)
+            for i in range(1, self.lst_categorias.count())
+            if self.lst_categorias.item(i).checkState() == Qt.Checked
+        ]
+
+    def _actualizar_preview(self):
+        all_item = self.lst_categorias.item(0)
+        if not all_item:
+            return
+        if all_item.checkState() == Qt.Checked:
             count = self.db.fetch_one("SELECT COUNT(*) FROM insumos")
-        n = count[0] if count else 0
-        self.lbl_preview.setText(f"{n} insumos incluidos")
+            n = count[0] if count else 0
+            self.lbl_preview.setText(f"Todas las categorías · {n} insumos incluidos")
+        else:
+            ids = self._get_selected_ids()
+            if not ids:
+                self.lbl_preview.setText("Sin categorías seleccionadas")
+                return
+            placeholders = ",".join("?" * len(ids))
+            count = self.db.fetch_one(
+                f"SELECT COUNT(*) FROM insumos WHERE categoria_id IN ({placeholders})",
+                tuple(ids),
+            )
+            n = count[0] if count else 0
+            cat_label = "1 categoría" if len(ids) == 1 else f"{len(ids)} categorías"
+            self.lbl_preview.setText(f"{cat_label} · {n} insumos incluidos")
 
     def _crear(self):
+        all_item = self.lst_categorias.item(0)
+        is_todas = all_item and all_item.checkState() == Qt.Checked
+
         fecha = self.date_edit.date().toString("yyyy-MM-dd")
-        desc = self.txt_desc.text().strip() or None
-        cat_id = self.cmb_categoria.currentData()
-        cat_nombre = self.cmb_categoria.currentText()
+        desc  = self.txt_desc.text().strip() or None
+
+        if is_todas:
+            categorias_ids_str = None
+            cat_nombre = "Todas las categorías"
+        else:
+            cat_ids = self._get_selected_ids()
+            if not cat_ids:
+                QMessageBox.warning(self, "Aviso", "Seleccione al menos una categoría para el conteo.")
+                return
+            categorias_ids_str = ",".join(str(x) for x in cat_ids)
+            names = [
+                self.lst_categorias.item(i).text()
+                for i in range(1, self.lst_categorias.count())
+                if self.lst_categorias.item(i).checkState() == Qt.Checked
+            ]
+            cat_nombre = ", ".join(names) if len(names) <= 3 else f"{len(names)} categorías"
 
         self.db.execute_query(
-            "INSERT INTO conteos_inventario (fecha, descripcion, categoria_id, estado) VALUES (?,?,?,'EN_PROCESO')",
-            (fecha, desc, cat_id),
+            "INSERT INTO conteos_inventario (fecha, descripcion, categoria_id, categorias_ids, estado) VALUES (?,?,?,?,'EN_PROCESO')",
+            (fecha, desc, None, categorias_ids_str),
         )
         conteo_id = self.db.fetch_one("SELECT last_insert_rowid()")[0]
 
-        if cat_id:
-            insumos = self.db.fetch_all(
-                """SELECT i.id, i.nombre, i.stock_actual, u.nombre, c.nombre
-                   FROM insumos i
-                   JOIN unidades_medida u ON u.id = i.unidad_base_id
-                   LEFT JOIN categorias_insumos c ON c.id = i.categoria_id
-                   WHERE i.categoria_id = ?
-                   ORDER BY c.nombre, i.nombre""",
-                (cat_id,),
-            )
-        else:
+        if is_todas:
             insumos = self.db.fetch_all(
                 """SELECT i.id, i.nombre, i.stock_actual, u.nombre, c.nombre
                    FROM insumos i
@@ -180,8 +263,19 @@ class NuevoConteoDialog(QDialog):
                    LEFT JOIN categorias_insumos c ON c.id = i.categoria_id
                    ORDER BY c.nombre, i.nombre"""
             )
+        else:
+            placeholders = ",".join("?" * len(cat_ids))
+            insumos = self.db.fetch_all(
+                f"""SELECT i.id, i.nombre, i.stock_actual, u.nombre, c.nombre
+                   FROM insumos i
+                   JOIN unidades_medida u ON u.id = i.unidad_base_id
+                   LEFT JOIN categorias_insumos c ON c.id = i.categoria_id
+                   WHERE i.categoria_id IN ({placeholders})
+                   ORDER BY c.nombre, i.nombre""",
+                tuple(cat_ids),
+            )
 
-        filas_pdf = []
+        filas_excel = []
         for idx, ins in enumerate(insumos, 1):
             insumo_id, nombre, stock, unidad, cat_n = ins
             self.db.execute_query(
@@ -194,7 +288,7 @@ class NuevoConteoDialog(QDialog):
                 "SELECT nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY nombre",
                 (insumo_id,),
             )
-            filas_pdf.append({
+            filas_excel.append({
                 "numero": idx,
                 "nombre": nombre,
                 "unidad": unidad or "",
@@ -202,17 +296,17 @@ class NuevoConteoDialog(QDialog):
             })
 
         try:
-            pdf_path = generar_pdf_conteo(conteo_id, fecha, desc, cat_nombre, filas_pdf)
-            _open_pdf(pdf_path)
+            excel_path = generar_excel_conteo(conteo_id, fecha, desc, cat_nombre, filas_excel)
+            _open_file(excel_path)
             QMessageBox.information(
                 self,
-                "PDF Generado",
-                f"El formato de conteo ha sido abierto.\n\nArchivo: {pdf_path}\n\n"
-                "Imprímalo y entréguelo al personal para realizar el conteo físico.\n"
+                "Excel Generado",
+                f"El formato de conteo ha sido abierto.\n\nArchivo: {excel_path}\n\n"
+                "Imprímalo o compártalo con el personal para realizar el conteo físico.\n"
                 "Cuando tenga los resultados, abra la sesión para ingresar las cantidades.",
             )
         except Exception as e:
-            QMessageBox.warning(self, "PDF Error", f"No se pudo generar el PDF:\n{e}")
+            QMessageBox.warning(self, "Error al generar Excel", f"No se pudo generar el archivo Excel:\n{e}")
 
         self.accept()
 
@@ -325,9 +419,9 @@ class ConteoActivoDialog(QDialog):
 
         # Footer
         footer = QHBoxLayout()
-        btn_pdf = QPushButton("Volver a Generar PDF")
-        btn_pdf.clicked.connect(self._generar_pdf)
-        footer.addWidget(btn_pdf)
+        btn_excel = QPushButton("Volver a Generar Excel")
+        btn_excel.clicked.connect(self._generar_excel)
+        footer.addWidget(btn_excel)
         footer.addStretch()
         layout.addLayout(footer)
 
@@ -345,7 +439,6 @@ class ConteoActivoDialog(QDialog):
             nombre_row = self.db.fetch_one("SELECT nombre FROM insumos WHERE id = ?", (insumo_id,))
             nombre = nombre_row[0] if nombre_row else str(insumo_id)
 
-            # Static columns
             self.tbl_ingreso.setItem(r, 0, QTableWidgetItem(str(det_id)))
 
             cat_item = QTableWidgetItem(cat or "")
@@ -361,7 +454,6 @@ class ConteoActivoDialog(QDialog):
             teorico_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self.tbl_ingreso.setItem(r, 3, teorico_item)
 
-            # Combobox: base unit + all purchase presentations for this insumo
             cmb = QComboBox()
             cmb.addItem(unidad or "unidad", 1.0)
             presentaciones = self.db.fetch_all(
@@ -373,14 +465,12 @@ class ConteoActivoDialog(QDialog):
                 cmb.addItem(f"{p[0]}  (×{factor:g})", factor)
             self.tbl_ingreso.setCellWidget(r, 4, cmb)
 
-            # SpinBox — always in the selected unit; defaults to base unit
             spin = QDoubleSpinBox()
             spin.setRange(0, 9999999)
             spin.setDecimals(4)
             spin.setValue(contada if contada is not None else 0.0)
             self.tbl_ingreso.setCellWidget(r, 5, spin)
 
-            # Equivalente label (live conversion to base units)
             equiv_val = contada if contada is not None else 0.0
             lbl_equiv = QLabel(f"= {equiv_val:.4f} {unidad}")
             lbl_equiv.setAlignment(Qt.AlignCenter)
@@ -390,7 +480,6 @@ class ConteoActivoDialog(QDialog):
             )
             self.tbl_ingreso.setCellWidget(r, 6, lbl_equiv)
 
-            # Connect signals for live update (capture r and unidad in closure)
             cmb.currentIndexChanged.connect(
                 lambda _, row=r, u=unidad: self._actualizar_equivalente(row, u)
             )
@@ -401,13 +490,13 @@ class ConteoActivoDialog(QDialog):
         self._cargar_revision()
 
     def _actualizar_equivalente(self, r, unidad):
-        cmb = self.tbl_ingreso.cellWidget(r, 4)
+        cmb  = self.tbl_ingreso.cellWidget(r, 4)
         spin = self.tbl_ingreso.cellWidget(r, 5)
-        lbl = self.tbl_ingreso.cellWidget(r, 6)
+        lbl  = self.tbl_ingreso.cellWidget(r, 6)
         if not (cmb and spin and lbl):
             return
         factor = cmb.currentData() or 1.0
-        equiv = round(spin.value() * factor, 4)
+        equiv  = round(spin.value() * factor, 4)
         lbl.setText(f"= {equiv:.4f} {unidad}")
 
     def _cargar_revision(self):
@@ -433,7 +522,7 @@ class ConteoActivoDialog(QDialog):
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 self.tbl_revision.setItem(r, col, item)
 
-            dif_val = dif if dif is not None else 0.0
+            dif_val  = dif if dif is not None else 0.0
             dif_item = QTableWidgetItem(f"{dif_val:+.4f}")
             dif_item.setFlags(dif_item.flags() & ~Qt.ItemIsEditable)
             dif_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -459,15 +548,15 @@ class ConteoActivoDialog(QDialog):
     def _guardar_cantidades(self):
         for r in range(self.tbl_ingreso.rowCount()):
             det_id = int(self.tbl_ingreso.item(r, 0).text())
-            cmb = self.tbl_ingreso.cellWidget(r, 4)
-            spin = self.tbl_ingreso.cellWidget(r, 5)
+            cmb    = self.tbl_ingreso.cellWidget(r, 4)
+            spin   = self.tbl_ingreso.cellWidget(r, 5)
             factor = cmb.currentData() if cmb else 1.0
             contada_base = round(spin.value() * factor, 4)
 
             row = self.db.fetch_one(
                 "SELECT stock_teorico FROM detalle_conteo_inventario WHERE id = ?", (det_id,)
             )
-            teorico = row[0] if row else 0.0
+            teorico    = row[0] if row else 0.0
             diferencia = round(contada_base - teorico, 4)
 
             self.db.execute_query(
@@ -492,14 +581,14 @@ class ConteoActivoDialog(QDialog):
 
         ajustados = 0
         for r in range(self.tbl_revision.rowCount()):
-            det_id = int(self.tbl_revision.item(r, 0).text())
+            det_id     = int(self.tbl_revision.item(r, 0).text())
             chk_widget = self.tbl_revision.cellWidget(r, 7)
-            chk = chk_widget.findChild(QCheckBox)
+            chk        = chk_widget.findChild(QCheckBox)
             if not chk or not chk.isChecked():
                 continue
 
             motivo_edit = self.tbl_revision.cellWidget(r, 6)
-            motivo = motivo_edit.text().strip() if motivo_edit else ""
+            motivo      = motivo_edit.text().strip() if motivo_edit else ""
 
             row = self.db.fetch_one(
                 "SELECT insumo_id, diferencia, ajuste_aplicado FROM detalle_conteo_inventario WHERE id = ?",
@@ -531,19 +620,15 @@ class ConteoActivoDialog(QDialog):
         )
         self.accept()
 
-    def _generar_pdf(self):
+    def _generar_excel(self):
         row = self.db.fetch_one(
-            "SELECT fecha, descripcion, categoria_id FROM conteos_inventario WHERE id = ?",
+            "SELECT fecha, descripcion, categoria_id, categorias_ids FROM conteos_inventario WHERE id = ?",
             (self.conteo_id,),
         )
         if not row:
             return
-        fecha, desc, cat_id = row
-        cat_nombre = "Todas"
-        if cat_id:
-            r2 = self.db.fetch_one("SELECT nombre FROM categorias_insumos WHERE id = ?", (cat_id,))
-            if r2:
-                cat_nombre = r2[0]
+        fecha, desc, cat_id, categorias_ids = row
+        cat_nombre = _resolver_cat_nombre(self.db, cat_id, categorias_ids)
 
         filas = self.db.fetch_all(
             """SELECT ROW_NUMBER() OVER (ORDER BY i.nombre) num, i.nombre, u.nombre, i.id
@@ -553,24 +638,24 @@ class ConteoActivoDialog(QDialog):
                WHERE d.conteo_id = ? ORDER BY i.nombre""",
             (self.conteo_id,),
         )
-        filas_pdf = []
+        filas_excel = []
         for f in filas:
             num, nombre, unidad, insumo_id = f
             presentaciones = self.db.fetch_all(
                 "SELECT nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY nombre",
                 (insumo_id,),
             )
-            filas_pdf.append({
+            filas_excel.append({
                 "numero": num,
                 "nombre": nombre,
                 "unidad": unidad,
                 "presentaciones": [p[0] for p in presentaciones],
             })
         try:
-            path = generar_pdf_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_pdf)
-            _open_pdf(path)
+            path = generar_excel_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_excel)
+            _open_file(path)
         except Exception as e:
-            QMessageBox.warning(self, "Error PDF", str(e))
+            QMessageBox.warning(self, "Error Excel", str(e))
 
 
 # ── VerDetalleDialog ──────────────────────────────────────────────────────────
@@ -588,15 +673,19 @@ class VerDetalleDialog(QDialog):
         layout = QVBoxLayout(self)
 
         row = self.db.fetch_one(
-            "SELECT fecha, descripcion, estado, fecha_cierre FROM conteos_inventario WHERE id = ?",
+            "SELECT fecha, descripcion, estado, fecha_cierre, categoria_id, categorias_ids FROM conteos_inventario WHERE id = ?",
             (self.conteo_id,),
         )
         if row:
-            fecha, desc, estado, fecha_cierre = row
+            fecha, desc, estado, fecha_cierre, cat_id, categorias_ids = row
+            cat_nombre = _resolver_cat_nombre(self.db, cat_id, categorias_ids)
             bg, fg = _ESTADO_STYLE.get(estado, ("#9e9e9e", "#ffffff"))
             info_row = QHBoxLayout()
             info_row.addWidget(
-                QLabel(f"<b>Sesión #{self.conteo_id}</b>  |  Fecha: {fecha}  |  {desc or ''}")
+                QLabel(
+                    f"<b>Sesión #{self.conteo_id}</b>  |  Fecha: {fecha}  |  "
+                    f"Categorías: {cat_nombre}  |  {desc or ''}"
+                )
             )
             info_row.addStretch()
             info_row.addWidget(_badge(estado, bg, fg))
@@ -638,7 +727,7 @@ class VerDetalleDialog(QDialog):
                 item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 tbl.setItem(r, col, item)
 
-            dif_val = dif if dif is not None else 0.0
+            dif_val  = dif if dif is not None else 0.0
             dif_item = QTableWidgetItem(f"{dif_val:+.4f}")
             dif_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             if dif_val < 0:
@@ -690,7 +779,7 @@ class ConteoInventarioView(QWidget):
         layout.addLayout(header)
 
         desc = QLabel(
-            "Gestione los conteos físicos de inventario. Cree una sesión para generar el formato PDF "
+            "Gestione los conteos físicos de inventario. Cree una sesión para generar el formato Excel "
             "que se entrega al personal, ingrese las cantidades contadas y aplique los ajustes al kardex. "
             "Las sesiones en BORRADOR o EN_PROCESO pueden eliminarse si fueron creadas por error."
         )
@@ -701,7 +790,7 @@ class ConteoInventarioView(QWidget):
         self.tbl = QTableWidget()
         self.tbl.setColumnCount(6)
         self.tbl.setHorizontalHeaderLabels(
-            ["ID", "Fecha", "Descripción", "Categoría", "Estado", "Acciones"]
+            ["ID", "Fecha", "Descripción", "Categoría(s)", "Estado", "Acciones"]
         )
         self.tbl.setColumnHidden(0, True)
         hdr = self.tbl.horizontalHeader()
@@ -718,18 +807,21 @@ class ConteoInventarioView(QWidget):
 
     def _cargar_sesiones(self):
         rows = self.db.fetch_all(
-            """SELECT c.id, c.fecha, c.descripcion, cat.nombre, c.estado
+            """SELECT c.id, c.fecha, c.descripcion, cat.nombre, c.estado, c.categorias_ids, c.categoria_id
                FROM conteos_inventario c
                LEFT JOIN categorias_insumos cat ON cat.id = c.categoria_id
                ORDER BY c.id DESC"""
         )
         self.tbl.setRowCount(len(rows))
         for r, row in enumerate(rows):
-            conteo_id, fecha, desc, cat_nombre, estado = row
+            conteo_id, fecha, desc, cat_nombre_legacy, estado, categorias_ids, cat_id = row
+
+            display_cat = _resolver_cat_nombre(self.db, cat_id, categorias_ids)
+
             self.tbl.setItem(r, 0, QTableWidgetItem(str(conteo_id)))
             self.tbl.setItem(r, 1, QTableWidgetItem(fecha or ""))
             self.tbl.setItem(r, 2, QTableWidgetItem(desc or ""))
-            self.tbl.setItem(r, 3, QTableWidgetItem(cat_nombre or "Todas"))
+            self.tbl.setItem(r, 3, QTableWidgetItem(display_cat))
 
             bg, fg = _ESTADO_STYLE.get(estado, ("#9e9e9e", "#ffffff"))
             badge_widget = QWidget()
@@ -739,8 +831,8 @@ class ConteoInventarioView(QWidget):
             bl.setContentsMargins(4, 2, 4, 2)
             self.tbl.setCellWidget(r, 4, badge_widget)
 
-            btn_widget = QWidget()
-            btn_layout = QHBoxLayout(btn_widget)
+            btn_widget  = QWidget()
+            btn_layout  = QHBoxLayout(btn_widget)
             btn_layout.setContentsMargins(4, 2, 4, 2)
             btn_layout.setSpacing(4)
 

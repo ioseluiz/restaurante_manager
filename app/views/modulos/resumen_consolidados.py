@@ -406,13 +406,13 @@ class ResumenConsolidadosView(QWidget):
                    COALESCE(SUM(pedidos_ya), 0),
                    COALESCE(SUM(clave), 0),
                    COALESCE(SUM(visa_mastercard), 0),
-                   COALESCE(SUM(total_ventas), 0)
+                   COALESCE(SUM(total_ventas), 0),
+                   COALESCE(SUM(efectivo), 0)
             FROM diario_ventas
             WHERE strftime('%Y-%m', fecha) = ?
         """, (mes_key,))
-        rv = cur.fetchone() or (0, 0, 0, 0, 0)
-        yappy_v, pedidos_v, clave_v, visa_v, total_v = (float(x) for x in rv)
-        efectivo_v = max(0.0, total_v - yappy_v - pedidos_v - clave_v - visa_v)
+        rv = cur.fetchone() or (0, 0, 0, 0, 0, 0)
+        yappy_v, pedidos_v, clave_v, visa_v, total_v, efectivo_v = (float(x) for x in rv)
         self.donut_ventas.refresh(
             _V_LABELS,
             [efectivo_v, yappy_v, pedidos_v, clave_v, visa_v],

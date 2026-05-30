@@ -99,12 +99,17 @@ class DiarioVentasDialog(QDialog):
         self.depositos_input.setMaximum(999999999.99)
         self.depositos_input.setDecimals(2)
 
+        self.efectivo_input = QDoubleSpinBox()
+        self.efectivo_input.setMaximum(999999999.99)
+        self.efectivo_input.setDecimals(2)
+
         form.addRow("Fecha:", self.fecha_input)
         form.addRow("TOTAL VENTAS:", self.total_ventas_input)
         form.addRow("Pagos Yappy:", self.yappy_input)
         form.addRow("Pagos Pedidos Ya:", self.pedidos_ya_input)
         form.addRow("Pagos Clave:", self.clave_input)
         form.addRow("Pagos Visa/MC:", self.visa_mastercard_input)
+        form.addRow("Pagos en Efectivo:", self.efectivo_input)
         form.addRow("Vale:", self.vale_input)
         form.addRow(self.lbl_vale_desc, self.vale_descripcion_input)
         form.addRow("No. Facturas:", self.no_facturas_input)
@@ -125,10 +130,11 @@ class DiarioVentasDialog(QDialog):
             self.sobrante_input.setValue(float(self.data.get("sobrante", 0.0)))
             self.faltante_input.setValue(float(self.data.get("faltante", 0.0)))
             self.depositos_input.setValue(float(self.data.get("depositos", 0.0)))
+            self.efectivo_input.setValue(float(self.data.get("efectivo", 0.0)))
             self.on_vale_changed()
 
         # Conectar señales para calcular el total automáticamente
-        for input_box in [self.yappy_input, self.pedidos_ya_input, self.clave_input, self.visa_mastercard_input, self.vale_input, self.sobrante_input, self.faltante_input]:
+        for input_box in [self.yappy_input, self.pedidos_ya_input, self.clave_input, self.visa_mastercard_input, self.efectivo_input, self.vale_input, self.sobrante_input, self.faltante_input]:
             input_box.valueChanged.connect(self.calcular_total_ventas)
 
         self.calcular_total_ventas()
@@ -161,12 +167,13 @@ class DiarioVentasDialog(QDialog):
         self.lbl_vale_desc.setVisible(has_vale)
 
     def calcular_total_ventas(self):
-        total = (self.yappy_input.value() + 
-                 self.pedidos_ya_input.value() + 
-                 self.clave_input.value() + 
-                 self.visa_mastercard_input.value() + 
+        total = (self.yappy_input.value() +
+                 self.pedidos_ya_input.value() +
+                 self.clave_input.value() +
+                 self.visa_mastercard_input.value() +
+                 self.efectivo_input.value() +
                  self.vale_input.value() +
-                 self.sobrante_input.value() + 
+                 self.sobrante_input.value() +
                  self.faltante_input.value())
         self.total_ventas_input.setValue(total)
 
@@ -177,6 +184,7 @@ class DiarioVentasDialog(QDialog):
         pedidos_ya = self.pedidos_ya_input.value()
         clave = self.clave_input.value()
         visa_mastercard = self.visa_mastercard_input.value()
+        efectivo = self.efectivo_input.value()
         vale = self.vale_input.value()
         vale_descripcion = self.vale_descripcion_input.text().strip() if vale > 0 else ""
         no_facturas = self.no_facturas_input.value()
@@ -186,17 +194,17 @@ class DiarioVentasDialog(QDialog):
 
         if self.data:
             query = """
-                UPDATE diario_ventas 
-                SET fecha=?, total_ventas=?, yappy=?, pedidos_ya=?, clave=?, visa_mastercard=?, vale=?, vale_descripcion=?, no_facturas=?, sobrante=?, faltante=?, depositos=?
+                UPDATE diario_ventas
+                SET fecha=?, total_ventas=?, yappy=?, pedidos_ya=?, clave=?, visa_mastercard=?, efectivo=?, vale=?, vale_descripcion=?, no_facturas=?, sobrante=?, faltante=?, depositos=?
                 WHERE id=?
             """
-            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos, self.data["id"]))
+            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, efectivo, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos, self.data["id"]))
         else:
             query = """
-                INSERT INTO diario_ventas (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO diario_ventas (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, efectivo, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
-            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos))
+            self.db.cursor.execute(query, (fecha, total_ventas, yappy, pedidos_ya, clave, visa_mastercard, efectivo, vale, vale_descripcion, no_facturas, sobrante, faltante, depositos))
             
         self.db.conn.commit()
         return True
@@ -212,6 +220,7 @@ class DiarioVentasDialog(QDialog):
             self.pedidos_ya_input.setValue(0.0)
             self.clave_input.setValue(0.0)
             self.visa_mastercard_input.setValue(0.0)
+            self.efectivo_input.setValue(0.0)
             self.vale_input.setValue(0.0)
             self.vale_descripcion_input.clear()
             self.no_facturas_input.setValue(0)
@@ -383,10 +392,10 @@ class DiarioVentasView(QWidget):
         self.table = QTableWidget()
         
         self.columnas = [
-            "ID", "FECHA", "TOTAL VENTAS", "YAPPY", "PEDIDOS YA", "CLAVE", "VISA/MC", "VALE", "DESC VALE", "NO FACT", "SOBRANTE", "FALTANTE", "DEPOSITOS"
+            "ID", "FECHA", "TOTAL VENTAS", "YAPPY", "PEDIDOS YA", "CLAVE", "VISA/MC", "EFECTIVO", "VALE", "DESC VALE", "NO FACT", "SOBRANTE", "FALTANTE", "DEPOSITOS"
         ]
         self.db_columns = [
-            "id", "fecha", "total_ventas", "yappy", "pedidos_ya", "clave", "visa_mastercard", "vale", "vale_descripcion", "no_facturas", "sobrante", "faltante", "depositos"
+            "id", "fecha", "total_ventas", "yappy", "pedidos_ya", "clave", "visa_mastercard", "efectivo", "vale", "vale_descripcion", "no_facturas", "sobrante", "faltante", "depositos"
         ]
         
         self.table.setColumnCount(len(self.columnas))
@@ -394,11 +403,23 @@ class DiarioVentasView(QWidget):
         
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Interactive)
-        self.table.setColumnWidth(1, 100) # Fecha
-        for i in range(2, len(self.columnas) - 1):
-            self.table.setColumnWidth(i, 90)
-        
-        # Stretch last column to avoid black space
+        col_widths = {
+            1: 100,  # FECHA
+            2: 120,  # TOTAL VENTAS
+            3: 90,   # YAPPY
+            4: 105,  # PEDIDOS YA
+            5: 80,   # CLAVE
+            6: 90,   # VISA/MC
+            7: 100,  # EFECTIVO
+            8: 80,   # VALE
+            9: 120,  # DESC VALE
+            10: 80,  # NO FACT
+            11: 95,  # SOBRANTE
+            12: 90,  # FALTANTE
+        }
+        for col, width in col_widths.items():
+            self.table.setColumnWidth(col, width)
+
         header.setSectionResizeMode(len(self.columnas) - 1, QHeaderView.Stretch)
             
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -438,29 +459,31 @@ class DiarioVentasView(QWidget):
             item_total.setFont(font)
             self.table.setItem(r_idx, 2, item_total)
             
-            # Montos
+            # Montos por método de pago (índices 3-7: yappy, pedidos_ya, clave, visa_mastercard, efectivo)
             self.table.setItem(r_idx, 3, NumericItem(f"{float(row[3] or 0.0):.2f}"))
             self.table.setItem(r_idx, 4, NumericItem(f"{float(row[4] or 0.0):.2f}"))
             self.table.setItem(r_idx, 5, NumericItem(f"{float(row[5] or 0.0):.2f}"))
             self.table.setItem(r_idx, 6, NumericItem(f"{float(row[6] or 0.0):.2f}"))
             self.table.setItem(r_idx, 7, NumericItem(f"{float(row[7] or 0.0):.2f}"))
-            self.table.setItem(r_idx, 8, QTableWidgetItem(str(row[8] or "")))
-            
-            # NO FACT (entero)
-            self.table.setItem(r_idx, 9, NumericItem(str(row[9] or 0)))
-            
-            # Sobrante / Faltante / Depositos
-            item_sob = NumericItem(f"{float(row[10] or 0.0):.2f}")
-            if float(row[10] or 0.0) > 0:
-                item_sob.setForeground(QColor("green"))
-            self.table.setItem(r_idx, 10, item_sob)
-            
-            item_falt = NumericItem(f"{float(row[11] or 0.0):.2f}")
+            # Vale y descripción (índices 8-9)
+            self.table.setItem(r_idx, 8, NumericItem(f"{float(row[8] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 9, QTableWidgetItem(str(row[9] or "")))
+
+            # NO FACT (entero, índice 10)
+            self.table.setItem(r_idx, 10, NumericItem(str(row[10] or 0)))
+
+            # Sobrante / Faltante / Depositos (índices 11-13)
+            item_sob = NumericItem(f"{float(row[11] or 0.0):.2f}")
             if float(row[11] or 0.0) > 0:
+                item_sob.setForeground(QColor("green"))
+            self.table.setItem(r_idx, 11, item_sob)
+
+            item_falt = NumericItem(f"{float(row[12] or 0.0):.2f}")
+            if float(row[12] or 0.0) > 0:
                 item_falt.setForeground(QColor("red"))
-            self.table.setItem(r_idx, 11, item_falt)
-            
-            self.table.setItem(r_idx, 12, NumericItem(f"{float(row[12] or 0.0):.2f}"))
+            self.table.setItem(r_idx, 12, item_falt)
+
+            self.table.setItem(r_idx, 13, NumericItem(f"{float(row[13] or 0.0):.2f}"))
 
         self.table.setSortingEnabled(True)
         self.aplicar_filtros()

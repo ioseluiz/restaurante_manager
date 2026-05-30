@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QDialog,
+    QDialogButtonBox,
     QFormLayout,
     QLineEdit,
     QComboBox,
@@ -18,8 +19,18 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QGroupBox,
     QSpinBox,
+    QDateEdit,
+    QFrame,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QDate
+from PyQt5.QtGui import QColor
+from PyQt5.QtWidgets import QSizePolicy
+import datetime
+import matplotlib
+matplotlib.use("Qt5Agg")
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib.dates as mdates
 
 
 # --- CLASE PERSONALIZADA PARA ORDENAR NÚMEROS ---
@@ -407,9 +418,13 @@ class TabPresentaciones(QWidget):
         btn_del.setProperty("class", "btn-danger")
         btn_del.clicked.connect(self.delete)
 
+        btn_historial = QPushButton("Historial de Precios")
+        btn_historial.clicked.connect(self.ver_historial)
+
         btn_layout.addWidget(btn_add)
         btn_layout.addWidget(btn_edit)
         btn_layout.addWidget(btn_del)
+        btn_layout.addWidget(btn_historial)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -534,12 +549,26 @@ class TabPresentaciones(QWidget):
             )
             self.cargar_datos()
 
+    def ver_historial(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una presentación para ver su historial de precios."
+            )
+        pid = int(self.table.item(row, 0).text())
+        insumo_nombre = self.table.item(row, 1).text()
+        pres_nombre   = self.table.item(row, 2).text()
+        dlg = HistorialPreciosDialog(self.db, pid, insumo_nombre, pres_nombre, parent=self)
+        dlg.exec_()
+        self.cargar_datos()
+
 
 class PresentacionDialog(QDialog):
     def __init__(self, db, presentacion_id=None, parent=None):
         super().__init__(parent)
         self.db = db
         self.presentacion_id = presentacion_id
+        self._precio_original = None  # para detectar cambio de precio en edición
 
         titulo = (
             "Editar Presentación de Compra"
@@ -653,6 +682,7 @@ class PresentacionDialog(QDialog):
 
             self.txt_nombre.setText(row[1])
             self.spin_precio.setValue(row[2])
+            self._precio_original = row[2]  # guardar para detectar cambio
             self.spin_total.setValue(row[3])
 
             # Verificar si tiene composición (empaque compuesto)
@@ -688,37 +718,59 @@ class PresentacionDialog(QDialog):
             )
 
         costo_u = precio / total
+        hoy = QDate.currentDate().toString("yyyy-MM-dd")
 
         try:
             if self.presentacion_id:
-                # Update
-                query_update = """
-                    UPDATE presentaciones_compra 
-                    SET insumo_id=?, nombre=?, cantidad_contenido=?, precio_compra=?, costo_unitario_calculado=? 
-                    WHERE id=?
-                """
+                # Update presentación
                 self.db.execute_query(
-                    query_update,
+                    """UPDATE presentaciones_compra
+                       SET insumo_id=?, nombre=?, cantidad_contenido=?, precio_compra=?, costo_unitario_calculado=?
+                       WHERE id=?""",
                     (ins_id, nom, total, precio, costo_u, self.presentacion_id),
                 )
                 pid = self.presentacion_id
 
-                # Para simplificar la composición, eliminamos la anterior si existía y creamos la nueva
+                # Si el precio cambió, registrar en historial
+                if self._precio_original is not None and round(precio, 4) != round(self._precio_original, 4):
+                    self.db.execute_query(
+                        "UPDATE historial_precios_presentacion SET es_precio_actual=0 WHERE presentacion_id=?",
+                        (pid,),
+                    )
+                    self.db.execute_query(
+                        """INSERT INTO historial_precios_presentacion
+                           (presentacion_id, precio_compra, costo_unitario_calculado, fecha_registro, es_precio_actual)
+                           VALUES (?,?,?,?,1)""",
+                        (pid, precio, costo_u, hoy),
+                    )
+
                 self.db.execute_query(
                     "DELETE FROM composicion_empaque WHERE presentacion_id=?", (pid,)
                 )
             else:
-                # Insert
+                # Insert presentación nueva
                 cur = self.db.execute_query(
-                    "INSERT INTO presentaciones_compra (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado) VALUES (?,?,?,?,?)",
+                    """INSERT INTO presentaciones_compra
+                       (insumo_id, nombre, cantidad_contenido, precio_compra, costo_unitario_calculado)
+                       VALUES (?,?,?,?,?)""",
                     (ins_id, nom, total, precio, costo_u),
                 )
                 pid = cur.lastrowid
 
-            # Insertar composición si aplica (tanto para Update como para Insert)
+                # Registrar precio inicial en historial
+                self.db.execute_query(
+                    """INSERT INTO historial_precios_presentacion
+                       (presentacion_id, precio_compra, costo_unitario_calculado, fecha_registro, es_precio_actual)
+                       VALUES (?,?,?,?,1)""",
+                    (pid, precio, costo_u, hoy),
+                )
+
+            # Insertar composición si aplica
             if self.chk_detalle.isChecked():
                 self.db.execute_query(
-                    "INSERT INTO composicion_empaque (presentacion_id, nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario) VALUES (?,?,?,?)",
+                    """INSERT INTO composicion_empaque
+                       (presentacion_id, nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario)
+                       VALUES (?,?,?,?)""",
                     (
                         pid,
                         self.txt_sub_nom.text(),
@@ -729,6 +781,283 @@ class PresentacionDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+
+# =============================================================================
+# HISTORIAL DE PRECIOS
+# =============================================================================
+
+class NuevoPrecioDialog(QDialog):
+    """Sub-dialog para registrar un nuevo precio como precio actual."""
+
+    def __init__(self, db, presentacion_id, cantidad_contenido, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.presentacion_id = presentacion_id
+        self.cantidad_contenido = cantidad_contenido
+        self.setWindowTitle("Registrar Nuevo Precio")
+        self.setMinimumWidth(380)
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        form = QFormLayout()
+        form.setSpacing(10)
+
+        self.date_edit = QDateEdit(QDate.currentDate())
+        self.date_edit.setCalendarPopup(True)
+        self.date_edit.setDisplayFormat("dd/MM/yyyy")
+        form.addRow("Fecha:", self.date_edit)
+
+        self.cmb_proveedor = QComboBox()
+        self.cmb_proveedor.addItem("— Sin proveedor —", None)
+        proveedores = self.db.fetch_all("SELECT id, nombre FROM proveedores ORDER BY nombre")
+        for p in proveedores:
+            self.cmb_proveedor.addItem(p[1], p[0])
+        form.addRow("Proveedor:", self.cmb_proveedor)
+
+        self.spin_precio = QDoubleSpinBox()
+        self.spin_precio.setMaximum(999999.99)
+        self.spin_precio.setDecimals(2)
+        self.spin_precio.setPrefix("$ ")
+        self.spin_precio.valueChanged.connect(self._actualizar_costo)
+        form.addRow("Precio de Compra:", self.spin_precio)
+
+        self.lbl_costo = QLabel("$ 0.0000 por unidad base")
+        self.lbl_costo.setStyleSheet("color:#2e7d32; font-size:11px;")
+        form.addRow("Costo unitario calc.:", self.lbl_costo)
+
+        self.txt_obs = QLineEdit()
+        self.txt_obs.setPlaceholderText("Observación opcional…")
+        form.addRow("Observación:", self.txt_obs)
+
+        layout.addLayout(form)
+
+        nota = QLabel("Este precio reemplazará al precio actual de la presentación.")
+        nota.setStyleSheet("color:#666666; font-size:10px; font-style:italic;")
+        nota.setWordWrap(True)
+        layout.addWidget(nota)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color:#dddddd;")
+        layout.addWidget(sep)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.button(QDialogButtonBox.Ok).setText("Guardar como Precio Actual")
+        btns.accepted.connect(self._guardar)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def _actualizar_costo(self, precio):
+        if self.cantidad_contenido and self.cantidad_contenido > 0:
+            costo = precio / self.cantidad_contenido
+            self.lbl_costo.setText(f"$ {costo:.4f} por unidad base")
+
+    def _guardar(self):
+        precio = self.spin_precio.value()
+        if precio <= 0:
+            return QMessageBox.warning(self, "Error", "El precio debe ser mayor a cero.")
+
+        proveedor_id = self.cmb_proveedor.currentData()
+        fecha = self.date_edit.date().toString("yyyy-MM-dd")
+        obs = self.txt_obs.text().strip() or None
+        costo_u = precio / self.cantidad_contenido if self.cantidad_contenido > 0 else 0.0
+
+        try:
+            # Desactivar precio actual anterior
+            self.db.execute_query(
+                "UPDATE historial_precios_presentacion SET es_precio_actual=0 WHERE presentacion_id=?",
+                (self.presentacion_id,),
+            )
+            # Insertar nuevo registro de precio
+            self.db.execute_query(
+                """INSERT INTO historial_precios_presentacion
+                   (presentacion_id, proveedor_id, precio_compra, costo_unitario_calculado,
+                    fecha_registro, es_precio_actual, observacion)
+                   VALUES (?,?,?,?,?,1,?)""",
+                (self.presentacion_id, proveedor_id, precio, costo_u, fecha, obs),
+            )
+            # Actualizar precio vigente en presentaciones_compra
+            self.db.execute_query(
+                "UPDATE presentaciones_compra SET precio_compra=?, costo_unitario_calculado=? WHERE id=?",
+                (precio, costo_u, self.presentacion_id),
+            )
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
+class _MiniPriceChart(FigureCanvas):
+    def __init__(self, parent=None):
+        self.fig = Figure(figsize=(6, 2.2), dpi=96, facecolor="white")
+        self.ax = self.fig.add_subplot(111)
+        super().__init__(self.fig)
+        self.setParent(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedHeight(170)
+
+    def refresh(self, dates, prices):
+        self.ax.clear()
+        self.fig.set_facecolor("white")
+        self.ax.set_facecolor("#fafafa")
+
+        if not dates:
+            self.ax.text(0.5, 0.5, "Sin datos de precios",
+                         ha="center", va="center",
+                         transform=self.ax.transAxes, color="#aaaaaa", fontsize=9)
+            self.ax.axis("off")
+            self.fig.tight_layout()
+            self.draw()
+            return
+
+        color = "#a20f22"
+        if len(dates) == 1:
+            self.ax.scatter(dates, prices, color=color, zorder=5, s=60)
+            self.ax.annotate(f"${prices[0]:,.2f}", (dates[0], prices[0]),
+                             textcoords="offset points", xytext=(5, 5),
+                             fontsize=8, color=color)
+        else:
+            self.ax.plot(dates, prices, marker="o", markersize=5,
+                         linewidth=1.8, color=color)
+            for d, p in zip(dates, prices):
+                self.ax.annotate(f"${p:,.2f}", (d, p),
+                                 textcoords="offset points", xytext=(3, 5),
+                                 fontsize=7, color=color)
+
+        self.ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%y"))
+        self.ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        self.fig.autofmt_xdate(rotation=30, ha="right")
+        self.ax.yaxis.set_major_formatter(
+            matplotlib.ticker.FuncFormatter(lambda x, _: f"${x:,.2f}")
+        )
+        self.ax.tick_params(labelsize=7)
+        self.ax.grid(axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
+        self.ax.spines["top"].set_visible(False)
+        self.ax.spines["right"].set_visible(False)
+        self.ax.set_title("Evolución del Precio", fontsize=9,
+                          fontweight="bold", color="#2c3e50", pad=5)
+        self.fig.tight_layout()
+        self.draw()
+
+
+class HistorialPreciosDialog(QDialog):
+    """Dialog principal para consultar y gestionar el historial de precios de una presentación."""
+
+    def __init__(self, db, presentacion_id, insumo_nombre, pres_nombre, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.presentacion_id = presentacion_id
+        self.setWindowTitle(f"Historial de Precios — {insumo_nombre}")
+        self.setMinimumSize(750, 600)
+        self._build_ui(insumo_nombre, pres_nombre)
+        self._cargar_datos()
+
+    def _build_ui(self, insumo_nombre, pres_nombre):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+
+        # Encabezado
+        lbl_titulo = QLabel(f"<b>{insumo_nombre}</b> — {pres_nombre}")
+        lbl_titulo.setStyleSheet("font-size:13px; color:#a20f22;")
+        layout.addWidget(lbl_titulo)
+
+        # Toolbar
+        toolbar = QHBoxLayout()
+        btn_nuevo = QPushButton("+ Registrar Nuevo Precio")
+        btn_nuevo.setProperty("class", "btn-success")
+        btn_nuevo.clicked.connect(self._registrar_precio)
+        toolbar.addWidget(btn_nuevo)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        # Mini chart
+        self.chart = _MiniPriceChart(self)
+        layout.addWidget(self.chart)
+
+        # Tabla de historial
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels([
+            "Fecha", "Proveedor", "Precio Compra", "Costo Unit.", "Observación", "Estado"
+        ])
+        hdr = self.table.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(4, QHeaderView.Stretch)
+        hdr.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        layout.addWidget(self.table, 1)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def _cargar_datos(self):
+        rows = self.db.fetch_all(
+            """SELECT h.fecha_registro, p.nombre, h.precio_compra,
+                      h.costo_unitario_calculado, h.observacion, h.es_precio_actual
+               FROM historial_precios_presentacion h
+               LEFT JOIN proveedores p ON p.id = h.proveedor_id
+               WHERE h.presentacion_id = ?
+               ORDER BY h.fecha_registro DESC, h.id DESC""",
+            (self.presentacion_id,),
+        )
+        self.table.setRowCount(len(rows))
+        chart_dates = []
+        chart_prices = []
+        for r, row in enumerate(rows):
+            fecha, proveedor, precio, costo, obs, es_actual = row
+
+            self.table.setItem(r, 0, QTableWidgetItem(str(fecha or "")))
+            self.table.setItem(r, 1, QTableWidgetItem(proveedor or "—"))
+            self.table.setItem(r, 2, QTableWidgetItem(f"$ {float(precio):.2f}"))
+            self.table.setItem(r, 3, QTableWidgetItem(f"$ {float(costo):.4f}"))
+            self.table.setItem(r, 4, QTableWidgetItem(obs or ""))
+
+            if es_actual:
+                estado_item = QTableWidgetItem("ACTUAL")
+                estado_item.setForeground(QColor("#2e7d32"))
+                estado_item.setBackground(QColor("#e8f5e9"))
+                font = estado_item.font()
+                font.setBold(True)
+                estado_item.setFont(font)
+                for col in range(5):
+                    item = self.table.item(r, col)
+                    if item:
+                        item.setBackground(QColor("#e8f5e9"))
+            else:
+                estado_item = QTableWidgetItem("Histórico")
+                estado_item.setForeground(QColor("#9e9e9e"))
+
+            estado_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(r, 5, estado_item)
+
+            try:
+                chart_dates.append(datetime.date.fromisoformat(str(fecha)))
+                chart_prices.append(float(precio))
+            except (ValueError, TypeError):
+                pass
+
+        chart_dates.reverse()
+        chart_prices.reverse()
+        self.chart.refresh(chart_dates, chart_prices)
+
+    def _registrar_precio(self):
+        row = self.db.fetch_one(
+            "SELECT cantidad_contenido FROM presentaciones_compra WHERE id=?",
+            (self.presentacion_id,),
+        )
+        cantidad_contenido = row[0] if row else 1.0
+        dlg = NuevoPrecioDialog(self.db, self.presentacion_id, cantidad_contenido, parent=self)
+        if dlg.exec_():
+            self._cargar_datos()
 
 
 # =============================================================================

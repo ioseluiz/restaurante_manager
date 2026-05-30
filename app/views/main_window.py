@@ -35,6 +35,8 @@ from app.views.modulos.conteo_inventario import ConteoInventarioView
 from app.views.dashboard import DashboardView
 from app.views.modulos.consolidados_view import ConsolidadosView
 from app.views.modulos.sucursales_crud import SucursalesCRUD
+from app.views.modulos.grafico_precios import GraficoPreciosView
+from app.views.modulos.planilla import PlanillaView
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -192,9 +194,9 @@ class MainWindow(QMainWindow):
         self.lbl_sidebar_header = QLabel()
         _logo_px = QPixmap(ruta_recurso("assets/imgs/italos_horizontal_transparente.png"))
         if not _logo_px.isNull():
-            _logo_px = _logo_px.scaledToWidth(168, Qt.SmoothTransformation)
+            _logo_px = _logo_px.scaled(168, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.lbl_sidebar_header.setPixmap(_logo_px)
-        self.lbl_sidebar_header.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        self.lbl_sidebar_header.setAlignment(Qt.AlignCenter)
         header_row.addWidget(self.lbl_sidebar_header)
 
         self.btn_toggle_sidebar = QPushButton("◀")
@@ -268,6 +270,16 @@ class MainWindow(QMainWindow):
             "Consolidados", "assets/icons/nav_consolidados.svg", self.show_consolidados
         )
         sidebar_layout.addWidget(self.btn_consolidados)
+
+        self.btn_grafico_precios = self.create_nav_button(
+            "Análisis de Precios", "assets/icons/nav_insumos.svg", self.show_grafico_precios
+        )
+        sidebar_layout.addWidget(self.btn_grafico_precios)
+
+        self.btn_planilla = self.create_nav_button(
+            "Planilla", "assets/icons/nav_planilla.svg", self.show_planilla
+        )
+        sidebar_layout.addWidget(self.btn_planilla)
 
         sidebar_layout.addStretch()
 
@@ -493,6 +505,12 @@ class MainWindow(QMainWindow):
 
     def show_consolidados(self):
         self.load_module("consolidados", ConsolidadosView, "Módulo de Consolidados", needs_db=True)
+
+    def show_grafico_precios(self):
+        self.load_module("grafico_precios", GraficoPreciosView, "Análisis de Precios", needs_db=True)
+
+    def show_planilla(self):
+        self.load_module("planilla", PlanillaView, "Módulo de Planilla", needs_db=True)
 
     def show_unidades(self):
         self.load_module("unidades", UnidadesCRUD, "Unidades de Medida", needs_db=True)

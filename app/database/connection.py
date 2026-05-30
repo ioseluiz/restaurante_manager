@@ -103,6 +103,20 @@ class DatabaseManager:
             );
         """)
         self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS historial_precios_presentacion (
+                id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+                presentacion_id          INTEGER NOT NULL,
+                proveedor_id             INTEGER,
+                precio_compra            REAL NOT NULL,
+                costo_unitario_calculado REAL NOT NULL,
+                fecha_registro           DATE NOT NULL,
+                es_precio_actual         INTEGER DEFAULT 0,
+                observacion              TEXT,
+                FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE CASCADE,
+                FOREIGN KEY (proveedor_id)    REFERENCES proveedores(id)
+            );
+        """)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS proveedores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre TEXT NOT NULL,
@@ -373,7 +387,8 @@ class DatabaseManager:
                 no_facturas INTEGER DEFAULT 0,
                 sobrante REAL DEFAULT 0.0,
                 faltante REAL DEFAULT 0.0,
-                depositos REAL DEFAULT 0.0
+                depositos REAL DEFAULT 0.0,
+                efectivo REAL DEFAULT 0.0
             );
         """)
 
@@ -427,9 +442,113 @@ class DatabaseManager:
                 fecha DATE NOT NULL,
                 descripcion TEXT,
                 categoria_id INTEGER,
+                categorias_ids TEXT,
                 estado TEXT DEFAULT 'BORRADOR',
                 fecha_cierre DATETIME,
                 FOREIGN KEY (categoria_id) REFERENCES categorias_insumos(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS empleados (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre        TEXT NOT NULL,
+                apellido      TEXT NOT NULL,
+                puesto        TEXT,
+                sucursal_id   INTEGER,
+                salario_hora  REAL DEFAULT 0.0,
+                activo        INTEGER DEFAULT 1,
+                fecha_ingreso DATE,
+                FOREIGN KEY (sucursal_id) REFERENCES sucursales(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS periodos_pago (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre       TEXT NOT NULL,
+                fecha_inicio DATE NOT NULL,
+                fecha_fin    DATE NOT NULL,
+                sucursal_id  INTEGER,
+                estado       TEXT DEFAULT 'ABIERTO',
+                FOREIGN KEY (sucursal_id) REFERENCES sucursales(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS horas_empleado (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id           INTEGER NOT NULL,
+                periodo_id            INTEGER NOT NULL,
+                horas_regulares       REAL DEFAULT 0.0,
+                horas_extra           REAL DEFAULT 0.0,
+                horas_festivos        REAL DEFAULT 0.0,
+                horas_domingos        REAL DEFAULT 0.0,
+                horas_extra_diurnas   REAL DEFAULT 0.0,
+                horas_extra_nocturnas REAL DEFAULT 0.0,
+                observacion           TEXT,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS planilla_config_recargos (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_hora      TEXT NOT NULL UNIQUE,
+                nombre_display TEXT NOT NULL,
+                recargo        REAL DEFAULT 1.0
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS planilla_config_deducciones (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                concepto       TEXT NOT NULL UNIQUE,
+                nombre_display TEXT NOT NULL,
+                porcentaje     REAL DEFAULT 0.0,
+                aplica_a       TEXT NOT NULL
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS planilla_deducciones_otras (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                periodo_id  INTEGER NOT NULL,
+                tipo        TEXT NOT NULL,
+                descripcion TEXT,
+                monto       REAL DEFAULT 0.0,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id),
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vales_empleados (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id       INTEGER NOT NULL,
+                fecha_emision     DATE NOT NULL,
+                monto_original    REAL NOT NULL,
+                descripcion       TEXT,
+                diario_ventas_id  INTEGER,
+                estado            TEXT DEFAULT 'PENDIENTE',
+                fecha_cancelacion DATE,
+                FOREIGN KEY (empleado_id)      REFERENCES empleados(id),
+                FOREIGN KEY (diario_ventas_id) REFERENCES diario_ventas(id)
+            );
+        """)
+
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vale_pagos (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                vale_id     INTEGER NOT NULL,
+                fecha       DATE NOT NULL,
+                monto       REAL NOT NULL,
+                periodo_id  INTEGER,
+                descripcion TEXT,
+                FOREIGN KEY (vale_id)    REFERENCES vales_empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id) REFERENCES periodos_pago(id)
             );
         """)
 
@@ -498,6 +617,149 @@ class DatabaseManager:
             )
         except sqlite3.OperationalError:
             pass
+
+        try:
+            self.cursor.execute(
+                "ALTER TABLE diario_ventas ADD COLUMN efectivo REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute(
+                "ALTER TABLE conteos_inventario ADD COLUMN categorias_ids TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        # Tablas planilla config/vales — instalaciones existentes
+        for ddl in [
+            """CREATE TABLE IF NOT EXISTS planilla_config_recargos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tipo_hora TEXT NOT NULL UNIQUE,
+                nombre_display TEXT NOT NULL,
+                recargo REAL DEFAULT 1.0)""",
+            """CREATE TABLE IF NOT EXISTS planilla_config_deducciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                concepto TEXT NOT NULL UNIQUE,
+                nombre_display TEXT NOT NULL,
+                porcentaje REAL DEFAULT 0.0,
+                aplica_a TEXT NOT NULL)""",
+            """CREATE TABLE IF NOT EXISTS planilla_deducciones_otras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, periodo_id INTEGER NOT NULL,
+                tipo TEXT NOT NULL, descripcion TEXT, monto REAL DEFAULT 0.0,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id),
+                FOREIGN KEY (periodo_id) REFERENCES periodos_pago(id) ON DELETE CASCADE)""",
+            """CREATE TABLE IF NOT EXISTS vales_empleados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                fecha_emision DATE NOT NULL,
+                monto_original REAL NOT NULL,
+                descripcion TEXT,
+                diario_ventas_id INTEGER,
+                estado TEXT DEFAULT 'PENDIENTE',
+                fecha_cancelacion DATE,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id),
+                FOREIGN KEY (diario_ventas_id) REFERENCES diario_ventas(id))""",
+            """CREATE TABLE IF NOT EXISTS vale_pagos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                vale_id INTEGER NOT NULL, fecha DATE NOT NULL,
+                monto REAL NOT NULL, periodo_id INTEGER, descripcion TEXT,
+                FOREIGN KEY (vale_id) REFERENCES vales_empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id) REFERENCES periodos_pago(id))""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass
+
+        # Seed recargos por defecto (INSERT OR IGNORE no sobrescribe personalizaciones)
+        for tipo, nombre, recargo in [
+            ("regulares",       "Horas Regulares",        1.00),
+            ("festivos",        "Horas Días Festivos",    2.50),
+            ("domingos",        "Horas Domingos",         1.50),
+            ("extra_diurnas",   "Horas Extra Diurnas",    1.25),
+            ("extra_nocturnas", "Horas Extra Nocturnas",  1.50),
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO planilla_config_recargos (tipo_hora, nombre_display, recargo) VALUES (?,?,?)",
+                    (tipo, nombre, recargo),
+                )
+            except Exception:
+                pass
+
+        # Seed deducciones por defecto (Panamá)
+        for concepto, nombre, pct, aplica_a in [
+            ("seguro_social_colaborador",    "Seguro Social (Colaborador)",    9.75,  "colaborador"),
+            ("seguro_social_empleador",      "Seguro Social (Empleador)",     12.25,  "empleador"),
+            ("seguro_educativo_colaborador", "Seguro Educativo (Colaborador)",  1.25, "colaborador"),
+            ("seguro_educativo_empleador",   "Seguro Educativo (Empleador)",    1.50, "empleador"),
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO planilla_config_deducciones (concepto, nombre_display, porcentaje, aplica_a) VALUES (?,?,?,?)",
+                    (concepto, nombre, pct, aplica_a),
+                )
+            except Exception:
+                pass
+
+        # Tablas planilla — instalaciones existentes
+        for ddl in [
+            """CREATE TABLE IF NOT EXISTS empleados (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL, apellido TEXT NOT NULL,
+                puesto TEXT, sucursal_id INTEGER,
+                salario_hora REAL DEFAULT 0.0,
+                activo INTEGER DEFAULT 1, fecha_ingreso DATE,
+                FOREIGN KEY (sucursal_id) REFERENCES sucursales(id))""",
+            """CREATE TABLE IF NOT EXISTS periodos_pago (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                fecha_inicio DATE NOT NULL, fecha_fin DATE NOT NULL,
+                sucursal_id INTEGER, estado TEXT DEFAULT 'ABIERTO',
+                FOREIGN KEY (sucursal_id) REFERENCES sucursales(id))""",
+            """CREATE TABLE IF NOT EXISTS horas_empleado (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, periodo_id INTEGER NOT NULL,
+                horas_regulares REAL DEFAULT 0.0,
+                horas_extra REAL DEFAULT 0.0,
+                horas_festivos REAL DEFAULT 0.0,
+                horas_domingos REAL DEFAULT 0.0,
+                horas_extra_diurnas REAL DEFAULT 0.0,
+                horas_extra_nocturnas REAL DEFAULT 0.0,
+                observacion TEXT,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE)""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass
+
+        # Nuevas columnas de horas en planilla
+        for col_def in [
+            "ALTER TABLE horas_empleado ADD COLUMN horas_festivos        REAL DEFAULT 0.0",
+            "ALTER TABLE horas_empleado ADD COLUMN horas_domingos        REAL DEFAULT 0.0",
+            "ALTER TABLE horas_empleado ADD COLUMN horas_extra_diurnas   REAL DEFAULT 0.0",
+            "ALTER TABLE horas_empleado ADD COLUMN horas_extra_nocturnas REAL DEFAULT 0.0",
+        ]:
+            try:
+                self.cursor.execute(col_def)
+            except Exception:
+                pass
+
+        # Siembra inicial: registrar precio actual de presentaciones sin historial
+        self.cursor.execute("""
+            INSERT INTO historial_precios_presentacion
+                (presentacion_id, precio_compra, costo_unitario_calculado, fecha_registro, es_precio_actual)
+            SELECT id, precio_compra, COALESCE(costo_unitario_calculado, 0.0), date('now'), 1
+            FROM presentaciones_compra
+            WHERE id NOT IN (
+                SELECT DISTINCT presentacion_id FROM historial_precios_presentacion
+            )
+        """)
 
         self.conn.commit()
 
