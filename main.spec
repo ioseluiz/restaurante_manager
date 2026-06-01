@@ -10,6 +10,7 @@ a = Analysis(
         'matplotlib.backends.backend_qt5agg',
         'matplotlib.backends.backend_agg',
         'PyQt5.sip',
+        'openpyxl',
     ],
     hookspath=[],
     hooksconfig={},
