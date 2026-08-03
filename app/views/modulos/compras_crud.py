@@ -667,6 +667,40 @@ class NuevaCompraDialog(QDialog):
             QMessageBox.critical(self, "Error", str(e))
 
 
+class EditarProveedorDialog(QDialog):
+    def __init__(self, nombre, tipo, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Editar Proveedor")
+        self.setMinimumWidth(400)
+        layout = QVBoxLayout()
+        form = QFormLayout()
+
+        self.txt_nombre = QLineEdit(nombre)
+        self.cmb_tipo = QComboBox()
+        self.cmb_tipo.addItems(["PROVEEDOR", "SUPERMERCADO"])
+        idx = self.cmb_tipo.findText(tipo)
+        if idx >= 0:
+            self.cmb_tipo.setCurrentIndex(idx)
+
+        form.addRow("Nombre:", self.txt_nombre)
+        form.addRow("Tipo:", self.cmb_tipo)
+        layout.addLayout(form)
+
+        btn_layout = QHBoxLayout()
+        btn_guardar = QPushButton("Guardar")
+        btn_guardar.clicked.connect(self.accept)
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_guardar)
+        btn_layout.addWidget(btn_cancelar)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+
+    def get_datos(self):
+        return self.txt_nombre.text().strip(), self.cmb_tipo.currentText()
+
+
 class TabProveedores(QWidget):
     def __init__(self, db):
         super().__init__()
@@ -688,10 +722,33 @@ class TabProveedores(QWidget):
         form_layout.addWidget(btn_add)
         layout.addLayout(form_layout)
 
+        btn_layout = QHBoxLayout()
+        btn_editar = QPushButton("Editar")
+        btn_editar.setStyleSheet(
+            f"background-color: {COLORS['warning']}; color: black;"
+        )
+        btn_editar.clicked.connect(self.editar)
+
+        btn_eliminar = QPushButton("Eliminar")
+        btn_eliminar.setStyleSheet(
+            f"background-color: {COLORS['danger']}; color: white;"
+        )
+        btn_eliminar.clicked.connect(self.eliminar)
+
+        btn_layout.addWidget(btn_editar)
+        btn_layout.addWidget(btn_eliminar)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+
         self.table = QTableWidget()
         self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Tipo"])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
         self.setLayout(layout)
         self.cargar_proveedores()
@@ -714,6 +771,66 @@ class TabProveedores(QWidget):
             )
             self.cargar_proveedores()
             self.txt_nombre.clear()
+
+    def editar(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un proveedor para editar."
+            )
+
+        pid = self.table.item(row, 0).text()
+        nombre_actual = self.table.item(row, 1).text()
+        tipo_actual = self.table.item(row, 2).text()
+
+        dialog = EditarProveedorDialog(nombre_actual, tipo_actual, parent=self)
+        if dialog.exec_():
+            nuevo_nombre, nuevo_tipo = dialog.get_datos()
+            if not nuevo_nombre:
+                return QMessageBox.warning(
+                    self, "Aviso", "El nombre no puede quedar vacío."
+                )
+            self.db.execute_query(
+                "UPDATE proveedores SET nombre=?, tipo=? WHERE id=?",
+                (nuevo_nombre, nuevo_tipo, pid),
+            )
+            self.cargar_proveedores()
+
+    def eliminar(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un proveedor para eliminar."
+            )
+
+        pid = self.table.item(row, 0).text()
+        nombre = self.table.item(row, 1).text()
+
+        n_compras = self.db.fetch_one(
+            "SELECT COUNT(*) FROM compras WHERE proveedor_id=?", (pid,)
+        )[0]
+        n_precios = self.db.fetch_one(
+            "SELECT COUNT(*) FROM historial_precios_presentacion WHERE proveedor_id=?",
+            (pid,),
+        )[0]
+
+        if n_compras > 0 or n_precios > 0:
+            return QMessageBox.critical(
+                self,
+                "Acción Denegada",
+                f"No se puede eliminar el proveedor '{nombre}'.\n\n"
+                f"Tiene {n_compras} compra(s) y {n_precios} registro(s) de precio "
+                f"asociados. Eliminarlo afectaría el historial.",
+            )
+
+        confirm = QMessageBox.question(
+            self,
+            "Confirmar",
+            f"¿Eliminar el proveedor '{nombre}'?",
+        )
+        if confirm == QMessageBox.Yes:
+            self.db.execute_query("DELETE FROM proveedores WHERE id=?", (pid,))
+            self.cargar_proveedores()
 
 
 class TabResumenSemanal(QWidget):
