@@ -9,10 +9,8 @@ import tempfile
 
 
 _RED = colors.HexColor("#a20f22")
-_ORANGE = colors.HexColor("#d0741d")
 _GRAY = colors.HexColor("#f5f5f5")
 _LIGHT_YELLOW = colors.HexColor("#fffde7")
-_LIGHT_BLUE = colors.HexColor("#f0f4ff")
 _DARK = colors.HexColor("#2c3e50")
 _BORDER = colors.HexColor("#cccccc")
 _PRES_TEXT = colors.HexColor("#555555")
@@ -84,18 +82,17 @@ def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
     story.append(Spacer(1, 0.3 * cm))
 
     story.append(Paragraph(
-        "Instrucciones: Cuente el stock real en bodega y complete las columnas <b>Cant. Física</b> "
-        "y <b>Unidad usada</b>. Si usa una presentación de compra (columna <i>Presentaciones disponibles</i>), "
-        "anote la cantidad en esa unidad y escriba el nombre de la presentación en la columna Unidad usada. "
-        "Registre decimales si aplica.",
+        "Instrucciones: Cuente el stock real en bodega y anote el total en la columna <b>Cant. Física</b>, "
+        "usando la <b>Unidad base</b> indicada para cada insumo. La columna <i>Presentaciones disponibles</i> "
+        "se muestra solo como referencia. Registre decimales si aplica.",
         instr_style,
     ))
     story.append(Spacer(1, 0.4 * cm))
 
-    # Columns: # | Descripción | Unidad base | Presentaciones disponibles | Cant. Física | Unidad usada
+    # Columns: # | Descripción | Unidad base | Presentaciones disponibles | Cant. Física
     # Total content width ≈ 17.9 cm
-    col_widths = [0.8 * cm, 5.5 * cm, 2.0 * cm, 4.5 * cm, 2.8 * cm, 2.3 * cm]
-    header = ["#", "Descripción del Insumo", "Unidad\nbase", "Presentaciones\ndisponibles", "Cant.\nFísica", "Unidad\nusada"]
+    col_widths = [0.8 * cm, 6.6 * cm, 2.2 * cm, 5.0 * cm, 3.3 * cm]
+    header = ["#", "Descripción del Insumo", "Unidad\nbase", "Presentaciones\ndisponibles", "Cant.\nFísica"]
     table_data = [header]
 
     for fila in filas:
@@ -111,7 +108,6 @@ def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
             fila["unidad"],
             pres_cell,
             "",   # Cant. Física — blank
-            "",   # Unidad usada — blank
         ])
 
     row_count = len(table_data)
@@ -132,17 +128,14 @@ def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
         ("ALIGN", (0, 1), (0, -1), "CENTER"),   # #
         ("ALIGN", (2, 1), (2, -1), "CENTER"),   # Unidad base
         ("ALIGN", (4, 1), (4, -1), "CENTER"),   # Cant. Física
-        ("ALIGN", (5, 1), (5, -1), "CENTER"),   # Unidad usada
         # Alternating row backgrounds
         *[("BACKGROUND", (0, r), (-1, r), _GRAY if r % 2 == 0 else colors.white)
           for r in range(1, row_count)],
-        # Highlight writable columns
+        # Highlight writable column
         ("BACKGROUND", (4, 1), (4, -1), _LIGHT_YELLOW),
-        ("BACKGROUND", (5, 1), (5, -1), _LIGHT_BLUE),
         # Borders
         ("GRID", (0, 0), (-1, -1), 0.4, _BORDER),
         ("LINEBELOW", (0, 0), (-1, 0), 1.2, _RED),
-        ("LINEAFTER", (4, 0), (4, -1), 0.8, _ORANGE),
         # Padding
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),

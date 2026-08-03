@@ -7,7 +7,6 @@ import tempfile
 _RED     = "A20F22"
 _GRAY    = "F5F5F5"
 _YELLOW  = "FFFDE7"
-_BLUE    = "F0F4FF"
 _DARK    = "2C3E50"
 _BORDER  = "CCCCCC"
 _WHITE   = "FFFFFF"
@@ -47,16 +46,15 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
 
     # ── Column widths ─────────────────────────────────────────────────────────
     ws.column_dimensions["A"].width = 5    # #
-    ws.column_dimensions["B"].width = 38   # Descripción
-    ws.column_dimensions["C"].width = 13   # Unidad Base
-    ws.column_dimensions["D"].width = 32   # Presentaciones
-    ws.column_dimensions["E"].width = 16   # Cant. Física
-    ws.column_dimensions["F"].width = 16   # Unidad Usada
+    ws.column_dimensions["B"].width = 40   # Descripción
+    ws.column_dimensions["C"].width = 14   # Unidad Base
+    ws.column_dimensions["D"].width = 34   # Presentaciones
+    ws.column_dimensions["E"].width = 18   # Cant. Física
 
     r = 1  # current row pointer
 
     # ── Row 1: Restaurant name ────────────────────────────────────────────────
-    ws.merge_cells(f"A{r}:F{r}")
+    ws.merge_cells(f"A{r}:E{r}")
     c = ws[f"A{r}"]
     c.value = "Restaurante Italos"
     c.font  = _font(color=_RED, bold=True, size=15)
@@ -65,7 +63,7 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     r += 1
 
     # ── Row 2: Document title ─────────────────────────────────────────────────
-    ws.merge_cells(f"A{r}:F{r}")
+    ws.merge_cells(f"A{r}:E{r}")
     c = ws[f"A{r}"]
     c.value = "Formato de Toma de Inventario Físico"
     c.font  = _font(color=_DARK, bold=True, size=11)
@@ -74,7 +72,7 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     r += 1
 
     # ── Row 3: Metadata ───────────────────────────────────────────────────────
-    ws.merge_cells(f"A{r}:F{r}")
+    ws.merge_cells(f"A{r}:E{r}")
     meta = (
         f"Conteo N°: {conteo_id}     "
         f"Fecha: {fecha}     "
@@ -90,17 +88,17 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     r += 1
 
     # ── Row 4: Instructions ───────────────────────────────────────────────────
-    ws.merge_cells(f"A{r}:F{r}")
+    ws.merge_cells(f"A{r}:E{r}")
     c = ws[f"A{r}"]
     c.value = (
-        "Instrucciones: Cuente el stock real en bodega y complete las columnas "
-        "Cant. Física y Unidad usada. Si usa una presentación de compra, anote la "
-        "cantidad en esa unidad y escriba el nombre de la presentación en la columna "
-        "Unidad usada. Registre decimales si aplica."
+        "Instrucciones: Cuente el stock real en bodega y anote el total en la columna "
+        "Cant. Física, usando la Unidad Base indicada para cada insumo. "
+        "La columna Presentaciones Disponibles se muestra solo como referencia. "
+        "Registre decimales si aplica."
     )
     c.font      = _font(color=_HINT, italic=True, size=8)
     c.alignment = _align(h="left")
-    ws.row_dimensions[r].height = 34
+    ws.row_dimensions[r].height = 30
     r += 1
 
     # ── Row 5: Table header ───────────────────────────────────────────────────
@@ -110,7 +108,6 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
         "Unidad Base",
         "Presentaciones Disponibles",
         "Cant. Física",
-        "Unidad Usada",
     ]
     hdr_row = r
     for col, text in enumerate(headers, 1):
@@ -139,7 +136,6 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
             fila["unidad"],
             pres_text,
             "",   # Cant. Física — left blank for manual entry
-            "",   # Unidad Usada — left blank for manual entry
         ]
         for col, val in enumerate(values, 1):
             c = ws.cell(row=r, column=col)
@@ -149,8 +145,6 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
             c.alignment = _align(h="left" if col in (2, 4) else "center")
             if col == 5:
                 c.fill = _fill(_YELLOW)
-            elif col == 6:
-                c.fill = _fill(_BLUE)
             else:
                 c.fill = row_fill
 
@@ -160,7 +154,7 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     # ── Signature section ─────────────────────────────────────────────────────
     r += 1
     for label, start_col in [("Elaborado por:", 1), ("Revisado por:", 4)]:
-        end_col = start_col + 2
+        end_col = start_col + 1
         ws.merge_cells(
             start_row=r, start_column=start_col,
             end_row=r, end_column=end_col,
@@ -173,7 +167,7 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     for start_col in [1, 4]:
         ws.merge_cells(
             start_row=r, start_column=start_col,
-            end_row=r, end_column=start_col + 2,
+            end_row=r, end_column=start_col + 1,
         )
         c = ws.cell(row=r, column=start_col)
         c.value = "_________________________"
@@ -183,7 +177,7 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     for start_col in [1, 4]:
         ws.merge_cells(
             start_row=r, start_column=start_col,
-            end_row=r, end_column=start_col + 2,
+            end_row=r, end_column=start_col + 1,
         )
         c = ws.cell(row=r, column=start_col)
         c.value = "Nombre y Firma"

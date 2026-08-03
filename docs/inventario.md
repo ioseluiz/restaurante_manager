@@ -234,13 +234,12 @@ El PDF contiene:
 |---|---|
 | # | Número de línea |
 | Descripción del insumo | Nombre del insumo |
-| Unidad base | Unidad mínima (kg, ml, unidad…) |
-| Presentaciones disponibles | Empaques de compra en que se puede contar (ej. Saco 25 kg, Caja 24 latas) |
-| Cant. Física | En blanco — el empleado llena con el conteo |
-| Unidad usada | En blanco — el empleado anota qué unidad usó si contó por presentación |
+| Unidad base | Unidad mínima (kg, ml, unidad…) en la que se debe anotar el conteo |
+| Presentaciones disponibles | Empaques de compra, mostrados solo como referencia (ej. Saco 25 kg, Caja 24 latas) |
+| Cant. Física | En blanco — el empleado llena con el conteo, en la unidad base |
 
-El empleado puede contar en la **unidad base** o en cualquier **presentación de
-compra** listada; simplemente anota la cantidad y la unidad que usó.
+El empleado cuenta el stock y anota el total en la **unidad base** indicada para
+cada insumo. La columna de presentaciones es solo referencial.
 
 **Paso 3 — Conteo físico**
 
