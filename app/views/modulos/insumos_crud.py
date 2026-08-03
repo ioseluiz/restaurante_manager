@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QSpinBox,
     QDateEdit,
     QFrame,
+    QInputDialog,
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
@@ -67,11 +68,13 @@ class InsumosCRUD(QWidget):
         self.tab_insumos = TabInsumos(self.db)
         self.tab_presentaciones = TabPresentaciones(self.db)
         self.tab_categorias = TabCategorias(self.db)
+        self.tab_tipos_empaque = TabTiposEmpaque(self.db)
 
         # Añadir pestañas
         self.tabs.addTab(self.tab_insumos, "1. Catálogo de Insumos")
         self.tabs.addTab(self.tab_presentaciones, "2. Presentaciones de Compra")
         self.tabs.addTab(self.tab_categorias, "3. Categorías")
+        self.tabs.addTab(self.tab_tipos_empaque, "4. Tipos de Empaque")
 
         # Conectar cambio de pestaña
         self.tabs.currentChanged.connect(self.on_tab_change)
@@ -89,6 +92,8 @@ class InsumosCRUD(QWidget):
             self.tab_presentaciones.cargar_datos()
         elif index == 2:
             self.tab_categorias.cargar_datos()
+        elif index == 3:
+            self.tab_tipos_empaque.cargar_datos()
 
 
 # =============================================================================
@@ -603,7 +608,10 @@ class PresentacionDialog(QDialog):
 
         self.grp_det = QGroupBox("Contenido Interno")
         f_det = QFormLayout()
-        self.txt_sub_nom = QLineEdit()
+        self.cmb_sub_nom = QComboBox()
+        self._tipo_empaque_prev = 0  # índice previo, para revertir si se cancela alta
+        self.cmb_sub_nom.currentIndexChanged.connect(self._on_tipo_empaque_changed)
+        self._cargar_tipos_empaque()
         self.spin_cant = QSpinBox()
         self.spin_cant.setRange(1, 1000)
         self.spin_cant.valueChanged.connect(self.calc_total)
@@ -613,7 +621,7 @@ class PresentacionDialog(QDialog):
         self.spin_peso_uni.valueChanged.connect(self.calc_total)
         self.lbl_u1 = QLabel("Peso/Vol Unitario:")
 
-        f_det.addRow("Nombre Unidad Interna:", self.txt_sub_nom)
+        f_det.addRow("Unidad Interna:", self.cmb_sub_nom)
         f_det.addRow("Cantidad:", self.spin_cant)
         f_det.addRow(self.lbl_u1, self.spin_peso_uni)
         self.grp_det.setLayout(f_det)
@@ -646,6 +654,60 @@ class PresentacionDialog(QDialog):
         rows = self.db.fetch_all(query)
         for r in rows:
             self.cmb_insumo.addItem(f"{r[1]} ({r[2]})", {"id": r[0], "u": r[2]})
+
+    _SENTINEL_NUEVO = "➕ Nuevo tipo de empaque…"
+
+    def _cargar_tipos_empaque(self, seleccion=None):
+        """Llena el combo de unidad interna desde el catálogo tipos_empaque.
+
+        Añade al final una entrada centinela para crear un tipo al vuelo.
+        Si `seleccion` (nombre) se indica, la deja seleccionada.
+        """
+        self.cmb_sub_nom.blockSignals(True)
+        self.cmb_sub_nom.clear()
+        rows = self.db.fetch_all("SELECT nombre FROM tipos_empaque ORDER BY nombre")
+        for r in rows:
+            self.cmb_sub_nom.addItem(r[0], r[0])
+        self.cmb_sub_nom.addItem(self._SENTINEL_NUEVO, None)
+
+        if seleccion:
+            idx = self.cmb_sub_nom.findText(seleccion)
+            if idx < 0:
+                # Valor histórico fuera del catálogo: lo insertamos y recargamos
+                self.cmb_sub_nom.insertItem(0, seleccion, seleccion)
+                idx = 0
+            self.cmb_sub_nom.setCurrentIndex(idx)
+        elif self.cmb_sub_nom.count() > 1:
+            self.cmb_sub_nom.setCurrentIndex(0)
+
+        self._tipo_empaque_prev = self.cmb_sub_nom.currentIndex()
+        self.cmb_sub_nom.blockSignals(False)
+
+    def _on_tipo_empaque_changed(self, index):
+        # Si se eligió el centinela, pedir nombre y crear el tipo al vuelo
+        if self.cmb_sub_nom.itemText(index) != self._SENTINEL_NUEVO:
+            self._tipo_empaque_prev = index
+            return
+
+        nombre, ok = QInputDialog.getText(
+            self, "Nuevo Tipo de Empaque", "Nombre del tipo de empaque:"
+        )
+        nombre = nombre.strip() if ok else ""
+        if not nombre:
+            # Cancelado o vacío: revertir a la selección previa
+            self.cmb_sub_nom.setCurrentIndex(self._tipo_empaque_prev)
+            return
+
+        try:
+            self.db.execute_query(
+                "INSERT OR IGNORE INTO tipos_empaque (nombre) VALUES (?)", (nombre,)
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+            self.cmb_sub_nom.setCurrentIndex(self._tipo_empaque_prev)
+            return
+
+        self._cargar_tipos_empaque(seleccion=nombre)
 
     def update_labels(self):
         data = self.cmb_insumo.currentData()
@@ -692,7 +754,7 @@ class PresentacionDialog(QDialog):
             if comp_rows:
                 c_row = comp_rows[0]
                 self.chk_detalle.setChecked(True)
-                self.txt_sub_nom.setText(c_row[0])
+                self._cargar_tipos_empaque(seleccion=c_row[0])
                 self.spin_cant.setValue(c_row[1])
                 self.spin_peso_uni.setValue(c_row[2])
             else:
@@ -716,6 +778,15 @@ class PresentacionDialog(QDialog):
             return QMessageBox.warning(
                 self, "Error", "Debe proporcionar un nombre para el empaque"
             )
+
+        # Validar unidad interna cuando es empaque compuesto
+        sub_nom = ""
+        if self.chk_detalle.isChecked():
+            sub_nom = self.cmb_sub_nom.currentData()
+            if not sub_nom:
+                return QMessageBox.warning(
+                    self, "Error", "Seleccione la unidad interna del empaque compuesto"
+                )
 
         costo_u = precio / total
         hoy = QDate.currentDate().toString("yyyy-MM-dd")
@@ -773,7 +844,7 @@ class PresentacionDialog(QDialog):
                        VALUES (?,?,?,?)""",
                     (
                         pid,
-                        self.txt_sub_nom.text(),
+                        sub_nom,
                         self.spin_cant.value(),
                         self.spin_peso_uni.value(),
                     ),
@@ -1171,6 +1242,158 @@ class TabCategorias(QWidget):
             try:
                 self.db.execute_query(
                     "DELETE FROM categorias_insumos WHERE id=?", (id_cat,)
+                )
+                self.cargar_datos()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", str(e))
+
+
+# =============================================================================
+# PESTAÑA 4: TIPOS DE EMPAQUE (unidad interna de empaques compuestos)
+# =============================================================================
+class TabTiposEmpaque(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        info = QLabel(
+            "Catálogo de unidades internas para empaques compuestos "
+            "(ej. saco, bolsa, paquete). Se usan al definir Presentaciones de Compra."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#666666; font-size:11px;")
+        layout.addWidget(info)
+
+        action_layout = QHBoxLayout()
+
+        btn_add = QPushButton("Nuevo Tipo de Empaque")
+        btn_add.setProperty("class", "btn-success")
+        btn_add.clicked.connect(self.abrir_form_crear)
+
+        btn_edit = QPushButton("Editar Seleccionado")
+        btn_edit.clicked.connect(self.abrir_form_editar)
+
+        btn_del = QPushButton("Eliminar")
+        btn_del.setProperty("class", "btn-danger")
+        btn_del.clicked.connect(self.eliminar_registro)
+
+        action_layout.addWidget(btn_add)
+        action_layout.addWidget(btn_edit)
+        action_layout.addWidget(btn_del)
+        action_layout.addStretch()
+        layout.addLayout(action_layout)
+
+        # Tabla
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["ID", "Nombre"])
+        self.table.setWordWrap(True)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        layout.addWidget(self.table)
+
+        self.setLayout(layout)
+        self.cargar_datos()
+
+    def cargar_datos(self):
+        rows = self.db.fetch_all("SELECT id, nombre FROM tipos_empaque ORDER BY nombre")
+        self.table.setRowCount(0)
+        for row_idx, row_data in enumerate(rows):
+            self.table.insertRow(row_idx)
+            self.table.setItem(row_idx, 0, NumericItem(str(row_data[0])))
+            self.table.setItem(row_idx, 1, QTableWidgetItem(str(row_data[1])))
+        self.table.resizeColumnsToContents()
+
+    def abrir_form_crear(self):
+        nombre, ok = QInputDialog.getText(
+            self, "Nuevo Tipo de Empaque", "Nombre (ej. Saco):"
+        )
+        if not ok:
+            return
+        nombre = nombre.strip()
+        if not nombre:
+            return
+        try:
+            self.db.execute_query(
+                "INSERT INTO tipos_empaque (nombre) VALUES (?)", (nombre,)
+            )
+            self.cargar_datos()
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Error", f"No se pudo crear (¿nombre duplicado?): {e}"
+            )
+
+    def abrir_form_editar(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un tipo de empaque para editar."
+            )
+        id_tipo = self.table.item(row, 0).text()
+        nombre_actual = self.table.item(row, 1).text()
+
+        nombre_nuevo, ok = QInputDialog.getText(
+            self, "Editar Tipo de Empaque", "Nombre:", text=nombre_actual
+        )
+        if not ok:
+            return
+        nombre_nuevo = nombre_nuevo.strip()
+        if not nombre_nuevo or nombre_nuevo == nombre_actual:
+            return
+        try:
+            self.db.execute_query(
+                "UPDATE tipos_empaque SET nombre=? WHERE id=?",
+                (nombre_nuevo, id_tipo),
+            )
+            # Cascada por nombre: mantener consistentes las composiciones existentes
+            self.db.execute_query(
+                "UPDATE composicion_empaque SET nombre_empaque_interno=? WHERE nombre_empaque_interno=?",
+                (nombre_nuevo, nombre_actual),
+            )
+            self.cargar_datos()
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Error", f"No se pudo editar (¿nombre duplicado?): {e}"
+            )
+
+    def eliminar_registro(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione un tipo de empaque para eliminar."
+            )
+        id_tipo = self.table.item(row, 0).text()
+        nombre = self.table.item(row, 1).text()
+
+        uso = self.db.fetch_all(
+            "SELECT COUNT(*) FROM composicion_empaque WHERE nombre_empaque_interno=?",
+            (nombre,),
+        )
+        if uso and uso[0][0] > 0:
+            QMessageBox.warning(
+                self,
+                "No permitido",
+                "No puedes eliminar un tipo de empaque que está en uso "
+                "en una presentación de compra.",
+            )
+            return
+
+        if (
+            QMessageBox.question(self, "Confirmar", "¿Eliminar tipo de empaque?")
+            == QMessageBox.Yes
+        ):
+            try:
+                self.db.execute_query(
+                    "DELETE FROM tipos_empaque WHERE id=?", (id_tipo,)
                 )
                 self.cargar_datos()
             except Exception as e:

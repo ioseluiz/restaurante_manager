@@ -103,6 +103,12 @@ class DatabaseManager:
             );
         """)
         self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tipos_empaque (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL UNIQUE
+            );
+        """)
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS historial_precios_presentacion (
                 id                       INTEGER PRIMARY KEY AUTOINCREMENT,
                 presentacion_id          INTEGER NOT NULL,
@@ -760,6 +766,42 @@ class DatabaseManager:
                 SELECT DISTINCT presentacion_id FROM historial_precios_presentacion
             )
         """)
+
+        # Catálogo de tipos de empaque (unidad interna de empaques compuestos)
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tipos_empaque (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL UNIQUE
+                )
+            """)
+        except Exception:
+            pass
+
+        # Seed de tipos por defecto (INSERT OR IGNORE respeta personalizaciones)
+        for nombre in [
+            "Saco", "Bolsa", "Paquete", "Caja", "Lata",
+            "Botella", "Frasco", "Bandeja", "Blister", "Unidad",
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO tipos_empaque (nombre) VALUES (?)",
+                    (nombre,),
+                )
+            except Exception:
+                pass
+
+        # Backfill: incorporar al catálogo los valores escritos a mano en composiciones
+        try:
+            self.cursor.execute("""
+                INSERT OR IGNORE INTO tipos_empaque (nombre)
+                SELECT DISTINCT TRIM(nombre_empaque_interno)
+                FROM composicion_empaque
+                WHERE nombre_empaque_interno IS NOT NULL
+                  AND TRIM(nombre_empaque_interno) <> ''
+            """)
+        except Exception:
+            pass
 
         self.conn.commit()
 
