@@ -16,6 +16,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox
 )
 from PyQt5.QtCore import Qt, QDate
+from app.views.widgets import SearchableComboBox
 
 class NumericItem(QTableWidgetItem):
     def __lt__(self, other):
@@ -71,7 +72,7 @@ class NuevoAbastecimientoDialog(QDialog):
         layout.addWidget(lbl_detalles)
 
         add_item_layout = QHBoxLayout()
-        self.insumo_combo = QComboBox()
+        self.insumo_combo = SearchableComboBox(placeholder="Escriba para buscar insumo…")
         self.insumo_combo.setMinimumWidth(200)
         add_item_layout.addWidget(QLabel("Insumo:"))
         add_item_layout.addWidget(self.insumo_combo)

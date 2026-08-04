@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
 )
 from PyQt5.QtCore import Qt
+from app.views.widgets import SearchableComboBox
 
 
 # Clase auxiliar para ordenar números correctamente (1, 2, 10 en lugar de 1, 10, 2)
@@ -185,7 +186,7 @@ class RecetaEditorDialog(QDialog):
         form_group = QWidget()
         form_layout = QHBoxLayout(form_group)
 
-        self.combo_insumos = QComboBox()
+        self.combo_insumos = SearchableComboBox(placeholder="Escriba para buscar insumo…")
         self.combo_insumos.setMinimumWidth(250)
 
         self.spin_cantidad = QDoubleSpinBox()
@@ -275,6 +276,9 @@ class RecetaEditorDialog(QDialog):
 
     def agregar_insumo(self):
         insumo_id = self.combo_insumos.currentData()
+        if insumo_id is None:
+            QMessageBox.warning(self, "Error", "Seleccione un insumo de la lista.")
+            return
         cantidad = self.spin_cantidad.value()
 
         if cantidad <= 0:

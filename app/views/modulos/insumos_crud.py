@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
+from app.views.widgets import SearchableComboBox
 from PyQt5.QtWidgets import QSizePolicy
 import datetime
 import matplotlib
@@ -586,7 +587,7 @@ class PresentacionDialog(QDialog):
         layout = QVBoxLayout()
         form = QFormLayout()
 
-        self.cmb_insumo = QComboBox()
+        self.cmb_insumo = SearchableComboBox(placeholder="Escriba para buscar insumo…")
         self.cargar_insumos()
         self.cmb_insumo.currentIndexChanged.connect(self.update_labels)
 
