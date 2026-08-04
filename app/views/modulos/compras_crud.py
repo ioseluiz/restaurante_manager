@@ -28,6 +28,7 @@ import calendar
 
 from app.controllers.kardex_controller import KardexController
 from app.styles import COLORS
+from app.views.widgets import SearchableComboBox
 
 
 class DetalleCompraDialog(QDialog):
@@ -414,7 +415,7 @@ class NuevaCompraDialog(QDialog):
 
         grp_items = QGroupBox("Agregar Productos")
         l_items = QHBoxLayout()
-        self.cmb_pres = QComboBox()
+        self.cmb_pres = SearchableComboBox(placeholder="Escriba para buscar presentación…")
         self.cargar_presentaciones()
         self.spin_cant = QDoubleSpinBox()
         self.spin_cant.setPrefix("Cant: ")
@@ -494,6 +495,10 @@ class NuevaCompraDialog(QDialog):
 
     def agregar_item_lista(self):
         data = self.cmb_pres.currentData()
+        if not data:
+            return QMessageBox.warning(
+                self, "Aviso", "Seleccione una presentación de la lista."
+            )
         pres_id = data["id"]
         texto = self.cmb_pres.currentText()
         cant = self.spin_cant.value()

@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate, QSize
 from PyQt5.QtGui import QColor
+from app.views.widgets import SearchableComboBox
 
 _RED   = "#a20f22"
 _DARK  = "#2c3e50"
@@ -141,7 +142,9 @@ class GraficoPreciosView(QWidget):
         filter_lay.addWidget(self.cmb_categoria)
 
         filter_lay.addWidget(QLabel("Insumo:"))
-        self.cmb_insumo = QComboBox()
+        self.cmb_insumo = SearchableComboBox(
+            placeholder="Escriba para buscar insumo…", start_empty=False
+        )
         self.cmb_insumo.setMinimumWidth(200)
         filter_lay.addWidget(self.cmb_insumo)
 
