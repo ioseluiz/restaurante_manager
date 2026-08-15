@@ -33,6 +33,22 @@ información de todas las otras para calcular el balance mensual.
 El módulo de Consolidados es **autónomo**: no depende de ningún otro módulo
 del sistema ni lo alimenta directamente.
 
+> **Vínculo con Presupuestos (Tipo de Gasto):** los registros de egreso tienen
+> un campo opcional **"Tipo de Gasto"** cuya lista proviene del mismo catálogo
+> de gastos fijos del módulo de Presupuestos. Al etiquetar un egreso con un tipo
+> de gasto (ej. Alquiler, Luz, Agua), ese monto se contabiliza como
+> **ejecutado** en el Control Presupuestal del mes correspondiente.
+>
+> - En **Chequera, Tarjetas (tipo COMPRA) y Yappy** el tipo de gasto se asigna
+>   al **pago completo**.
+> - En **Pagos en Efectivo** el tipo de gasto se asigna **por línea del
+>   desglose**, de modo que un mismo pago puede mezclar un gasto fijo (ej.
+>   $1,200 de alquiler) con otros conceptos y solo la parte etiquetada cuenta
+>   como ese gasto.
+>
+> Es opcional: un egreso sin tipo de gasto sigue contando como egreso general
+> del negocio, solo que no se vincula a ningún gasto fijo presupuestado.
+
 > **Importante:** El **Diario de Ventas** dentro de Consolidados es distinto al
 > **Registro de Ventas Diarias** del módulo de Ventas. Son dos tablas y dos
 > propósitos diferentes:
@@ -213,8 +229,11 @@ gastó el dinero.
 1. Hacer clic en **"+ Nuevo Registro"**.
 2. Completar: fecha, proveedor, descripción y **total del pago**.
 3. En la sección **Desglose de Categorías**, seleccionar la categoría del gasto,
-   ingresar el monto parcial y hacer clic en **"Agregar"**. Repetir por cada
-   categoría que aplique.
+   ingresar el monto parcial, opcionalmente elegir un **Tipo de Gasto** (para
+   vincularlo a un gasto fijo del presupuesto, ej. Alquiler) y hacer clic en
+   **"Agregar"**. Repetir por cada línea que aplique. Se pueden tener varias
+   líneas de la misma categoría con distinto tipo de gasto (ej. dos líneas
+   "Otros": una Alquiler y otra Luz).
 4. Verificar que la **Suma actual** (en verde) coincida con el total ingresado
    antes de guardar. Si hay diferencia el sistema lo marcará en rojo y no
    permitirá guardar hasta que cuadren.
@@ -439,4 +458,5 @@ sistema:
 | `yappy_cuentas` | Cuentas Yappy registradas |
 | `transacciones_yappy` | Pagos realizados por Yappy |
 | `pagos_efectivo` | Pagos en efectivo con desglose por categoría |
+| `detalle_pagos_efectivo` | Líneas del desglose de cada pago en efectivo, con tipo de gasto por línea |
 | `configuracion_comisiones` | Porcentajes y frecuencias de comisión por método de pago |

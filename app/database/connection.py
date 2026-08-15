@@ -302,6 +302,62 @@ class DatabaseManager:
             );
         """)
 
+        # Bloque de planilla del presupuesto: snapshot editable por empleado.
+        # Es independiente del bloque de compras (detalle_presupuestos); solo
+        # se suma al total general y NO participa del Control Presupuestal.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_presupuesto_planilla (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id        INTEGER NOT NULL,
+                empleado_id           INTEGER,
+                empleado_nombre       TEXT,
+                puesto                TEXT,
+                sucursal_nombre       TEXT,
+                salario_hora          REAL DEFAULT 0.0,
+                horas_regulares       REAL DEFAULT 0.0,
+                horas_festivos        REAL DEFAULT 0.0,
+                horas_domingos        REAL DEFAULT 0.0,
+                horas_extra_diurnas   REAL DEFAULT 0.0,
+                horas_extra_nocturnas REAL DEFAULT 0.0,
+                salario_bruto         REAL DEFAULT 0.0,
+                deducciones_colab     REAL DEFAULT 0.0,
+                costo_patronal        REAL DEFAULT 0.0,
+                costo_total           REAL DEFAULT 0.0,
+                observacion           TEXT,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Bloque de gastos fijos del presupuesto (alquiler, luz, agua, otros).
+        # Independiente de compras y planilla; solo suma al total general.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_presupuesto_gastos (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id INTEGER NOT NULL,
+                concepto       TEXT NOT NULL,
+                monto          REAL DEFAULT 0.0,
+                observacion    TEXT,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Catálogo/historial de conceptos de gasto fijo reutilizables.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS gastos_fijos_catalogo (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                concepto TEXT NOT NULL UNIQUE
+            );
+        """)
+        for _concepto in [
+            "Alquiler", "Luz (electricidad)", "Agua", "Internet / Teléfono",
+            "Gas", "Seguros", "Contabilidad / Honorarios", "Publicidad",
+            "Mantenimiento", "Otros",
+        ]:
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO gastos_fijos_catalogo (concepto) VALUES (?)",
+                (_concepto,),
+            )
+
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS chequera (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,6 +412,19 @@ class DatabaseManager:
                 atencion_empleados REAL DEFAULT 0.0,
                 combustible REAL DEFAULT 0.0,
                 medicamentos REAL DEFAULT 0.0
+            );
+        """)
+
+        # Desglose por línea de un pago en efectivo, con tipo de gasto opcional
+        # por línea (para vincular gastos fijos mezclados en un mismo pago).
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_pagos_efectivo (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                pago_efectivo_id INTEGER NOT NULL,
+                categoria        TEXT,
+                monto            REAL DEFAULT 0.0,
+                tipo_gasto       TEXT,
+                FOREIGN KEY (pago_efectivo_id) REFERENCES pagos_efectivo(id) ON DELETE CASCADE
             );
         """)
 
@@ -559,6 +628,20 @@ class DatabaseManager:
         """)
 
         self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS codigos_barras (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo          TEXT NOT NULL UNIQUE,
+                insumo_id       INTEGER NOT NULL,
+                presentacion_id INTEGER,
+                tipo            TEXT DEFAULT 'INTERNO',
+                descripcion     TEXT,
+                fecha_registro  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (insumo_id)       REFERENCES insumos(id) ON DELETE CASCADE,
+                FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE SET NULL
+            );
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_conteo_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conteo_id INTEGER NOT NULL,
@@ -628,6 +711,106 @@ class DatabaseManager:
             self.cursor.execute(
                 "ALTER TABLE diario_ventas ADD COLUMN efectivo REAL DEFAULT 0.0"
             )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: bloque de planilla en presupuestos (instalaciones existentes) ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE presupuestos ADD COLUMN monto_planilla REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_presupuesto_planilla (
+                    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    presupuesto_id        INTEGER NOT NULL,
+                    empleado_id           INTEGER,
+                    empleado_nombre       TEXT,
+                    puesto                TEXT,
+                    sucursal_nombre       TEXT,
+                    salario_hora          REAL DEFAULT 0.0,
+                    horas_regulares       REAL DEFAULT 0.0,
+                    horas_festivos        REAL DEFAULT 0.0,
+                    horas_domingos        REAL DEFAULT 0.0,
+                    horas_extra_diurnas   REAL DEFAULT 0.0,
+                    horas_extra_nocturnas REAL DEFAULT 0.0,
+                    salario_bruto         REAL DEFAULT 0.0,
+                    deducciones_colab     REAL DEFAULT 0.0,
+                    costo_patronal        REAL DEFAULT 0.0,
+                    costo_total           REAL DEFAULT 0.0,
+                    observacion           TEXT,
+                    FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+                )
+            """)
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: bloque de gastos fijos en presupuestos (instalaciones existentes) ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE presupuestos ADD COLUMN monto_gastos REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_presupuesto_gastos (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    presupuesto_id INTEGER NOT NULL,
+                    concepto       TEXT NOT NULL,
+                    monto          REAL DEFAULT 0.0,
+                    observacion    TEXT,
+                    FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+                )
+            """)
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gastos_fijos_catalogo (
+                    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concepto TEXT NOT NULL UNIQUE
+                )
+            """)
+            for _concepto in [
+                "Alquiler", "Luz (electricidad)", "Agua", "Internet / Teléfono",
+                "Gas", "Seguros", "Contabilidad / Honorarios", "Publicidad",
+                "Mantenimiento", "Otros",
+            ]:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO gastos_fijos_catalogo (concepto) VALUES (?)",
+                    (_concepto,),
+                )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: etiqueta "tipo de gasto" en los egresos de consolidados,
+        #            para vincular lo ejecutado con los gastos fijos del presupuesto.
+        for _tabla in ["chequera", "transacciones_tarjeta",
+                       "transacciones_yappy", "pagos_efectivo"]:
+            try:
+                self.cursor.execute(
+                    f"ALTER TABLE {_tabla} ADD COLUMN tipo_gasto TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_pagos_efectivo (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pago_efectivo_id INTEGER NOT NULL,
+                    categoria        TEXT,
+                    monto            REAL DEFAULT 0.0,
+                    tipo_gasto       TEXT,
+                    FOREIGN KEY (pago_efectivo_id) REFERENCES pagos_efectivo(id) ON DELETE CASCADE
+                )
+            """)
         except sqlite3.OperationalError:
             pass
 
@@ -799,6 +982,47 @@ class DatabaseManager:
                 FROM composicion_empaque
                 WHERE nombre_empaque_interno IS NOT NULL
                   AND TRIM(nombre_empaque_interno) <> ''
+            """)
+        except Exception:
+            pass
+
+        # Códigos de barras / QR (inventario escaneable) — instalaciones existentes
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS codigos_barras (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo          TEXT NOT NULL UNIQUE,
+                    insumo_id       INTEGER NOT NULL,
+                    presentacion_id INTEGER,
+                    tipo            TEXT DEFAULT 'INTERNO',
+                    descripcion     TEXT,
+                    fecha_registro  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (insumo_id)       REFERENCES insumos(id) ON DELETE CASCADE,
+                    FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE SET NULL
+                )
+            """)
+        except Exception:
+            pass
+
+        # Backfill de costo por unidad base (valoración de inventario):
+        # los insumos con costo 0 se inicializan con el promedio del costo unitario
+        # calculado de sus presentaciones. Idempotente: solo toca los que están en 0,
+        # así no sobrescribe el promedio ponderado (WAC) que se mantiene al recibir.
+        try:
+            self.cursor.execute("""
+                UPDATE insumos
+                SET costo_unitario = (
+                    SELECT AVG(pc.costo_unitario_calculado)
+                    FROM presentaciones_compra pc
+                    WHERE pc.insumo_id = insumos.id
+                      AND pc.costo_unitario_calculado > 0
+                )
+                WHERE COALESCE(costo_unitario, 0) = 0
+                  AND EXISTS (
+                    SELECT 1 FROM presentaciones_compra pc
+                    WHERE pc.insumo_id = insumos.id
+                      AND pc.costo_unitario_calculado > 0
+                  )
             """)
         except Exception:
             pass
