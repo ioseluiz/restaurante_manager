@@ -32,11 +32,13 @@ from app.views.modulos.ventas import VentasModulo
 
 from app.views.modulos.inventario_view import InventarioView
 from app.views.modulos.conteo_inventario import ConteoInventarioView
+from app.views.modulos.etiquetas_view import EtiquetasView
 from app.views.dashboard import DashboardView
 from app.views.modulos.consolidados_view import ConsolidadosView
 from app.views.modulos.sucursales_crud import SucursalesCRUD
 from app.views.modulos.grafico_precios import GraficoPreciosView
 from app.views.modulos.planilla import PlanillaView
+from app.views.modulos.rentabilidad_view import RentabilidadView
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -251,6 +253,11 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_insumos)
 
+        self.btn_etiquetas = self.create_nav_button(
+            "Etiquetas / Códigos", "assets/icons/nav_etiquetas.svg", self.show_etiquetas
+        )
+        sidebar_layout.addWidget(self.btn_etiquetas)
+
         self.btn_recetas = self.create_nav_button(
             "Recetas (Fichas)", "assets/icons/nav_recetas.svg", self.show_recetas
         )
@@ -271,8 +278,13 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_consolidados)
 
+        self.btn_rentabilidad = self.create_nav_button(
+            "Rentabilidad", "assets/icons/nav_rentabilidad.svg", self.show_rentabilidad
+        )
+        sidebar_layout.addWidget(self.btn_rentabilidad)
+
         self.btn_grafico_precios = self.create_nav_button(
-            "Análisis de Precios", "assets/icons/nav_insumos.svg", self.show_grafico_precios
+            "Análisis de Precios", "assets/icons/nav_grafico_precios.svg", self.show_grafico_precios
         )
         sidebar_layout.addWidget(self.btn_grafico_precios)
 
@@ -494,6 +506,9 @@ class MainWindow(QMainWindow):
     def show_insumos(self):
         self.load_module("insumos", InsumosCRUD, "Catálogo de Insumos", needs_db=True)
 
+    def show_etiquetas(self):
+        self.load_module("etiquetas", EtiquetasView, "Etiquetas y Códigos", needs_db=True)
+
     def show_menu(self):
         self.load_module("menu", MenuCRUD, "Gestión de Menú", needs_db=True)
 
@@ -505,6 +520,9 @@ class MainWindow(QMainWindow):
 
     def show_consolidados(self):
         self.load_module("consolidados", ConsolidadosView, "Módulo de Consolidados", needs_db=True)
+
+    def show_rentabilidad(self):
+        self.load_module("rentabilidad", RentabilidadView, "Análisis de Rentabilidad", needs_db=True)
 
     def show_grafico_precios(self):
         self.load_module("grafico_precios", GraficoPreciosView, "Análisis de Precios", needs_db=True)

@@ -331,6 +331,13 @@ class InsumoDialog(QDialog):
         layout.addRow("Grupo de Cálculo:", self.cmb_grupo_calc)
         layout.addRow("Factor Cálculo:", self.spin_factor)
 
+        self.btn_codigos = QPushButton("Códigos de barras / QR…")
+        self.btn_codigos.clicked.connect(self._abrir_codigos)
+        self.btn_codigos.setEnabled(bool(self.insumo_id))
+        if not self.insumo_id:
+            self.btn_codigos.setToolTip("Guarde el insumo primero para asignarle códigos.")
+        layout.addRow(self.btn_codigos)
+
         btn_save = QPushButton("Guardar")
         btn_save.setProperty("class", "btn-success")
         btn_save.clicked.connect(self.guardar)
@@ -339,6 +346,18 @@ class InsumoDialog(QDialog):
 
         if self.insumo_id:
             self.cargar_datos_edicion()
+
+    def _abrir_codigos(self):
+        if not self.insumo_id:
+            return
+        from app.controllers.codigos_controller import CodigosController
+        from app.views.modulos.etiquetas_view import CodigosInsumoDialog
+
+        ctrl = CodigosController(self.db)
+        dlg = CodigosInsumoDialog(
+            self.db, ctrl, self.insumo_id, self.txt_nombre.text().strip(), parent=self
+        )
+        dlg.exec_()
 
     def cargar_datos_edicion(self):
         query = "SELECT nombre, unidad_base_id, categoria_id, grupo_calculo, factor_calculo FROM insumos WHERE id=?"
