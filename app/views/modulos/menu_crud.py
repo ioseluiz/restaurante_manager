@@ -133,7 +133,10 @@ class MenuCRUD(QWidget):
         """Consulta la BD y rellena la tabla"""
         self.table.setSortingEnabled(False)
 
-        query = "SELECT id, codigo, nombre, precio_venta, es_preparado FROM menu_items"
+        query = (
+            "SELECT id, codigo, nombre, precio_venta, es_preparado FROM menu_items "
+            "WHERE COALESCE(es_componente, 0) = 0"
+        )
         rows = self.db.fetch_all(query)
 
         self.table.setRowCount(0)

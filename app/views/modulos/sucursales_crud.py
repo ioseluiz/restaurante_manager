@@ -36,7 +36,10 @@ class SucursalDialog(QDialog):
         self.nombre_input = QLineEdit()
         self.direccion_input = QLineEdit()
         self.telefono_input = QLineEdit()
-        self.es_principal_checkbox = QCheckBox("Es sucursal principal (Central)")
+        self.es_principal_checkbox = QCheckBox("Es la sucursal de ESTA instalación (donde se usa este programa)")
+        self.es_principal_checkbox.setToolTip(
+            "Solo una sucursal puede estar marcada. El programa la usa para saber si un abastecimiento "
+            "interno envía (baja el stock) o recibe (sube el stock) en esta instalación.")
 
         form.addRow("Nombre:", self.nombre_input)
         form.addRow("Dirección:", self.direccion_input)
@@ -138,7 +141,7 @@ class SucursalesCRUD(QWidget):
 
         self.table = QTableWidget()
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Dirección", "Teléfono", "Principal"])
+        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Dirección", "Teléfono", "Esta instalación"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)

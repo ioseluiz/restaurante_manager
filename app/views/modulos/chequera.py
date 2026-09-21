@@ -13,11 +13,14 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QDateEdit,
     QDoubleSpinBox,
-    QFileDialog
+    QFileDialog,
+    QComboBox,
 )
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 import csv
+
+from app.utils.gastos_fijos import poblar_combo, valor_combo
 
 
 class NumericItem(QTableWidgetItem):
@@ -55,11 +58,15 @@ class ChequeraDialog(QDialog):
         self.monto_input.setMaximum(999999999.99)
         self.monto_input.setDecimals(2)
 
+        self.tipo_gasto_input = QComboBox()
+        poblar_combo(self.db, self.tipo_gasto_input)
+
         form.addRow("Fecha:", self.fecha_input)
         form.addRow("No.CK:", self.nock_input)
         form.addRow("Nombre Cheque:", self.nombre_input)
         form.addRow("Detalle:", self.detalle_input)
         form.addRow("Monto:", self.monto_input)
+        form.addRow("Tipo de Gasto:", self.tipo_gasto_input)
 
         if self.data:
             # Edit mode
@@ -68,6 +75,7 @@ class ChequeraDialog(QDialog):
             self.nombre_input.setText(self.data.get("nombre_cheque", ""))
             self.detalle_input.setText(self.data.get("detalle", ""))
             self.monto_input.setValue(float(self.data.get("monto", 0.0)))
+            poblar_combo(self.db, self.tipo_gasto_input, self.data.get("tipo_gasto"))
 
         layout.addLayout(form)
 
@@ -97,20 +105,21 @@ class ChequeraDialog(QDialog):
         nombre = self.nombre_input.text().strip()
         detalle = self.detalle_input.text().strip()
         monto = self.monto_input.value()
+        tipo_gasto = valor_combo(self.tipo_gasto_input)
 
         if self.data:
             query = """
-                UPDATE chequera 
-                SET fecha=?, no_ck=?, nombre_cheque=?, detalle=?, monto=?
+                UPDATE chequera
+                SET fecha=?, no_ck=?, nombre_cheque=?, detalle=?, monto=?, tipo_gasto=?
                 WHERE id=?
             """
-            self.db.cursor.execute(query, (fecha, no_ck, nombre, detalle, monto, self.data["id"]))
+            self.db.cursor.execute(query, (fecha, no_ck, nombre, detalle, monto, tipo_gasto, self.data["id"]))
         else:
             query = """
-                INSERT INTO chequera (fecha, no_ck, nombre_cheque, detalle, monto)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO chequera (fecha, no_ck, nombre_cheque, detalle, monto, tipo_gasto)
+                VALUES (?, ?, ?, ?, ?, ?)
             """
-            self.db.cursor.execute(query, (fecha, no_ck, nombre, detalle, monto))
+            self.db.cursor.execute(query, (fecha, no_ck, nombre, detalle, monto, tipo_gasto))
         self.db.conn.commit()
         return True
 
@@ -125,6 +134,7 @@ class ChequeraDialog(QDialog):
             self.nombre_input.clear()
             self.detalle_input.clear()
             self.monto_input.setValue(0.0)
+            self.tipo_gasto_input.setCurrentIndex(0)
             self.nock_input.setFocus()
             # No cerramos el diálogo
 
@@ -297,13 +307,18 @@ class ChequeraCRUD(QWidget):
         if row < 0:
             return QMessageBox.warning(self, "Aviso", "Seleccione un registro para editar.")
 
+        reg_id = self.table.item(row, 0).text()
+        tipo_gasto_row = self.db.fetch_one(
+            "SELECT tipo_gasto FROM chequera WHERE id = ?", (reg_id,)
+        )
         data = {
-            "id": self.table.item(row, 0).text(),
+            "id": reg_id,
             "fecha": self.table.item(row, 1).text(),
             "no_ck": self.table.item(row, 2).text(),
             "nombre_cheque": self.table.item(row, 3).text(),
             "detalle": self.table.item(row, 4).text(),
             "monto": self.table.item(row, 5).text(),
+            "tipo_gasto": tipo_gasto_row[0] if tipo_gasto_row else None,
         }
 
         dlg = ChequeraDialog(self.db, data=data, parent=self)

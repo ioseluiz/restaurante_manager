@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 import calendar
 
 from app.controllers.kardex_controller import KardexController
+from app.controllers.codigos_controller import CodigosController
 from app.styles import COLORS
 from app.views.widgets import SearchableComboBox
 
@@ -264,15 +265,10 @@ class TabGestionCompras(QWidget):
                 self, "Info", "Esta compra ya fue recibida e inventariada."
             )
 
-        if (
-            QMessageBox.question(
-                self,
-                "Confirmar",
-                "¿Confirmar recepción? Esto sumará los insumos al inventario.",
-            )
-            == QMessageBox.Yes
-        ):
-            self.procesar_recepcion(cid)
+        dlg = RecepcionDialog(self.db, int(cid), parent=self)
+        dlg.exec_()
+        if dlg.aplicado:
+            self.cargar_compras()
 
     def procesar_recepcion(self, compra_id):
         try:
@@ -374,6 +370,257 @@ class TabGestionCompras(QWidget):
                 QMessageBox.information(self, "Éxito", "Compra eliminada.")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo eliminar: {str(e)}")
+
+
+class RecepcionDialog(QDialog):
+    """Recepción de una compra con escáner o edición manual.
+
+    Muestra las líneas de la compra con la cantidad Pedida y una columna
+    Recibida editable (por defecto = pedida). Se puede escanear cada producto
+    para sumar 1 unidad de su presentación, o ajustar a mano. Al aplicar, lo
+    recibido se suma al inventario (Kardex).
+    """
+
+    def __init__(self, db, compra_id, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.compra_id = compra_id
+        self.codigos_ctrl = CodigosController(db)
+        self._filas = []
+        self.aplicado = False
+        self.setWindowTitle(f"Recepción de Compra #{compra_id}")
+        self.setMinimumSize(840, 520)
+        self._build_ui()
+        self._cargar_lineas()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+
+        info = QLabel(
+            "Escanee cada producto que llega para sumar 1 unidad de su presentación, "
+            "o edite la columna <b>Recibido</b> a mano. Al aplicar, lo recibido se "
+            "suma al inventario."
+        )
+        info.setWordWrap(True)
+        info.setStyleSheet("color:#555555; font-size:11px;")
+        layout.addWidget(info)
+
+        scan_row = QHBoxLayout()
+        lbl = QLabel("📷 Escanear:")
+        lbl.setStyleSheet("font-weight:bold; color:#a20f22;")
+        self.txt_scan = QLineEdit()
+        self.txt_scan.setPlaceholderText(
+            "Coloque el cursor aquí y escanee el producto recibido…"
+        )
+        self.txt_scan.returnPressed.connect(self._on_scan)
+        scan_row.addWidget(lbl)
+        scan_row.addWidget(self.txt_scan, 1)
+        layout.addLayout(scan_row)
+
+        self.tbl = QTableWidget()
+        self.tbl.setColumnCount(5)
+        self.tbl.setHorizontalHeaderLabels(
+            ["Insumo", "Presentación", "Pedido", "Recibido", "Entra al stock"]
+        )
+        hdr = self.tbl.horizontalHeader()
+        hdr.setSectionResizeMode(0, QHeaderView.Stretch)
+        for c in (1, 2, 3, 4):
+            hdr.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        self.tbl.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl.setSelectionBehavior(QTableWidget.SelectRows)
+        self.tbl.setAlternatingRowColors(True)
+        self.tbl.verticalHeader().setDefaultSectionSize(34)
+        layout.addWidget(self.tbl, 1)
+
+        self.lbl_status = QLabel("")
+        self.lbl_status.setMinimumHeight(20)
+        layout.addWidget(self.lbl_status)
+
+        btn_row = QHBoxLayout()
+        btn_igualar = QPushButton("Recibido = Pedido")
+        btn_igualar.clicked.connect(self._igualar)
+        btn_row.addWidget(btn_igualar)
+        btn_row.addStretch()
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.clicked.connect(self.reject)
+        btn_aplicar = QPushButton("Aplicar Recepción y Sumar a Stock")
+        btn_aplicar.setStyleSheet(f"background-color:{COLORS['success']}; color:white;")
+        btn_aplicar.clicked.connect(self._aplicar)
+        btn_row.addWidget(btn_cancelar)
+        btn_row.addWidget(btn_aplicar)
+        layout.addLayout(btn_row)
+
+        self.txt_scan.setFocus()
+
+    def _cargar_lineas(self):
+        detalles = self.db.fetch_all(
+            """SELECT dc.presentacion_id, pc.insumo_id, i.nombre, pc.nombre,
+                      pc.cantidad_contenido, dc.cantidad, dc.precio_unitario
+               FROM detalle_compras dc
+               JOIN presentaciones_compra pc ON pc.id = dc.presentacion_id
+               JOIN insumos i ON i.id = pc.insumo_id
+               WHERE dc.compra_id = ?""",
+            (self.compra_id,),
+        )
+        self._filas = []
+        self.tbl.setRowCount(len(detalles))
+        for r, det in enumerate(detalles):
+            pres_id, insumo_id, insumo_nombre, pres_nombre, contenido, pedido, precio_unit = det
+            contenido = float(contenido or 1.0)
+            # Costo por unidad base de esta compra (para el promedio ponderado)
+            costo_base = (float(precio_unit) / contenido) if contenido else 0.0
+
+            item_i = QTableWidgetItem(insumo_nombre)
+            item_i.setFlags(item_i.flags() & ~Qt.ItemIsEditable)
+            self.tbl.setItem(r, 0, item_i)
+
+            item_p = QTableWidgetItem(pres_nombre or "")
+            item_p.setFlags(item_p.flags() & ~Qt.ItemIsEditable)
+            self.tbl.setItem(r, 1, item_p)
+
+            item_ped = QTableWidgetItem(f"{pedido:g}")
+            item_ped.setTextAlignment(Qt.AlignCenter)
+            item_ped.setFlags(item_ped.flags() & ~Qt.ItemIsEditable)
+            self.tbl.setItem(r, 2, item_ped)
+
+            spin = QDoubleSpinBox()
+            spin.setRange(0, 9999999)
+            spin.setDecimals(2)
+            spin.setValue(float(pedido))
+            self.tbl.setCellWidget(r, 3, spin)
+
+            lbl_eq = QLabel()
+            lbl_eq.setAlignment(Qt.AlignCenter)
+            self.tbl.setCellWidget(r, 4, lbl_eq)
+
+            fila = {
+                "row": r, "pres_id": pres_id, "insumo_id": insumo_id,
+                "contenido": contenido, "costo_base": costo_base,
+                "spin": spin, "lbl": lbl_eq,
+            }
+            self._filas.append(fila)
+            spin.valueChanged.connect(lambda _v, f=fila: self._actualizar_equiv(f))
+            self._actualizar_equiv(fila)
+
+    def _actualizar_equiv(self, fila):
+        entra = fila["spin"].value() * fila["contenido"]
+        fila["lbl"].setText(f"{entra:g}")
+
+    def _igualar(self):
+        for f in self._filas:
+            pedido = float(self.tbl.item(f["row"], 2).text())
+            f["spin"].setValue(pedido)
+        self._status("Recibido igualado a lo pedido.", error=False)
+
+    def _on_scan(self):
+        codigo = self.txt_scan.text().strip()
+        self.txt_scan.clear()
+        if not codigo:
+            return
+        info = self.codigos_ctrl.resolver_codigo(codigo)
+        if not info:
+            self._status(f"Código '{codigo}' no registrado.", error=True)
+            self.txt_scan.setFocus()
+            return
+
+        # Coincidencia: primero por presentación exacta, luego por insumo
+        fila = None
+        if info.get("presentacion_id"):
+            fila = next(
+                (f for f in self._filas if f["pres_id"] == info["presentacion_id"]), None
+            )
+        if fila is None:
+            fila = next(
+                (f for f in self._filas if f["insumo_id"] == info["insumo_id"]), None
+            )
+        if fila is None:
+            self._status(f"'{info['nombre']}' no está en esta compra.", error=True)
+            self.txt_scan.setFocus()
+            return
+
+        fila["spin"].setValue(fila["spin"].value() + 1)
+        self.tbl.selectRow(fila["row"])
+        self.tbl.scrollToItem(self.tbl.item(fila["row"], 0))
+        self._status(f"✓ +1  {info['nombre']}", error=False)
+        self.txt_scan.setFocus()
+
+    def _status(self, texto, error=False):
+        color = "#a20f22" if error else "#2e7d32"
+        self.lbl_status.setStyleSheet(f"font-weight:bold; color:{color};")
+        self.lbl_status.setText(texto)
+
+    def _aplicar(self):
+        estado_row = self.db.fetch_one(
+            "SELECT estado FROM compras WHERE id=?", (self.compra_id,)
+        )
+        if estado_row and estado_row[0] == "RECIBIDO":
+            QMessageBox.information(self, "Info", "Esta compra ya fue recibida.")
+            return self.reject()
+
+        if not any(f["spin"].value() > 0 for f in self._filas):
+            self._status("No hay cantidades recibidas para aplicar.", error=True)
+            return
+
+        if QMessageBox.question(
+            self, "Confirmar",
+            "¿Aplicar la recepción? Las cantidades recibidas se sumarán al inventario.",
+            QMessageBox.Yes | QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+
+        try:
+            kardex = KardexController(self.db)
+            for f in self._filas:
+                recibido = f["spin"].value()
+                if recibido <= 0:
+                    continue
+                cantidad_total = recibido * f["contenido"]
+                pres = self.db.fetch_one(
+                    "SELECT nombre FROM presentaciones_compra WHERE id=?", (f["pres_id"],)
+                )
+                nombre_pres = pres[0] if pres else ""
+
+                # Costo promedio ponderado: leer stock/costo ANTES del ingreso
+                prev = self.db.fetch_one(
+                    "SELECT stock_actual, costo_unitario FROM insumos WHERE id=?",
+                    (f["insumo_id"],),
+                )
+                stock_viejo = (prev[0] or 0.0) if prev else 0.0
+                costo_viejo = (prev[1] or 0.0) if prev else 0.0
+
+                kardex.registrar_movimiento(
+                    insumo_id=f["insumo_id"],
+                    cantidad=cantidad_total,
+                    tipo="COMPRA",
+                    referencia_id=self.compra_id,
+                    observacion=f"Entrada por Compra (Presentación: {nombre_pres})",
+                )
+
+                # Recalcular WAC y actualizar costo_unitario del insumo
+                costo_entrada = f["costo_base"]
+                if costo_entrada > 0:
+                    nuevo_stock = stock_viejo + cantidad_total
+                    if nuevo_stock > 0 and costo_viejo > 0:
+                        nuevo_costo = (
+                            stock_viejo * costo_viejo + cantidad_total * costo_entrada
+                        ) / nuevo_stock
+                    else:
+                        # Sin costo previo (o stock previo nulo) → usar el costo de entrada
+                        nuevo_costo = costo_entrada
+                    self.db.execute_query(
+                        "UPDATE insumos SET costo_unitario=? WHERE id=?",
+                        (round(nuevo_costo, 6), f["insumo_id"]),
+                    )
+            self.db.execute_query(
+                "UPDATE compras SET estado='RECIBIDO' WHERE id=?", (self.compra_id,)
+            )
+            self.aplicado = True
+            QMessageBox.information(
+                self, "Éxito", "Inventario actualizado y registrado en Kardex."
+            )
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
 
 class NuevaCompraDialog(QDialog):

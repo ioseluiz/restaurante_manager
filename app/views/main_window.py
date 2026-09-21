@@ -14,10 +14,14 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QButtonGroup,
     QApplication,
+    QAction,
 )
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QKeySequence
 from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from app.utils.button_icons import auto_icon_buttons
+from app.utils import ayuda
+from app.version import etiqueta_version
+from app.views.ayuda_dialog import AyudaDialog
 
 # --- IMPORTACIÓN DE VISTAS ---
 from app.views.modulos.insumos_crud import InsumosCRUD
@@ -32,11 +36,14 @@ from app.views.modulos.ventas import VentasModulo
 
 from app.views.modulos.inventario_view import InventarioView
 from app.views.modulos.conteo_inventario import ConteoInventarioView
+from app.views.modulos.etiquetas_view import EtiquetasView
 from app.views.dashboard import DashboardView
 from app.views.modulos.consolidados_view import ConsolidadosView
 from app.views.modulos.sucursales_crud import SucursalesCRUD
 from app.views.modulos.grafico_precios import GraficoPreciosView
 from app.views.modulos.planilla import PlanillaView
+from app.views.modulos.rentabilidad_view import RentabilidadView
+from app.views.modulos.costo_platos import CostoPlatosView
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -104,13 +111,16 @@ class MainWindow(QMainWindow):
         self.auth = auth_controller
         self.logout_requested = False
         self.modules = {}
+        self._modulo_actual = None  # clave del módulo a la vista (para F1)
+        self._ayuda_dialog = None
         self.sidebar_collapsed = False
         self._nav_buttons = []  # list of {"btn": QPushButton, "text": str}
 
-        self.setWindowTitle("Sistema de Gestión de Restaurante")
+        self.setWindowTitle(f"Sistema de Gestión de Restaurante — {etiqueta_version()}")
         self.setWindowIcon(QIcon(ruta_recurso("assets/icons/app.ico")))
 
         self.init_ui()
+        self.setup_menubar()
         self.setup_statusbar()
         self._fit_to_screen()
 
@@ -123,6 +133,45 @@ class MainWindow(QMainWindow):
             screen.x() + (screen.width() - w) // 2,
             screen.y() + (screen.height() - h) // 2,
         )
+
+    def setup_menubar(self):
+        menu_ayuda = self.menuBar().addMenu("&Ayuda")
+
+        act_modulo = QAction("Ayuda de este módulo", self)
+        act_modulo.setShortcut(QKeySequence("F1"))
+        act_modulo.setStatusTip("Explica cómo usar el módulo que tiene abierto")
+        act_modulo.triggered.connect(lambda: self.mostrar_ayuda(self._modulo_actual))
+        menu_ayuda.addAction(act_modulo)
+
+        act_indice = QAction("Índice de ayuda…", self)
+        act_indice.setShortcut(QKeySequence("Ctrl+F1"))
+        act_indice.setStatusTip("Guía de todos los módulos, con buscador")
+        act_indice.triggered.connect(lambda: self.mostrar_ayuda(ayuda.TEMA_POR_DEFECTO))
+        menu_ayuda.addAction(act_indice)
+
+        menu_ayuda.addSeparator()
+        act_acerca = QAction("Acerca de Italos Manager…", self)
+        act_acerca.setStatusTip("Versión de la aplicación y base de datos en uso")
+        act_acerca.triggered.connect(self.mostrar_acerca_de)
+        menu_ayuda.addAction(act_acerca)
+
+    def mostrar_acerca_de(self):
+        ruta_bd = getattr(self.db, "db_path", "—")
+        QMessageBox.about(
+            self,
+            "Acerca de Italos Manager",
+            "<h3>Italos Manager</h3>"
+            "Sistema de gestión de restaurante.<br><br>"
+            f"<b>Versión:</b> {etiqueta_version()}<br>"
+            f"<b>Base de datos en uso:</b> {ruta_bd}<br><br>"
+            "Indique esta versión cuando reporte un problema.",
+        )
+
+    def mostrar_ayuda(self, clave=None):
+        """Abre la ventana de ayuda en el tema indicado (por defecto, primeros pasos)."""
+        if self._ayuda_dialog is None:
+            self._ayuda_dialog = AyudaDialog(self)
+        self._ayuda_dialog.mostrar_tema(clave or ayuda.TEMA_POR_DEFECTO)
 
     def setup_statusbar(self):
         sb = self.statusBar()
@@ -147,6 +196,12 @@ class MainWindow(QMainWindow):
         lbl_gh.setOpenExternalLinks(True)
         lbl_gh.setStyleSheet("font-size: 11px;")
         gh_row.addWidget(lbl_gh)
+
+        # Versión de la aplicación (a la derecha, junto al crédito de GitHub)
+        lbl_version = QLabel(etiqueta_version())
+        lbl_version.setToolTip("Versión de Italos Manager (Ayuda → Acerca de)")
+        lbl_version.setStyleSheet("font-size: 11px; font-weight: normal; color: #555555; padding-right: 10px;")
+        sb.addPermanentWidget(lbl_version)
 
         sb.addPermanentWidget(gh_widget)
 
@@ -251,6 +306,11 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_insumos)
 
+        self.btn_etiquetas = self.create_nav_button(
+            "Etiquetas / Códigos", "assets/icons/nav_etiquetas.svg", self.show_etiquetas
+        )
+        sidebar_layout.addWidget(self.btn_etiquetas)
+
         self.btn_recetas = self.create_nav_button(
             "Recetas (Fichas)", "assets/icons/nav_recetas.svg", self.show_recetas
         )
@@ -271,8 +331,18 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_consolidados)
 
+        self.btn_rentabilidad = self.create_nav_button(
+            "Rentabilidad", "assets/icons/nav_rentabilidad.svg", self.show_rentabilidad
+        )
+        sidebar_layout.addWidget(self.btn_rentabilidad)
+
+        self.btn_costo_platos = self.create_nav_button(
+            "Costo de Platos", "assets/icons/nav_costo_platos.svg", self.show_costo_platos
+        )
+        sidebar_layout.addWidget(self.btn_costo_platos)
+
         self.btn_grafico_precios = self.create_nav_button(
-            "Análisis de Precios", "assets/icons/nav_insumos.svg", self.show_grafico_precios
+            "Análisis de Precios", "assets/icons/nav_grafico_precios.svg", self.show_grafico_precios
         )
         sidebar_layout.addWidget(self.btn_grafico_precios)
 
@@ -472,6 +542,7 @@ class MainWindow(QMainWindow):
             self.modules[name] = {"instance": instance, "index": index, "title": title}
 
         module_data = self.modules[name]
+        self._modulo_actual = name
         self.stacked_widget.setCurrentIndex(module_data["index"])
 
         if hasattr(module_data["instance"], "cargar_datos"):
@@ -494,6 +565,9 @@ class MainWindow(QMainWindow):
     def show_insumos(self):
         self.load_module("insumos", InsumosCRUD, "Catálogo de Insumos", needs_db=True)
 
+    def show_etiquetas(self):
+        self.load_module("etiquetas", EtiquetasView, "Etiquetas y Códigos", needs_db=True)
+
     def show_menu(self):
         self.load_module("menu", MenuCRUD, "Gestión de Menú", needs_db=True)
 
@@ -505,6 +579,12 @@ class MainWindow(QMainWindow):
 
     def show_consolidados(self):
         self.load_module("consolidados", ConsolidadosView, "Módulo de Consolidados", needs_db=True)
+
+    def show_rentabilidad(self):
+        self.load_module("rentabilidad", RentabilidadView, "Análisis de Rentabilidad", needs_db=True)
+
+    def show_costo_platos(self):
+        self.load_module("costo_platos", CostoPlatosView, "Costo de Platos", needs_db=True)
 
     def show_grafico_precios(self):
         self.load_module("grafico_precios", GraficoPreciosView, "Análisis de Precios", needs_db=True)

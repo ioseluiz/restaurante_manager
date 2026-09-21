@@ -21,9 +21,14 @@ from PyQt5.QtWidgets import (
     QAbstractItemView,
     QTextBrowser,
     QDoubleSpinBox,
+    QTabWidget,
+    QFormLayout,
+    QCheckBox,
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QFont
+
+from app.utils.calculo_planilla import calcular_costo_empleado
 
 DIALOG_STYLES = """
     QDialog {
@@ -78,6 +83,42 @@ def recalcular_total_presupuesto(db, presupuesto_id):
         (total_val, presupuesto_id),
     )
     return total_val
+
+
+def recalcular_total_planilla(db, presupuesto_id):
+    """Suma el costo total (bruto + patronal) del bloque de planilla y lo
+    guarda en presupuestos.monto_planilla. Independiente del bloque de compras."""
+    total = db.fetch_one(
+        "SELECT SUM(costo_total) FROM detalle_presupuesto_planilla WHERE presupuesto_id = ?",
+        (presupuesto_id,),
+    )
+    total_val = total[0] if total and total[0] else 0.0
+    db.execute_query(
+        "UPDATE presupuestos SET monto_planilla = ? WHERE id = ?",
+        (total_val, presupuesto_id),
+    )
+    return total_val
+
+
+def recalcular_total_gastos(db, presupuesto_id):
+    """Suma los gastos fijos del presupuesto y lo guarda en monto_gastos.
+    Independiente de los bloques de compras y planilla."""
+    total = db.fetch_one(
+        "SELECT SUM(monto) FROM detalle_presupuesto_gastos WHERE presupuesto_id = ?",
+        (presupuesto_id,),
+    )
+    total_val = total[0] if total and total[0] else 0.0
+    db.execute_query(
+        "UPDATE presupuestos SET monto_gastos = ? WHERE id = ?",
+        (total_val, presupuesto_id),
+    )
+    return total_val
+
+
+from app.utils.gastos_reales import (  # noqa: F401  (reexport)
+    calcular_planilla_real_mes,
+    ejecutado_gastos_mes,
+)
 
 
 class PresupuestosView(QWidget):
@@ -135,9 +176,9 @@ class PresupuestosView(QWidget):
         layout.addLayout(btn_layout)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(
-            ["Número", "Mes", "Año", "Descripción", "Monto Total Estimado"]
+            ["Número", "Mes", "Año", "Descripción", "Compras", "Planilla", "Gastos", "Total General"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -154,7 +195,11 @@ class PresupuestosView(QWidget):
 
     def cargar_datos(self):
         self.table.setRowCount(0)
-        query = "SELECT id, numero, mes, anio, descripcion, monto_total FROM presupuestos ORDER BY id DESC"
+        query = (
+            "SELECT id, numero, mes, anio, descripcion, monto_total, "
+            "COALESCE(monto_planilla, 0.0), COALESCE(monto_gastos, 0.0) "
+            "FROM presupuestos ORDER BY id DESC"
+        )
         filas = self.db.fetch_all(query)
 
         for i, f in enumerate(filas):
@@ -168,15 +213,36 @@ class PresupuestosView(QWidget):
             self.table.setItem(i, 2, QTableWidgetItem(str(f[3])))
             self.table.setItem(i, 3, QTableWidgetItem(f[4]))
 
-            item_monto = QTableWidgetItem(f"${f[5]:,.2f}")
-            item_monto.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-            self.table.setItem(i, 4, item_monto)
+            monto_compras = f[5] if f[5] else 0.0
+            monto_planilla = f[6] if f[6] else 0.0
+            monto_gastos = f[7] if f[7] else 0.0
+            total_general = monto_compras + monto_planilla + monto_gastos
+
+            for col, val in [
+                (4, monto_compras), (5, monto_planilla),
+                (6, monto_gastos), (7, total_general),
+            ]:
+                it = QTableWidgetItem(f"${val:,.2f}")
+                it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if col == 7:
+                    font = it.font()
+                    font.setBold(True)
+                    it.setFont(font)
+                self.table.setItem(i, col, it)
 
         self.table.resizeRowsToContents()
 
     def nuevo_presupuesto(self):
         dlg = CrearPresupuestoDialog(self.db, self)
         if dlg.exec_():
+            if (
+                getattr(dlg, "chk_incluir_planilla", None)
+                and dlg.chk_incluir_planilla.isChecked()
+                and dlg.nuevo_presupuesto_id
+            ):
+                copiar = CopiarPlanillaDialog(self.db, dlg.nuevo_presupuesto_id, self)
+                if copiar.exec_():
+                    recalcular_total_planilla(self.db, dlg.nuevo_presupuesto_id)
             self.cargar_datos()
 
     def ver_presupuesto(self):
@@ -287,9 +353,9 @@ class ControlPresupuestoDialog(QDialog):
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
             [
-                "Categoría / Insumo",
+                "Categoría / Concepto",
                 "Monto Presupuestado",
-                "Monto Ejecutado (Compras)",
+                "Monto Ejecutado (Real)",
                 "Saldo (Diferencia)",
             ]
         )
@@ -415,7 +481,89 @@ class ControlPresupuestoDialog(QDialog):
             gran_total_presupuestado += total_cat_pres
             gran_total_ejecutado += total_cat_ejec
 
+        # Categorías adicionales: planilla y gastos fijos (bloques del presupuesto)
+        p_pres, p_ejec = self._control_planilla(font_bold)
+        gran_total_presupuestado += p_pres
+        gran_total_ejecutado += p_ejec
+
+        g_pres, g_ejec = self._control_gastos(font_bold)
+        gran_total_presupuestado += g_pres
+        gran_total_ejecutado += g_ejec
+
         self.tree.expandAll()
+
+    def _fila_saldo(self, item, columna, dif):
+        if dif < 0:
+            item.setText(columna, f"-${abs(dif):,.2f} (Excedido)")
+            item.setForeground(columna, QColor("#c0392b"))
+        else:
+            item.setText(columna, f"${dif:,.2f}")
+            item.setForeground(columna, QColor("#2980b9"))
+
+    def _control_planilla(self, font_bold):
+        pres = self.db.fetch_one(
+            "SELECT COALESCE(SUM(costo_total), 0) FROM detalle_presupuesto_planilla WHERE presupuesto_id = ?",
+            (self.presupuesto_id,),
+        )[0] or 0.0
+        ejec = calcular_planilla_real_mes(self.db, self.mes, self.anio)
+        if not pres and not ejec:
+            return 0.0, 0.0
+
+        cat_item = QTreeWidgetItem(self.tree)
+        cat_item.setText(0, "PLANILLA")
+        cat_item.setFont(0, font_bold)
+        for i in range(4):
+            cat_item.setBackground(i, Qt.lightGray)
+        cat_item.setText(1, f"${pres:,.2f}")
+        cat_item.setText(2, f"${ejec:,.2f}")
+        self._fila_saldo(cat_item, 3, pres - ejec)
+
+        hijo = QTreeWidgetItem(cat_item)
+        hijo.setText(0, "  Planilla del mes (real)")
+        hijo.setText(1, f"${pres:,.2f}")
+        hijo.setText(2, f"${ejec:,.2f}")
+        self._fila_saldo(hijo, 3, pres - ejec)
+        return pres, ejec
+
+    def _control_gastos(self, font_bold):
+        pres_por_concepto = {}
+        for concepto, monto in self.db.fetch_all(
+            "SELECT concepto, SUM(monto) FROM detalle_presupuesto_gastos "
+            "WHERE presupuesto_id = ? GROUP BY concepto",
+            (self.presupuesto_id,),
+        ):
+            pres_por_concepto[concepto] = float(monto or 0)
+
+        ejec_por_concepto = ejecutado_gastos_mes(self.db, self.mes, self.anio)
+
+        conceptos = sorted(set(pres_por_concepto) | set(ejec_por_concepto))
+        if not conceptos:
+            return 0.0, 0.0
+
+        cat_item = QTreeWidgetItem(self.tree)
+        cat_item.setText(0, "GASTOS FIJOS")
+        cat_item.setFont(0, font_bold)
+        for i in range(4):
+            cat_item.setBackground(i, Qt.lightGray)
+
+        total_pres = 0.0
+        total_ejec = 0.0
+        for concepto in conceptos:
+            m_pres = pres_por_concepto.get(concepto, 0.0)
+            m_ejec = ejec_por_concepto.get(concepto, 0.0)
+            total_pres += m_pres
+            total_ejec += m_ejec
+
+            hijo = QTreeWidgetItem(cat_item)
+            hijo.setText(0, f"  {concepto}")
+            hijo.setText(1, f"${m_pres:,.2f}")
+            hijo.setText(2, f"${m_ejec:,.2f}")
+            self._fila_saldo(hijo, 3, m_pres - m_ejec)
+
+        cat_item.setText(1, f"${total_pres:,.2f}")
+        cat_item.setText(2, f"${total_ejec:,.2f}")
+        self._fila_saldo(cat_item, 3, total_pres - total_ejec)
+        return total_pres, total_ejec
 
         dif_global = gran_total_presupuestado - gran_total_ejecutado
         color_saldo = "red" if dif_global < 0 else "blue"
@@ -663,6 +811,7 @@ class CrearPresupuestoDialog(QDialog):
     def __init__(self, db_manager, parent=None):
         super().__init__(parent)
         self.db = db_manager
+        self.nuevo_presupuesto_id = None
         self.setWindowTitle("Crear Nuevo Presupuesto")
         self.resize(700, 550)
         self.setStyleSheet(DIALOG_STYLES)
@@ -699,6 +848,11 @@ class CrearPresupuestoDialog(QDialog):
         self.txt_desc.setPlaceholderText("Ej: Presupuesto T1 2025 - Temporada Alta")
         h_layout2.addWidget(self.txt_desc)
         layout.addLayout(h_layout2)
+
+        self.chk_incluir_planilla = QCheckBox(
+            "Incluir planilla base (se elegirá el período tras crear el presupuesto)"
+        )
+        layout.addWidget(self.chk_incluir_planilla)
 
         lbl_rep = QLabel("Seleccione los reportes de venta base para el cálculo:")
         lbl_rep.setStyleSheet("margin-top: 10px;")
@@ -831,8 +985,8 @@ class CrearPresupuestoDialog(QDialog):
                 # --- MODIFICADO: Ya no buscamos factor_calculo de insumos, sino aplicamos pct global del reporte ---
                 query_recetas = """
                     SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
-                           r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
-                    FROM recetas r
+                           r.cantidad_necesaria AS cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
+                    FROM v_recetas_explotadas r
                     JOIN menu_items m ON r.menu_item_id = m.id
                     JOIN insumos i ON r.insumo_id = i.id
                     LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
@@ -998,6 +1152,7 @@ class CrearPresupuestoDialog(QDialog):
                 query_pres_insert, (nuevo_num, mes, anio, desc, monto_total_presupuesto)
             )
             presupuesto_id = self.db.cursor.lastrowid
+            self.nuevo_presupuesto_id = presupuesto_id
 
             for rid in reportes_ids:
                 self.db.execute_query(
@@ -1079,6 +1234,15 @@ class VerPresupuestoDialog(QDialog):
         self.lbl_head = QLabel()
         layout.addWidget(self.lbl_head)
 
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs)
+
+        # ---------------- Tab COMPRAS (bloque existente) ----------------
+        tab_compras = QWidget()
+        lay_compras = QVBoxLayout(tab_compras)
+        lay_compras.setContentsMargins(0, 10, 0, 0)
+        lay_compras.setSpacing(10)
+
         btn_layout_top = QHBoxLayout()
 
         btn_recalcular = QPushButton(" 🔄 Recalcular con Precios Actuales")
@@ -1097,7 +1261,7 @@ class VerPresupuestoDialog(QDialog):
         btn_layout_top.addStretch()
         btn_layout_top.addWidget(btn_agregar_insumo)
 
-        layout.addLayout(btn_layout_top)
+        lay_compras.addLayout(btn_layout_top)
 
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(
@@ -1116,9 +1280,17 @@ class VerPresupuestoDialog(QDialog):
         self.tree.setColumnWidth(4, 310)
         self.tree.setAlternatingRowColors(True)
         self.tree.setWordWrap(True)
-        layout.addWidget(self.tree)
+        lay_compras.addWidget(self.tree)
+
+        self.tabs.addTab(tab_compras, "🧾 Compras")
+
+        # ---------------- Tab PLANILLA (bloque nuevo) ----------------
+        tab_planilla = QWidget()
+        self._init_planilla_tab(tab_planilla)
+        self.tabs.addTab(tab_planilla, "👥 Planilla")
 
         self.cargar_detalles()
+        self.cargar_planilla()
 
         btn_cerrar = QPushButton("Cerrar Vista")
         btn_cerrar.setStyleSheet(
@@ -1129,15 +1301,82 @@ class VerPresupuestoDialog(QDialog):
 
         self.setLayout(layout)
 
+    def _init_planilla_tab(self, contenedor):
+        lay = QVBoxLayout(contenedor)
+        lay.setContentsMargins(0, 10, 0, 0)
+        lay.setSpacing(10)
+
+        btn_bar = QHBoxLayout()
+
+        btn_copiar = QPushButton(" 📋 Copiar planilla de período…")
+        btn_copiar.setStyleSheet(
+            "background-color: #2980b9; color: white; padding: 6px 12px; border-radius: 4px; font-weight: bold;"
+        )
+        btn_copiar.clicked.connect(self.copiar_planilla_periodo)
+
+        btn_agregar_emp = QPushButton(" + Agregar empleado manual")
+        btn_agregar_emp.setStyleSheet(
+            "background-color: #27ae60; color: white; padding: 6px 12px; border-radius: 4px; font-weight: bold;"
+        )
+        btn_agregar_emp.clicked.connect(self.agregar_empleado_planilla)
+
+        btn_bar.addWidget(btn_copiar)
+        btn_bar.addStretch()
+        btn_bar.addWidget(btn_agregar_emp)
+        lay.addLayout(btn_bar)
+
+        self.tabla_planilla = QTableWidget()
+        self.tabla_planilla.setColumnCount(9)
+        self.tabla_planilla.setHorizontalHeaderLabels(
+            [
+                "Empleado",
+                "Puesto",
+                "Sucursal",
+                "Salario Bruto",
+                "Deducc. Colab.",
+                "Costo Patronal",
+                "Provisiones",
+                "Costo Total",
+                "Acciones",
+            ]
+        )
+        self.tabla_planilla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.tabla_planilla.horizontalHeader().setSectionResizeMode(
+            8, QHeaderView.ResizeToContents
+        )
+        self.tabla_planilla.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.tabla_planilla.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla_planilla.setAlternatingRowColors(True)
+        self.tabla_planilla.setStyleSheet(
+            "background-color: white; color: #2c3e50; alternate-background-color: #f9f9f9;"
+        )
+        lay.addWidget(self.tabla_planilla)
+
+        self.lbl_total_planilla = QLabel()
+        self.lbl_total_planilla.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        lay.addWidget(self.lbl_total_planilla)
+
     def actualizar_encabezado(self):
-        query = "SELECT monto_total FROM presupuestos WHERE id = ?"
-        total = self.db.fetch_one(query, (self.presupuesto_id,))
-        monto_actual = total[0] if total and total[0] else 0.0
+        row = self.db.fetch_one(
+            "SELECT monto_total, COALESCE(monto_planilla, 0.0), COALESCE(monto_gastos, 0.0) "
+            "FROM presupuestos WHERE id = ?",
+            (self.presupuesto_id,),
+        )
+        monto_compras = row[0] if row and row[0] else 0.0
+        monto_planilla = row[1] if row and row[1] else 0.0
+        monto_gastos = row[2] if row and row[2] else 0.0
+        total_general = monto_compras + monto_planilla + monto_gastos
 
         html = f"""
             <div style='background-color: #ecf0f1; padding: 15px; border-radius: 5px; border: 1px solid #bdc3c7;'>
                 <h3 style='margin:0; color: #2c3e50;'>Presupuesto N° {self.numero}</h3>
-                <p style='margin: 5px 0; color: #34495e;'><b>Periodo:</b> {self.mes}/{self.anio} &nbsp;|&nbsp; <b>Total Estimado:</b> <span style='color: #c0392b; font-size: 16px;'>${monto_actual:,.2f}</span></p>
+                <p style='margin: 5px 0; color: #34495e;'>
+                    <b>Periodo:</b> {self.mes}/{self.anio}
+                    &nbsp;|&nbsp; <b>Compras:</b> <span style='color: #c0392b;'>${monto_compras:,.2f}</span>
+                    &nbsp;|&nbsp; <b>Planilla:</b> <span style='color: #2980b9;'>${monto_planilla:,.2f}</span>
+                    &nbsp;|&nbsp; <b>Gastos fijos:</b> <span style='color: #d35400;'>${monto_gastos:,.2f}</span>
+                    &nbsp;|&nbsp; <b>Total General:</b> <span style='color: #16a085; font-size: 16px;'>${total_general:,.2f}</span>
+                </p>
                 <p style='margin: 0; color: #7f8c8d; font-style: italic;'>{self.desc}</p>
             </div>
         """
@@ -1268,7 +1507,184 @@ class VerPresupuestoDialog(QDialog):
 
                 self.tree.setItemWidget(hijo, 4, widget_acciones)
 
+        self._agregar_categoria_planilla()
+        self._agregar_categoria_gastos()
+
         self.tree.expandAll()
+
+    def _agregar_categoria_planilla(self):
+        """Muestra la planilla como una categoría más dentro del árbol del
+        presupuesto (junto a las categorías de insumos), con el monto del mes
+        y cada empleado como sub-fila editable."""
+        empleados = self.db.fetch_all(
+            """SELECT id, empleado_nombre, puesto, sucursal_nombre, costo_total
+               FROM detalle_presupuesto_planilla
+               WHERE presupuesto_id = ?
+               ORDER BY empleado_nombre""",
+            (self.presupuesto_id,),
+        )
+        total_planilla = sum(float(e[4] or 0) for e in empleados)
+
+        cat_item = QTreeWidgetItem(self.tree)
+        cat_item.setText(0, "PLANILLA (PLANIFICADA)")
+        cat_item.setText(2, f"${total_planilla:,.2f}")
+        for i in range(5):
+            cat_item.setBackground(i, QColor("#2980b9"))
+            cat_item.setForeground(i, Qt.white)
+            font = cat_item.font(i)
+            font.setBold(True)
+            cat_item.setFont(i, font)
+
+        # Botones a nivel de categoría: copiar de período / agregar empleado
+        cat_widget = QWidget()
+        cat_lay = QHBoxLayout(cat_widget)
+        cat_lay.setContentsMargins(0, 0, 0, 0)
+        cat_lay.setSpacing(5)
+        _cat_btn = (
+            "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+            "padding:4px 9px;font-weight:bold;font-size:11px;border:none;}}"
+            "QPushButton:hover{{background-color:{hov};}}"
+        )
+        btn_copiar = QPushButton("Copiar de período")
+        btn_copiar.setProperty("skip-auto-icon", True)
+        btn_copiar.setStyleSheet(_cat_btn.format(bg="#2471a3", hov="#1b4f72"))
+        btn_copiar.setCursor(Qt.PointingHandCursor)
+        btn_copiar.clicked.connect(self.copiar_planilla_periodo)
+        btn_add = QPushButton("+ Empleado")
+        btn_add.setProperty("skip-auto-icon", True)
+        btn_add.setStyleSheet(_cat_btn.format(bg="#27ae60", hov="#1e8449"))
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.clicked.connect(self.agregar_empleado_planilla)
+        cat_lay.addWidget(btn_copiar)
+        cat_lay.addWidget(btn_add)
+        self.tree.setItemWidget(cat_item, 4, cat_widget)
+
+        if not empleados:
+            vacio = QTreeWidgetItem(cat_item)
+            vacio.setText(0, "Sin planilla planificada")
+            vacio.setText(3, "Use “Copiar de período” o “+ Empleado”.")
+            vacio.setForeground(0, QColor("#7f8c8d"))
+            return
+
+        for (det_id, nombre, puesto, sucursal, costo_total) in empleados:
+            hijo = QTreeWidgetItem(cat_item)
+            hijo.setText(0, nombre or "—")
+            hijo.setText(2, f"${float(costo_total or 0):,.2f}")
+            hijo.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
+            desglose = " · ".join([x for x in [puesto, sucursal] if x and x != "—"])
+            hijo.setText(3, desglose)
+
+            widget = QWidget()
+            hl = QHBoxLayout(widget)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(5)
+            _btn = (
+                "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+                "padding:5px 10px;font-weight:bold;font-size:11px;border:none;}}"
+                "QPushButton:hover{{background-color:{hov};}}"
+            )
+            btn_e = QPushButton("Editar")
+            btn_e.setProperty("skip-auto-icon", True)
+            btn_e.setStyleSheet(_btn.format(bg="#f39c12", hov="#c87f0a"))
+            btn_e.setCursor(Qt.PointingHandCursor)
+            btn_e.clicked.connect(
+                lambda checked, d_id=det_id: self.editar_empleado_planilla(d_id)
+            )
+            btn_b = QPushButton("Borrar")
+            btn_b.setProperty("skip-auto-icon", True)
+            btn_b.setStyleSheet(_btn.format(bg="#c0392b", hov="#96281b"))
+            btn_b.setCursor(Qt.PointingHandCursor)
+            btn_b.clicked.connect(
+                lambda checked, d_id=det_id, nom=nombre: self.eliminar_empleado_planilla(d_id, nom)
+            )
+            hl.addWidget(btn_e)
+            hl.addWidget(btn_b)
+            self.tree.setItemWidget(hijo, 4, widget)
+
+    def _agregar_categoria_gastos(self):
+        """Muestra los gastos fijos (alquiler, luz, agua, otros) como una
+        categoría más dentro del árbol del presupuesto."""
+        gastos = self.db.fetch_all(
+            """SELECT id, concepto, monto
+               FROM detalle_presupuesto_gastos
+               WHERE presupuesto_id = ?
+               ORDER BY concepto""",
+            (self.presupuesto_id,),
+        )
+        total_gastos = sum(float(g[2] or 0) for g in gastos)
+
+        cat_item = QTreeWidgetItem(self.tree)
+        cat_item.setText(0, "GASTOS FIJOS")
+        cat_item.setText(2, f"${total_gastos:,.2f}")
+        for i in range(5):
+            cat_item.setBackground(i, QColor("#d35400"))
+            cat_item.setForeground(i, Qt.white)
+            font = cat_item.font(i)
+            font.setBold(True)
+            cat_item.setFont(i, font)
+
+        cat_widget = QWidget()
+        cat_lay = QHBoxLayout(cat_widget)
+        cat_lay.setContentsMargins(0, 0, 0, 0)
+        cat_lay.setSpacing(5)
+        _cat_btn = (
+            "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+            "padding:4px 9px;font-weight:bold;font-size:11px;border:none;}}"
+            "QPushButton:hover{{background-color:{hov};}}"
+        )
+        btn_copiar = QPushButton("Copiar del anterior")
+        btn_copiar.setProperty("skip-auto-icon", True)
+        btn_copiar.setStyleSheet(_cat_btn.format(bg="#ba4a00", hov="#873600"))
+        btn_copiar.setCursor(Qt.PointingHandCursor)
+        btn_copiar.clicked.connect(self.copiar_gastos_anterior)
+        btn_add = QPushButton("+ Gasto")
+        btn_add.setProperty("skip-auto-icon", True)
+        btn_add.setStyleSheet(_cat_btn.format(bg="#27ae60", hov="#1e8449"))
+        btn_add.setCursor(Qt.PointingHandCursor)
+        btn_add.clicked.connect(self.agregar_gasto)
+        cat_lay.addWidget(btn_copiar)
+        cat_lay.addWidget(btn_add)
+        self.tree.setItemWidget(cat_item, 4, cat_widget)
+
+        if not gastos:
+            vacio = QTreeWidgetItem(cat_item)
+            vacio.setText(0, "Sin gastos fijos")
+            vacio.setText(3, "Use “Copiar del anterior” o “+ Gasto”.")
+            vacio.setForeground(0, QColor("#7f8c8d"))
+            return
+
+        for (det_id, concepto, monto) in gastos:
+            hijo = QTreeWidgetItem(cat_item)
+            hijo.setText(0, concepto or "—")
+            hijo.setText(2, f"${float(monto or 0):,.2f}")
+            hijo.setTextAlignment(2, Qt.AlignRight | Qt.AlignVCenter)
+
+            widget = QWidget()
+            hl = QHBoxLayout(widget)
+            hl.setContentsMargins(0, 0, 0, 0)
+            hl.setSpacing(5)
+            _btn = (
+                "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+                "padding:5px 10px;font-weight:bold;font-size:11px;border:none;}}"
+                "QPushButton:hover{{background-color:{hov};}}"
+            )
+            btn_e = QPushButton("Editar")
+            btn_e.setProperty("skip-auto-icon", True)
+            btn_e.setStyleSheet(_btn.format(bg="#f39c12", hov="#c87f0a"))
+            btn_e.setCursor(Qt.PointingHandCursor)
+            btn_e.clicked.connect(
+                lambda checked, d_id=det_id: self.editar_gasto(d_id)
+            )
+            btn_b = QPushButton("Borrar")
+            btn_b.setProperty("skip-auto-icon", True)
+            btn_b.setStyleSheet(_btn.format(bg="#c0392b", hov="#96281b"))
+            btn_b.setCursor(Qt.PointingHandCursor)
+            btn_b.clicked.connect(
+                lambda checked, d_id=det_id, c=concepto: self.eliminar_gasto(d_id, c)
+            )
+            hl.addWidget(btn_e)
+            hl.addWidget(btn_b)
+            self.tree.setItemWidget(hijo, 4, widget)
 
     def abrir_ajuste_porcentaje(self, det_id, nombre, pct_actual):
         dlg = AjustarPorcentajeDialog(self.db, det_id, nombre, pct_actual, self)
@@ -1389,8 +1805,8 @@ class VerPresupuestoDialog(QDialog):
 
                 query_recetas = """
                     SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
-                           r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
-                    FROM recetas r
+                           r.cantidad_necesaria AS cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
+                    FROM v_recetas_explotadas r
                     JOIN menu_items m ON r.menu_item_id = m.id
                     JOIN insumos i ON r.insumo_id = i.id
                     LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
@@ -1583,3 +1999,613 @@ class VerPresupuestoDialog(QDialog):
         if dlg.exec_():
             recalcular_total_presupuesto(self.db, self.presupuesto_id)
             self.cargar_detalles()
+
+    # ------------------------ Bloque Planilla ------------------------
+
+    def cargar_planilla(self):
+        self.tabla_planilla.setRowCount(0)
+        filas = self.db.fetch_all(
+            """SELECT id, empleado_nombre, puesto, sucursal_nombre,
+                      salario_bruto, deducciones_colab, costo_patronal, COALESCE(provisiones, 0), costo_total
+               FROM detalle_presupuesto_planilla
+               WHERE presupuesto_id = ?
+               ORDER BY empleado_nombre""",
+            (self.presupuesto_id,),
+        )
+
+        total_costo = 0.0
+        for i, f in enumerate(filas):
+            (det_id, nombre, puesto, sucursal,
+             bruto, ded_colab, patronal, provisiones, costo_total) = f
+            total_costo += float(costo_total or 0)
+
+            self.tabla_planilla.insertRow(i)
+
+            it_nom = QTableWidgetItem(nombre or "—")
+            it_nom.setData(Qt.UserRole, det_id)
+            self.tabla_planilla.setItem(i, 0, it_nom)
+            self.tabla_planilla.setItem(i, 1, QTableWidgetItem(puesto or "—"))
+            self.tabla_planilla.setItem(i, 2, QTableWidgetItem(sucursal or "—"))
+
+            for col, val in [
+                (3, bruto), (4, ded_colab), (5, patronal), (6, provisiones), (7, costo_total)
+            ]:
+                it = QTableWidgetItem(f"${float(val or 0):,.2f}")
+                it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                self.tabla_planilla.setItem(i, col, it)
+
+            widget = QWidget()
+            hl = QHBoxLayout(widget)
+            hl.setContentsMargins(4, 0, 4, 0)
+            hl.setSpacing(5)
+
+            _btn_style = (
+                "QPushButton{{background-color:{bg};color:white;border-radius:3px;"
+                "padding:5px 10px;font-weight:bold;font-size:11px;border:none;}}"
+                "QPushButton:hover{{background-color:{hov};}}"
+            )
+
+            btn_edit = QPushButton("Editar")
+            btn_edit.setProperty("skip-auto-icon", True)
+            btn_edit.setStyleSheet(_btn_style.format(bg="#f39c12", hov="#c87f0a"))
+            btn_edit.setCursor(Qt.PointingHandCursor)
+            btn_edit.clicked.connect(
+                lambda checked, d_id=det_id: self.editar_empleado_planilla(d_id)
+            )
+
+            btn_del = QPushButton("Borrar")
+            btn_del.setProperty("skip-auto-icon", True)
+            btn_del.setStyleSheet(_btn_style.format(bg="#c0392b", hov="#96281b"))
+            btn_del.setCursor(Qt.PointingHandCursor)
+            btn_del.clicked.connect(
+                lambda checked, d_id=det_id, nom=nombre: self.eliminar_empleado_planilla(d_id, nom)
+            )
+
+            hl.addWidget(btn_edit)
+            hl.addWidget(btn_del)
+            self.tabla_planilla.setCellWidget(i, 8, widget)
+
+        self.lbl_total_planilla.setText(
+            f"<span style='font-size:15px;'>Total Planilla (bruto + aportes patronales): "
+            f"<b style='color:#2980b9;'>${total_costo:,.2f}</b></span>"
+        )
+        self.actualizar_encabezado()
+
+    def _refrescar_planilla(self):
+        """Recalcula el total de planilla y refresca ambas vistas: la pestaña
+        de planilla y la categoría de planilla dentro del árbol de compras."""
+        recalcular_total_planilla(self.db, self.presupuesto_id)
+        self.cargar_planilla()
+        self.cargar_detalles()
+
+    def copiar_planilla_periodo(self):
+        dlg = CopiarPlanillaDialog(self.db, self.presupuesto_id, self)
+        if dlg.exec_():
+            self._refrescar_planilla()
+
+    def agregar_empleado_planilla(self):
+        dlg = EmpleadoPlanillaDialog(self.db, self.presupuesto_id, None, self)
+        if dlg.exec_():
+            self._refrescar_planilla()
+
+    def editar_empleado_planilla(self, det_id):
+        dlg = EmpleadoPlanillaDialog(self.db, self.presupuesto_id, det_id, self)
+        if dlg.exec_():
+            self._refrescar_planilla()
+
+    def eliminar_empleado_planilla(self, det_id, nombre):
+        resp = QMessageBox.question(
+            self,
+            "Confirmar Eliminación",
+            f"¿Seguro que desea quitar a '{nombre or '—'}' de la planilla de este presupuesto?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if resp == QMessageBox.Yes:
+            self.db.execute_query(
+                "DELETE FROM detalle_presupuesto_planilla WHERE id = ?", (det_id,)
+            )
+            self._refrescar_planilla()
+
+    # ------------------------ Bloque Gastos Fijos ------------------------
+
+    def _refrescar_gastos(self):
+        recalcular_total_gastos(self.db, self.presupuesto_id)
+        self.cargar_detalles()
+
+    def agregar_gasto(self):
+        dlg = GastoPresupuestoDialog(self.db, self.presupuesto_id, None, self)
+        if dlg.exec_():
+            self._refrescar_gastos()
+
+    def editar_gasto(self, det_id):
+        dlg = GastoPresupuestoDialog(self.db, self.presupuesto_id, det_id, self)
+        if dlg.exec_():
+            self._refrescar_gastos()
+
+    def eliminar_gasto(self, det_id, concepto):
+        resp = QMessageBox.question(
+            self,
+            "Confirmar Eliminación",
+            f"¿Seguro que desea quitar el gasto '{concepto or '—'}' de este presupuesto?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if resp == QMessageBox.Yes:
+            self.db.execute_query(
+                "DELETE FROM detalle_presupuesto_gastos WHERE id = ?", (det_id,)
+            )
+            self._refrescar_gastos()
+
+    def copiar_gastos_anterior(self):
+        """Copia todos los gastos fijos del presupuesto anterior más reciente."""
+        prev = self.db.fetch_one(
+            "SELECT id, numero FROM presupuestos WHERE id <> ? ORDER BY id DESC LIMIT 1",
+            (self.presupuesto_id,),
+        )
+        if not prev:
+            QMessageBox.information(
+                self, "Sin historial", "No hay otro presupuesto del cual copiar gastos."
+            )
+            return
+        gastos = self.db.fetch_all(
+            "SELECT concepto, monto FROM detalle_presupuesto_gastos WHERE presupuesto_id = ?",
+            (prev[0],),
+        )
+        if not gastos:
+            QMessageBox.information(
+                self, "Sin gastos",
+                f"El presupuesto N°{prev[1]} no tiene gastos fijos registrados.",
+            )
+            return
+        resp = QMessageBox.question(
+            self,
+            "Copiar gastos",
+            f"¿Copiar {len(gastos)} gasto(s) del presupuesto N°{prev[1]}?\n"
+            "Se reemplazarán los gastos fijos actuales de este presupuesto.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if resp != QMessageBox.Yes:
+            return
+        self.db.execute_query(
+            "DELETE FROM detalle_presupuesto_gastos WHERE presupuesto_id = ?",
+            (self.presupuesto_id,),
+        )
+        for concepto, monto in gastos:
+            self.db.execute_query(
+                "INSERT INTO detalle_presupuesto_gastos (presupuesto_id, concepto, monto, observacion) VALUES (?,?,?,?)",
+                (self.presupuesto_id, concepto, monto, f"Copiado de N°{prev[1]}"),
+            )
+        self._refrescar_gastos()
+
+
+def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
+    """Calcula el costo de una fila de planilla y la inserta o actualiza.
+
+    'datos' debe traer: empleado_id, empleado_nombre, puesto, sucursal_nombre,
+    salario_hora, observacion y las 5 claves de horas (horas_regulares, etc.).
+    """
+    horas = {
+        "horas_regulares":       datos.get("horas_regulares", 0.0),
+        "horas_festivos":        datos.get("horas_festivos", 0.0),
+        "horas_domingos":        datos.get("horas_domingos", 0.0),
+        "horas_extra_diurnas":   datos.get("horas_extra_diurnas", 0.0),
+        "horas_extra_nocturnas": datos.get("horas_extra_nocturnas", 0.0),
+    }
+    # Costo laboral completo (igual que el Resumen de Planilla): bruto + patronal (SS, SE, riesgos)
+    # + provisiones. costo_total = costo completo; costo_patronal incluye el riesgo profesional.
+    costo = calcular_costo_empleado(
+        db, datos.get("salario_hora", 0.0), horas, empleado_id=datos.get("empleado_id"))
+
+    campos = (
+        datos.get("empleado_id"),
+        datos.get("empleado_nombre"),
+        datos.get("puesto"),
+        datos.get("sucursal_nombre"),
+        float(datos.get("salario_hora", 0.0) or 0.0),
+        horas["horas_regulares"],
+        horas["horas_festivos"],
+        horas["horas_domingos"],
+        horas["horas_extra_diurnas"],
+        horas["horas_extra_nocturnas"],
+        costo["salario_bruto"],
+        costo["deducciones_colab"],
+        costo["costo_patronal_total"],
+        costo["provisiones_total"],
+        costo["costo_total_completo"],
+        datos.get("observacion"),
+    )
+
+    if det_id is None:
+        db.execute_query(
+            """INSERT INTO detalle_presupuesto_planilla
+               (presupuesto_id, empleado_id, empleado_nombre, puesto, sucursal_nombre,
+                salario_hora, horas_regulares, horas_festivos, horas_domingos,
+                horas_extra_diurnas, horas_extra_nocturnas,
+                salario_bruto, deducciones_colab, costo_patronal, provisiones, costo_total, observacion)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (presupuesto_id, *campos),
+        )
+    else:
+        db.execute_query(
+            """UPDATE detalle_presupuesto_planilla SET
+                 empleado_id=?, empleado_nombre=?, puesto=?, sucursal_nombre=?,
+                 salario_hora=?, horas_regulares=?, horas_festivos=?, horas_domingos=?,
+                 horas_extra_diurnas=?, horas_extra_nocturnas=?,
+                 salario_bruto=?, deducciones_colab=?, costo_patronal=?, provisiones=?, costo_total=?, observacion=?
+               WHERE id=?""",
+            (*campos, det_id),
+        )
+
+
+class CopiarPlanillaDialog(QDialog):
+    """Copia las horas de uno o varios períodos de pago como base de la
+    planilla del presupuesto, aplicando un multiplicador (quincena→mes)."""
+
+    def __init__(self, db_manager, presupuesto_id, parent=None):
+        super().__init__(parent)
+        self.db = db_manager
+        self.presupuesto_id = presupuesto_id
+        self.setWindowTitle("Copiar planilla de período(s)")
+        self.resize(560, 520)
+        self.setStyleSheet(DIALOG_STYLES)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+
+        info = QLabel(
+            "Seleccione uno o varios períodos de pago. Las horas de los empleados "
+            "se <b>suman</b> entre los períodos marcados y luego se multiplican por "
+            "el factor.<br>"
+            "<span style='color:#7f8c8d;'>Ej.: 1 quincena × 2 = mes • 2 quincenas × 1 = mes</span>"
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        layout.addWidget(QLabel("Períodos de pago:"))
+        self.list_periodos = QListWidget()
+        for p in self.db.fetch_all(
+            "SELECT id, nombre, fecha_inicio, fecha_fin FROM periodos_pago ORDER BY fecha_inicio DESC"
+        ):
+            item = QListWidgetItem(f"{p[1]}  ({p[2]} al {p[3]})")
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            item.setData(Qt.UserRole, p[0])
+            self.list_periodos.addItem(item)
+        layout.addWidget(self.list_periodos)
+
+        fila = QHBoxLayout()
+        fila.addWidget(QLabel("Multiplicador:"))
+        self.spin_factor = QDoubleSpinBox()
+        self.spin_factor.setRange(0.1, 12.0)
+        self.spin_factor.setSingleStep(0.5)
+        self.spin_factor.setValue(2.0)
+        self.spin_factor.setFixedWidth(90)
+        fila.addWidget(self.spin_factor)
+        fila.addStretch()
+        layout.addLayout(fila)
+
+        self.chk_reemplazar = QCheckBox("Reemplazar la planilla actual del presupuesto")
+        self.chk_reemplazar.setChecked(True)
+        layout.addWidget(self.chk_reemplazar)
+
+        btns = QHBoxLayout()
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setStyleSheet("padding: 8px;")
+        btn_cancelar.clicked.connect(self.reject)
+        btn_ok = QPushButton(" Copiar planilla")
+        btn_ok.setStyleSheet(
+            "background-color: #2980b9; color: white; font-weight: bold; padding: 8px 15px; border-radius: 4px;"
+        )
+        btn_ok.clicked.connect(self.copiar)
+        btns.addStretch()
+        btns.addWidget(btn_cancelar)
+        btns.addWidget(btn_ok)
+        layout.addLayout(btns)
+
+        self.setLayout(layout)
+
+    def _periodos_seleccionados(self):
+        ids = []
+        for i in range(self.list_periodos.count()):
+            it = self.list_periodos.item(i)
+            if it.checkState() == Qt.Checked:
+                ids.append(it.data(Qt.UserRole))
+        return ids
+
+    def copiar(self):
+        periodos = self._periodos_seleccionados()
+        if not periodos:
+            QMessageBox.warning(self, "Aviso", "Seleccione al menos un período de pago.")
+            return
+
+        factor = float(self.spin_factor.value())
+        placeholders = ",".join(["?"] * len(periodos))
+        filas = self.db.fetch_all(
+            f"""SELECT e.id, e.nombre || ' ' || e.apellido, e.puesto,
+                       COALESCE(s.nombre, '—'), e.salario_hora,
+                       COALESCE(SUM(h.horas_regulares), 0),
+                       COALESCE(SUM(h.horas_festivos), 0),
+                       COALESCE(SUM(h.horas_domingos), 0),
+                       COALESCE(SUM(h.horas_extra_diurnas), 0),
+                       COALESCE(SUM(h.horas_extra_nocturnas), 0)
+                FROM horas_empleado h
+                JOIN empleados e ON e.id = h.empleado_id
+                LEFT JOIN sucursales s ON s.id = e.sucursal_id
+                WHERE h.periodo_id IN ({placeholders})
+                GROUP BY e.id
+                ORDER BY e.apellido, e.nombre""",
+            tuple(periodos),
+        )
+
+        if not filas:
+            QMessageBox.warning(
+                self, "Sin datos",
+                "Los períodos seleccionados no tienen horas de empleados registradas.",
+            )
+            return
+
+        if self.chk_reemplazar.isChecked():
+            self.db.execute_query(
+                "DELETE FROM detalle_presupuesto_planilla WHERE presupuesto_id = ?",
+                (self.presupuesto_id,),
+            )
+
+        for (eid, nombre, puesto, sucursal, sal_hora,
+             h_reg, h_fest, h_dom, h_exd, h_exn) in filas:
+            _guardar_fila_planilla(
+                self.db, self.presupuesto_id,
+                {
+                    "empleado_id": eid,
+                    "empleado_nombre": nombre,
+                    "puesto": puesto,
+                    "sucursal_nombre": sucursal,
+                    "salario_hora": sal_hora,
+                    "horas_regulares":       float(h_reg or 0) * factor,
+                    "horas_festivos":        float(h_fest or 0) * factor,
+                    "horas_domingos":        float(h_dom or 0) * factor,
+                    "horas_extra_diurnas":   float(h_exd or 0) * factor,
+                    "horas_extra_nocturnas": float(h_exn or 0) * factor,
+                    "observacion": f"Base: {len(periodos)} período(s) × {factor:g}",
+                },
+            )
+
+        QMessageBox.information(
+            self, "Éxito",
+            f"Se copiaron {len(filas)} empleado(s) a la planilla del presupuesto.",
+        )
+        self.accept()
+
+
+class EmpleadoPlanillaDialog(QDialog):
+    """Agrega o edita una fila de empleado en la planilla del presupuesto."""
+
+    def __init__(self, db_manager, presupuesto_id, det_id=None, parent=None):
+        super().__init__(parent)
+        self.db = db_manager
+        self.presupuesto_id = presupuesto_id
+        self.det_id = det_id
+        self.setWindowTitle(
+            "Editar empleado (planilla)" if det_id else "Agregar empleado (planilla)"
+        )
+        self.resize(460, 520)
+        self.setStyleSheet(DIALOG_STYLES)
+        self.init_ui()
+        if det_id:
+            self._cargar()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(10)
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.txt_nombre = QLineEdit()
+        self.txt_puesto = QLineEdit()
+        self.txt_sucursal = QLineEdit()
+        form.addRow("Nombre:", self.txt_nombre)
+        form.addRow("Puesto:", self.txt_puesto)
+        form.addRow("Sucursal:", self.txt_sucursal)
+
+        self.spin_salario = QDoubleSpinBox()
+        self.spin_salario.setRange(0.0, 10000.0)
+        self.spin_salario.setDecimals(2)
+        self.spin_salario.setPrefix("$ ")
+        form.addRow("Salario/hora:", self.spin_salario)
+
+        self.spins_horas = {}
+        for clave, etiqueta in [
+            ("horas_regulares", "Horas regulares:"),
+            ("horas_festivos", "Horas festivos:"),
+            ("horas_domingos", "Horas domingos:"),
+            ("horas_extra_diurnas", "Horas extra diurnas:"),
+            ("horas_extra_nocturnas", "Horas extra nocturnas:"),
+        ]:
+            sp = QDoubleSpinBox()
+            sp.setRange(0.0, 1000.0)
+            sp.setDecimals(2)
+            self.spins_horas[clave] = sp
+            form.addRow(etiqueta, sp)
+
+        layout.addLayout(form)
+
+        btns = QHBoxLayout()
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setStyleSheet("padding: 8px;")
+        btn_cancelar.clicked.connect(self.reject)
+        btn_ok = QPushButton("Guardar")
+        btn_ok.setStyleSheet(
+            "background-color: #27ae60; color: white; font-weight: bold; padding: 8px 15px; border-radius: 4px;"
+        )
+        btn_ok.clicked.connect(self.guardar)
+        btns.addStretch()
+        btns.addWidget(btn_cancelar)
+        btns.addWidget(btn_ok)
+        layout.addLayout(btns)
+
+        self.setLayout(layout)
+
+    def _cargar(self):
+        row = self.db.fetch_one(
+            """SELECT empleado_nombre, puesto, sucursal_nombre, salario_hora,
+                      horas_regulares, horas_festivos, horas_domingos,
+                      horas_extra_diurnas, horas_extra_nocturnas
+               FROM detalle_presupuesto_planilla WHERE id = ?""",
+            (self.det_id,),
+        )
+        if not row:
+            return
+        self.txt_nombre.setText(row[0] or "")
+        self.txt_puesto.setText(row[1] or "")
+        self.txt_sucursal.setText(row[2] or "")
+        self.spin_salario.setValue(float(row[3] or 0))
+        for clave, val in zip(
+            ["horas_regulares", "horas_festivos", "horas_domingos",
+             "horas_extra_diurnas", "horas_extra_nocturnas"],
+            row[4:9],
+        ):
+            self.spins_horas[clave].setValue(float(val or 0))
+
+    def guardar(self):
+        nombre = self.txt_nombre.text().strip()
+        if not nombre:
+            QMessageBox.warning(self, "Aviso", "El nombre del empleado es obligatorio.")
+            return
+
+        datos = {
+            "empleado_id": None,
+            "empleado_nombre": nombre,
+            "puesto": self.txt_puesto.text().strip(),
+            "sucursal_nombre": self.txt_sucursal.text().strip() or "—",
+            "salario_hora": self.spin_salario.value(),
+            "observacion": "Manual",
+        }
+        for clave, sp in self.spins_horas.items():
+            datos[clave] = sp.value()
+
+        _guardar_fila_planilla(self.db, self.presupuesto_id, datos, self.det_id)
+        self.accept()
+
+
+class GastoPresupuestoDialog(QDialog):
+    """Agrega o edita un gasto fijo del presupuesto. Permite elegir un concepto
+    del historial/catálogo (prellenando el último monto usado) o crear uno nuevo."""
+
+    def __init__(self, db_manager, presupuesto_id, det_id=None, parent=None):
+        super().__init__(parent)
+        self.db = db_manager
+        self.presupuesto_id = presupuesto_id
+        self.det_id = det_id
+        self.setWindowTitle("Editar gasto fijo" if det_id else "Agregar gasto fijo")
+        self.resize(440, 260)
+        self.setStyleSheet(DIALOG_STYLES)
+        self.init_ui()
+        if det_id:
+            self._cargar()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(10)
+
+        info = QLabel(
+            "Elija un concepto del historial o escriba uno nuevo. "
+            "Al seleccionar un concepto ya usado se sugiere su último monto."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        self.cmb_concepto = QComboBox()
+        self.cmb_concepto.setEditable(True)
+        self._montos_historial = {}
+        for concepto in self._conceptos_historial():
+            self.cmb_concepto.addItem(concepto)
+        self.cmb_concepto.setCurrentText("")
+        self.cmb_concepto.currentTextChanged.connect(self._sugerir_monto)
+        form.addRow("Concepto:", self.cmb_concepto)
+
+        self.spin_monto = QDoubleSpinBox()
+        self.spin_monto.setRange(0.0, 9999999.99)
+        self.spin_monto.setDecimals(2)
+        self.spin_monto.setPrefix("$ ")
+        form.addRow("Monto mensual:", self.spin_monto)
+
+        layout.addLayout(form)
+
+        btns = QHBoxLayout()
+        btn_cancelar = QPushButton("Cancelar")
+        btn_cancelar.setStyleSheet("padding: 8px;")
+        btn_cancelar.clicked.connect(self.reject)
+        btn_ok = QPushButton("Guardar")
+        btn_ok.setStyleSheet(
+            "background-color: #27ae60; color: white; font-weight: bold; padding: 8px 15px; border-radius: 4px;"
+        )
+        btn_ok.clicked.connect(self.guardar)
+        btns.addStretch()
+        btns.addWidget(btn_cancelar)
+        btns.addWidget(btn_ok)
+        layout.addLayout(btns)
+
+        self.setLayout(layout)
+
+    def _conceptos_historial(self):
+        """Conceptos del catálogo + los ya usados en presupuestos, con su último
+        monto como sugerencia."""
+        conceptos = []
+        for (c,) in self.db.fetch_all(
+            "SELECT concepto FROM gastos_fijos_catalogo ORDER BY concepto"
+        ):
+            conceptos.append(c)
+        # Último monto usado por concepto (cualquier presupuesto)
+        for concepto, monto in self.db.fetch_all(
+            """SELECT concepto, monto FROM detalle_presupuesto_gastos
+               WHERE id IN (SELECT MAX(id) FROM detalle_presupuesto_gastos GROUP BY concepto)"""
+        ):
+            self._montos_historial[concepto] = float(monto or 0)
+            if concepto not in conceptos:
+                conceptos.append(concepto)
+        return conceptos
+
+    def _sugerir_monto(self, texto):
+        # Solo sugiere al agregar (no pisar el monto al editar uno existente)
+        if self.det_id:
+            return
+        if texto in self._montos_historial and self.spin_monto.value() == 0:
+            self.spin_monto.setValue(self._montos_historial[texto])
+
+    def _cargar(self):
+        row = self.db.fetch_one(
+            "SELECT concepto, monto FROM detalle_presupuesto_gastos WHERE id = ?",
+            (self.det_id,),
+        )
+        if not row:
+            return
+        self.cmb_concepto.setCurrentText(row[0] or "")
+        self.spin_monto.setValue(float(row[1] or 0))
+
+    def guardar(self):
+        concepto = self.cmb_concepto.currentText().strip()
+        if not concepto:
+            QMessageBox.warning(self, "Aviso", "El concepto del gasto es obligatorio.")
+            return
+        monto = self.spin_monto.value()
+
+        # Registrar el concepto en el catálogo/historial para reutilizarlo
+        self.db.execute_query(
+            "INSERT OR IGNORE INTO gastos_fijos_catalogo (concepto) VALUES (?)",
+            (concepto,),
+        )
+
+        if self.det_id is None:
+            self.db.execute_query(
+                "INSERT INTO detalle_presupuesto_gastos (presupuesto_id, concepto, monto, observacion) VALUES (?,?,?,?)",
+                (self.presupuesto_id, concepto, monto, "Manual"),
+            )
+        else:
+            self.db.execute_query(
+                "UPDATE detalle_presupuesto_gastos SET concepto=?, monto=? WHERE id=?",
+                (concepto, monto, self.det_id),
+            )
+        self.accept()

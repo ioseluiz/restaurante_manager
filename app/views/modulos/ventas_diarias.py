@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont
 
+from app.controllers.kardex_controller import KardexController
+
 
 class VentasDiariasView(QWidget):
     def __init__(self, db_manager):
@@ -96,7 +98,7 @@ class VentasDiariasView(QWidget):
         """)
         self.btn_save.clicked.connect(self.guardar_cambios)
 
-        # Botón para descontar inventario (Futura implementación lógica)
+        # Descuenta del stock los insumos consumidos por las ventas del día (Kardex, tipo VENTA)
         self.btn_process = QPushButton("Actualizar Inventario (Kardex)")
         self.btn_process.setCursor(Qt.PointingHandCursor)
         self.btn_process.setStyleSheet("""
@@ -105,7 +107,18 @@ class VentasDiariasView(QWidget):
         """)
         self.btn_process.clicked.connect(self.procesar_inventario)
 
+        # Reabre un día ya procesado: repone el stock descontado para poder corregir las cantidades
+        self.btn_reopen = QPushButton("Reabrir Día (Revertir Inventario)")
+        self.btn_reopen.setCursor(Qt.PointingHandCursor)
+        self.btn_reopen.setStyleSheet("""
+            QPushButton { background-color: #7f8c8d; color: white; font-weight: bold; padding: 10px 20px; border-radius: 4px; }
+            QPushButton:hover { background-color: #636e72; }
+            QPushButton:disabled { background-color: #bdc3c7; }
+        """)
+        self.btn_reopen.clicked.connect(self.reabrir_dia)
+
         btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_reopen)
         btn_layout.addWidget(self.btn_save)
         btn_layout.addWidget(self.btn_process)
 
@@ -125,11 +138,12 @@ class VentasDiariasView(QWidget):
         )
 
         items_data = []  # Lista de tuplas: (id_item, codigo, nombre, cantidad)
+        procesado = False
 
         if header:
             # Día existente: Cargar cantidades guardadas
             self.registro_actual_id = header[0]
-            procesado = header[1]
+            procesado = bool(header[1])
 
             if procesado:
                 self.lbl_status.setText("Estado: INVENTARIO ACTUALIZADO (Cerrado)")
@@ -137,12 +151,16 @@ class VentasDiariasView(QWidget):
                     "color: #27ae60; font-weight: bold; margin-left: 15px;"
                 )
                 self.btn_process.setEnabled(False)  # Ya se procesó
+                self.btn_save.setEnabled(False)     # Día cerrado: para corregir hay que reabrirlo
+                self.btn_reopen.setEnabled(True)
             else:
                 self.lbl_status.setText("Estado: BORRADOR (Inventario Pendiente)")
                 self.lbl_status.setStyleSheet(
                     "color: #e67e22; font-weight: bold; margin-left: 15px;"
                 )
                 self.btn_process.setEnabled(True)
+                self.btn_save.setEnabled(True)
+                self.btn_reopen.setEnabled(False)
 
             # Left Join para traer todos los items, incluso los que no tienen venta registrada ese día
             query = """
@@ -150,6 +168,7 @@ class VentasDiariasView(QWidget):
                 FROM menu_items m
                 LEFT JOIN detalle_ventas_diarias d 
                 ON m.id = d.menu_item_id AND d.registro_diario_id = ?
+                WHERE COALESCE(m.es_componente, 0) = 0
                 ORDER BY m.nombre ASC
             """
             items_data = self.db.fetch_all(query, (self.registro_actual_id,))
@@ -162,23 +181,32 @@ class VentasDiariasView(QWidget):
                 "color: #3498db; font-weight: bold; margin-left: 15px;"
             )
             self.btn_process.setEnabled(False)  # Debe guardar primero
+            self.btn_save.setEnabled(True)
+            self.btn_reopen.setEnabled(False)
+            procesado = False
 
-            query = "SELECT id, codigo, nombre, 0 FROM menu_items ORDER BY nombre ASC"
+            query = (
+                "SELECT id, codigo, nombre, 0 FROM menu_items "
+                "WHERE COALESCE(es_componente, 0) = 0 ORDER BY nombre ASC"
+            )
             items_data = self.db.fetch_all(query)
 
         # 2. Llenar Tabla
         self.table.setRowCount(0)
         for i, (mid, cod, nom, cant) in enumerate(items_data):
             self.table.insertRow(i)
-            self.table.setItem(i, 0, QTableWidgetItem(str(mid)))
-            self.table.setItem(i, 1, QTableWidgetItem(str(cod)))
-            self.table.setItem(i, 2, QTableWidgetItem(str(nom)))
+            for col, valor in enumerate((mid, cod, nom)):
+                it = QTableWidgetItem(str(valor))
+                it.setFlags(it.flags() & ~Qt.ItemIsEditable)  # solo la cantidad se edita
+                self.table.setItem(i, col, it)
 
-            # Cantidad Editable
+            # Cantidad Editable (bloqueada si el día ya actualizó el inventario)
             qty_item = QTableWidgetItem(str(cant))
-            qty_item.setBackground(QColor("#e8f8f5"))
+            qty_item.setBackground(QColor("#f0f0f0" if procesado else "#e8f8f5"))
             qty_item.setTextAlignment(Qt.AlignCenter)
             qty_item.setFont(QFont("Arial", 10, QFont.Bold))
+            if procesado:
+                qty_item.setFlags(qty_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(i, 3, qty_item)
 
     def guardar_cambios(self):
@@ -228,32 +256,91 @@ class VentasDiariasView(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
+    def _cantidades_en_tabla(self):
+        """{menu_item_id: cantidad} de lo que muestra la tabla (solo cantidades > 0)."""
+        out = {}
+        for row in range(self.table.rowCount()):
+            try:
+                qty = float(self.table.item(row, 3).text() or 0)
+            except ValueError:
+                return None
+            if qty > 0:
+                out[int(self.table.item(row, 0).text())] = qty
+        return out
+
+    def _hay_cambios_sin_guardar(self):
+        en_tabla = self._cantidades_en_tabla()
+        if en_tabla is None:
+            return True
+        guardado = {
+            mid: float(c)
+            for mid, c in self.db.fetch_all(
+                "SELECT menu_item_id, cantidad FROM detalle_ventas_diarias WHERE registro_diario_id=? AND cantidad > 0",
+                (self.registro_actual_id,),
+            )
+        }
+        return {k: round(v, 6) for k, v in en_tabla.items()} != {k: round(v, 6) for k, v in guardado.items()}
+
     def procesar_inventario(self):
-        # Aquí conectarás luego con tu controlador de Kardex
-        # Lógica sugerida:
-        # 1. Obtener items vendidos > 0
-        # 2. Para cada item, buscar su receta (tabla recetas)
-        # 3. Para cada insumo en la receta: CantidadVendida * CantidadReceta
-        # 4. Insertar en tabla 'movimientos_inventario' (tipo='VENTA')
-        # 5. Actualizar stock en tabla 'insumos'
-        # 6. UPDATE registro_ventas_diarias SET inventario_descontado = 1
+        """Descuenta del stock los insumos de las ventas del día (Kardex, tipo VENTA)."""
+        if not self.registro_actual_id:
+            QMessageBox.warning(self, "Aviso", "Guarde primero las cantidades del día.")
+            return
+        if self._hay_cambios_sin_guardar():
+            QMessageBox.warning(
+                self, "Aviso",
+                "Hay cantidades sin guardar (o inválidas). Pulse «Guardar Cantidades» antes de actualizar el inventario.",
+            )
+            return
 
         reply = QMessageBox.question(
             self,
             "Confirmar Actualización",
-            "Esto descontará los insumos del inventario basado en las recetas.\n¿Estás seguro? Esta acción no se debe repetir.",
+            "Se descontarán del inventario los insumos consumidos por las ventas de este día, según las recetas "
+            "(incluidas las sub-recetas).\n\nEl día quedará cerrado; si necesita corregirlo podrá usar "
+            "«Reabrir Día», que repone el stock descontado.\n\n¿Desea continuar?",
             QMessageBox.Yes | QMessageBox.No,
         )
+        if reply != QMessageBox.Yes:
+            return
 
-        if reply == QMessageBox.Yes:
-            # TODO: Llamar a self.kardex_controller.procesar_venta_diaria(self.registro_actual_id)
+        try:
+            res = KardexController(self.db).procesar_ventas_diarias(self.registro_actual_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo actualizar el inventario:\n{e}")
+            return
 
-            # Simulamos el proceso por ahora
-            self.db.execute_query(
-                "UPDATE registro_ventas_diarias SET inventario_descontado=1 WHERE id=?",
-                (self.registro_actual_id,),
-            )
-            QMessageBox.information(
-                self, "Procesado", "Inventario actualizado (Simulación)."
-            )
-            self.cargar_datos_fecha()
+        msg = f"Inventario actualizado: {res['movimientos']} insumo(s) descontado(s) del stock."
+        if res["sin_receta"]:
+            msg += ("\n\nPlatos vendidos SIN receta (no descontaron nada):\n• " + "\n• ".join(res["sin_receta"]))
+        if res["negativos"]:
+            msg += ("\n\nInsumos que quedaron con stock NEGATIVO (revise compras o haga un conteo):\n• "
+                    + "\n• ".join(res["negativos"]))
+        QMessageBox.information(self, "Procesado", msg)
+        self.cargar_datos_fecha()
+
+    def reabrir_dia(self):
+        """Repone el stock descontado por el día y lo deja editable otra vez."""
+        if not self.registro_actual_id:
+            return
+        reply = QMessageBox.question(
+            self,
+            "Reabrir día",
+            "Se devolverá al inventario lo que descontaron las ventas de este día y el registro volverá a estado "
+            "BORRADOR para poder corregirlo.\n\nDespués de corregir y guardar deberá pulsar «Actualizar Inventario "
+            "(Kardex)» otra vez.\n\n¿Desea continuar?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            repuestos = KardexController(self.db).revertir_ventas_diarias(self.registro_actual_id)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"No se pudo reabrir el día:\n{e}")
+            return
+        QMessageBox.information(
+            self, "Día reabierto",
+            f"Día reabierto. Se repusieron {repuestos} insumo(s) al inventario." if repuestos
+            else "Día reabierto. No había movimientos de inventario que revertir.",
+        )
+        self.cargar_datos_fecha()
