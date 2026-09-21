@@ -1148,6 +1148,14 @@ class DatabaseManager:
         except Exception:
             pass
 
+        # Presupuesto: la planilla del presupuesto usa el costo laboral completo (con provisiones).
+        try:
+            self.cursor.execute(
+                "ALTER TABLE detalle_presupuesto_planilla ADD COLUMN provisiones REAL DEFAULT 0.0"
+            )
+        except Exception:
+            pass  # la columna ya existe
+
         self.conn.commit()
 
     def create_default_admin(self):

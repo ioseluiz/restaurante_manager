@@ -210,3 +210,27 @@ def calcular_costo_completo(salario_hora, horas, recargos, pcts,
         "costo_total_completo": costo_total_completo,
     })
     return result
+
+
+def calcular_costo_empleado(db, salario_hora, horas, empleado_id=None, tipo_contrato=None, ctx=None):
+    """Costo laboral COMPLETO de un empleado (misma regla del Resumen de Planilla).
+
+    Es la fuente única para el bloque de planilla del Presupuesto, el ejecutado del Control
+    Presupuestal y los indirectos de Costo de Platos: bruto + Seguro Social/Educativo patronales
+    + riesgo profesional + provisiones laborales (la prima de antigüedad solo si el contrato es
+    INDEFINIDO). `ctx` = (recargos, pcts, tramos_isr) permite reutilizar la configuración al
+    calcular muchas filas. El ISR no forma parte del costo (es deducción del colaborador).
+    """
+    if ctx is None:
+        recargos, pcts = cargar_config(db)
+        ctx = (recargos, pcts, cargar_isr_tramos(db))
+    recargos, pcts, tramos = ctx
+    if not tipo_contrato and empleado_id:
+        try:
+            row = db.fetch_one("SELECT tipo_contrato FROM empleados WHERE id=?", (empleado_id,))
+            tipo_contrato = row[0] if row else None
+        except Exception:
+            tipo_contrato = None
+    return calcular_costo_completo(
+        salario_hora, horas, recargos, pcts,
+        tipo_contrato=tipo_contrato or "INDEFINIDO", tramos_isr=tramos)

@@ -28,7 +28,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QFont
 
-from app.utils.calculo_planilla import cargar_config, calcular_costo
+from app.utils.calculo_planilla import calcular_costo_empleado
 
 DIALOG_STYLES = """
     QDialog {
@@ -115,81 +115,10 @@ def recalcular_total_gastos(db, presupuesto_id):
     return total_val
 
 
-def calcular_planilla_real_mes(db, mes, anio):
-    """Costo real de planilla ejecutado en el mes/año: suma los períodos de pago
-    cuya fecha de inicio cae en ese mes, con las mismas reglas del módulo Planilla."""
-    mes_p = f"{int(mes):02d}"
-    anio_s = str(int(anio))
-    periodos = db.fetch_all(
-        "SELECT id FROM periodos_pago "
-        "WHERE strftime('%m', fecha_inicio) = ? AND strftime('%Y', fecha_inicio) = ?",
-        (mes_p, anio_s),
-    )
-    if not periodos:
-        return 0.0
-    recargos, pcts = cargar_config(db)
-    ids = [str(p[0]) for p in periodos]
-    placeholders = ",".join(["?"] * len(ids))
-    rows = db.fetch_all(
-        f"""SELECT e.salario_hora, h.horas_regulares, h.horas_festivos, h.horas_domingos,
-                   h.horas_extra_diurnas, h.horas_extra_nocturnas
-            FROM horas_empleado h
-            JOIN empleados e ON e.id = h.empleado_id
-            WHERE h.periodo_id IN ({placeholders})""",
-        tuple(ids),
-    )
-    total = 0.0
-    for sal, h_reg, h_fest, h_dom, h_exd, h_exn in rows:
-        costo = calcular_costo(
-            sal,
-            {
-                "horas_regulares": h_reg, "horas_festivos": h_fest,
-                "horas_domingos": h_dom, "horas_extra_diurnas": h_exd,
-                "horas_extra_nocturnas": h_exn,
-            },
-            recargos, pcts,
-        )
-        total += costo["costo_total"]
-    return total
-
-
-def ejecutado_gastos_mes(db, mes, anio):
-    """Suma los egresos de consolidados (cheques, tarjeta, Yappy, efectivo) del
-    mes/año, agrupados por 'tipo_gasto'. Devuelve {concepto: monto_ejecutado}."""
-    mes_p = f"{int(mes):02d}"
-    anio_s = str(int(anio))
-    resultado = {}
-
-    def _acumular(query):
-        for concepto, monto in db.fetch_all(query, (mes_p, anio_s)):
-            if not concepto:
-                continue
-            resultado[concepto] = resultado.get(concepto, 0.0) + float(monto or 0)
-
-    base = (
-        "strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ? "
-        "AND tipo_gasto IS NOT NULL AND TRIM(tipo_gasto) <> ''"
-    )
-    _acumular(f"SELECT tipo_gasto, SUM(monto) FROM chequera WHERE {base} GROUP BY tipo_gasto")
-    _acumular(
-        f"SELECT tipo_gasto, SUM(monto) FROM transacciones_tarjeta "
-        f"WHERE {base} AND tipo_transaccion = 'COMPRA' GROUP BY tipo_gasto"
-    )
-    _acumular(f"SELECT tipo_gasto, SUM(monto) FROM transacciones_yappy WHERE {base} GROUP BY tipo_gasto")
-
-    # Pagos en efectivo: el tipo de gasto se etiqueta por línea del desglose.
-    for concepto, monto in db.fetch_all(
-        "SELECT d.tipo_gasto, SUM(d.monto) "
-        "FROM detalle_pagos_efectivo d "
-        "JOIN pagos_efectivo p ON p.id = d.pago_efectivo_id "
-        "WHERE strftime('%m', p.fecha) = ? AND strftime('%Y', p.fecha) = ? "
-        "AND d.tipo_gasto IS NOT NULL AND TRIM(d.tipo_gasto) <> '' "
-        "GROUP BY d.tipo_gasto",
-        (mes_p, anio_s),
-    ):
-        if concepto:
-            resultado[concepto] = resultado.get(concepto, 0.0) + float(monto or 0)
-    return resultado
+from app.utils.gastos_reales import (  # noqa: F401  (reexport)
+    calcular_planilla_real_mes,
+    ejecutado_gastos_mes,
+)
 
 
 class PresupuestosView(QWidget):
@@ -1397,7 +1326,7 @@ class VerPresupuestoDialog(QDialog):
         lay.addLayout(btn_bar)
 
         self.tabla_planilla = QTableWidget()
-        self.tabla_planilla.setColumnCount(8)
+        self.tabla_planilla.setColumnCount(9)
         self.tabla_planilla.setHorizontalHeaderLabels(
             [
                 "Empleado",
@@ -1406,13 +1335,14 @@ class VerPresupuestoDialog(QDialog):
                 "Salario Bruto",
                 "Deducc. Colab.",
                 "Costo Patronal",
+                "Provisiones",
                 "Costo Total",
                 "Acciones",
             ]
         )
         self.tabla_planilla.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tabla_planilla.horizontalHeader().setSectionResizeMode(
-            7, QHeaderView.ResizeToContents
+            8, QHeaderView.ResizeToContents
         )
         self.tabla_planilla.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla_planilla.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -2076,7 +2006,7 @@ class VerPresupuestoDialog(QDialog):
         self.tabla_planilla.setRowCount(0)
         filas = self.db.fetch_all(
             """SELECT id, empleado_nombre, puesto, sucursal_nombre,
-                      salario_bruto, deducciones_colab, costo_patronal, costo_total
+                      salario_bruto, deducciones_colab, costo_patronal, COALESCE(provisiones, 0), costo_total
                FROM detalle_presupuesto_planilla
                WHERE presupuesto_id = ?
                ORDER BY empleado_nombre""",
@@ -2086,7 +2016,7 @@ class VerPresupuestoDialog(QDialog):
         total_costo = 0.0
         for i, f in enumerate(filas):
             (det_id, nombre, puesto, sucursal,
-             bruto, ded_colab, patronal, costo_total) = f
+             bruto, ded_colab, patronal, provisiones, costo_total) = f
             total_costo += float(costo_total or 0)
 
             self.tabla_planilla.insertRow(i)
@@ -2098,7 +2028,7 @@ class VerPresupuestoDialog(QDialog):
             self.tabla_planilla.setItem(i, 2, QTableWidgetItem(sucursal or "—"))
 
             for col, val in [
-                (3, bruto), (4, ded_colab), (5, patronal), (6, costo_total)
+                (3, bruto), (4, ded_colab), (5, patronal), (6, provisiones), (7, costo_total)
             ]:
                 it = QTableWidgetItem(f"${float(val or 0):,.2f}")
                 it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -2133,7 +2063,7 @@ class VerPresupuestoDialog(QDialog):
 
             hl.addWidget(btn_edit)
             hl.addWidget(btn_del)
-            self.tabla_planilla.setCellWidget(i, 7, widget)
+            self.tabla_planilla.setCellWidget(i, 8, widget)
 
         self.lbl_total_planilla.setText(
             f"<span style='font-size:15px;'>Total Planilla (bruto + aportes patronales): "
@@ -2253,7 +2183,6 @@ def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
     'datos' debe traer: empleado_id, empleado_nombre, puesto, sucursal_nombre,
     salario_hora, observacion y las 5 claves de horas (horas_regulares, etc.).
     """
-    recargos, pcts = cargar_config(db)
     horas = {
         "horas_regulares":       datos.get("horas_regulares", 0.0),
         "horas_festivos":        datos.get("horas_festivos", 0.0),
@@ -2261,7 +2190,10 @@ def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
         "horas_extra_diurnas":   datos.get("horas_extra_diurnas", 0.0),
         "horas_extra_nocturnas": datos.get("horas_extra_nocturnas", 0.0),
     }
-    costo = calcular_costo(datos.get("salario_hora", 0.0), horas, recargos, pcts)
+    # Costo laboral completo (igual que el Resumen de Planilla): bruto + patronal (SS, SE, riesgos)
+    # + provisiones. costo_total = costo completo; costo_patronal incluye el riesgo profesional.
+    costo = calcular_costo_empleado(
+        db, datos.get("salario_hora", 0.0), horas, empleado_id=datos.get("empleado_id"))
 
     campos = (
         datos.get("empleado_id"),
@@ -2276,8 +2208,9 @@ def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
         horas["horas_extra_nocturnas"],
         costo["salario_bruto"],
         costo["deducciones_colab"],
-        costo["costo_patronal"],
-        costo["costo_total"],
+        costo["costo_patronal_total"],
+        costo["provisiones_total"],
+        costo["costo_total_completo"],
         datos.get("observacion"),
     )
 
@@ -2287,8 +2220,8 @@ def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
                (presupuesto_id, empleado_id, empleado_nombre, puesto, sucursal_nombre,
                 salario_hora, horas_regulares, horas_festivos, horas_domingos,
                 horas_extra_diurnas, horas_extra_nocturnas,
-                salario_bruto, deducciones_colab, costo_patronal, costo_total, observacion)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                salario_bruto, deducciones_colab, costo_patronal, provisiones, costo_total, observacion)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (presupuesto_id, *campos),
         )
     else:
@@ -2297,7 +2230,7 @@ def _guardar_fila_planilla(db, presupuesto_id, datos, det_id=None):
                  empleado_id=?, empleado_nombre=?, puesto=?, sucursal_nombre=?,
                  salario_hora=?, horas_regulares=?, horas_festivos=?, horas_domingos=?,
                  horas_extra_diurnas=?, horas_extra_nocturnas=?,
-                 salario_bruto=?, deducciones_colab=?, costo_patronal=?, costo_total=?, observacion=?
+                 salario_bruto=?, deducciones_colab=?, costo_patronal=?, provisiones=?, costo_total=?, observacion=?
                WHERE id=?""",
             (*campos, det_id),
         )
