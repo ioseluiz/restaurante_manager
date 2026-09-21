@@ -14,10 +14,13 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QButtonGroup,
     QApplication,
+    QAction,
 )
-from PyQt5.QtGui import QIcon, QPixmap
+from PyQt5.QtGui import QIcon, QPixmap, QKeySequence
 from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from app.utils.button_icons import auto_icon_buttons
+from app.utils import ayuda
+from app.views.ayuda_dialog import AyudaDialog
 
 # --- IMPORTACIÓN DE VISTAS ---
 from app.views.modulos.insumos_crud import InsumosCRUD
@@ -107,6 +110,8 @@ class MainWindow(QMainWindow):
         self.auth = auth_controller
         self.logout_requested = False
         self.modules = {}
+        self._modulo_actual = None  # clave del módulo a la vista (para F1)
+        self._ayuda_dialog = None
         self.sidebar_collapsed = False
         self._nav_buttons = []  # list of {"btn": QPushButton, "text": str}
 
@@ -114,6 +119,7 @@ class MainWindow(QMainWindow):
         self.setWindowIcon(QIcon(ruta_recurso("assets/icons/app.ico")))
 
         self.init_ui()
+        self.setup_menubar()
         self.setup_statusbar()
         self._fit_to_screen()
 
@@ -126,6 +132,27 @@ class MainWindow(QMainWindow):
             screen.x() + (screen.width() - w) // 2,
             screen.y() + (screen.height() - h) // 2,
         )
+
+    def setup_menubar(self):
+        menu_ayuda = self.menuBar().addMenu("&Ayuda")
+
+        act_modulo = QAction("Ayuda de este módulo", self)
+        act_modulo.setShortcut(QKeySequence("F1"))
+        act_modulo.setStatusTip("Explica cómo usar el módulo que tiene abierto")
+        act_modulo.triggered.connect(lambda: self.mostrar_ayuda(self._modulo_actual))
+        menu_ayuda.addAction(act_modulo)
+
+        act_indice = QAction("Índice de ayuda…", self)
+        act_indice.setShortcut(QKeySequence("Ctrl+F1"))
+        act_indice.setStatusTip("Guía de todos los módulos, con buscador")
+        act_indice.triggered.connect(lambda: self.mostrar_ayuda(ayuda.TEMA_POR_DEFECTO))
+        menu_ayuda.addAction(act_indice)
+
+    def mostrar_ayuda(self, clave=None):
+        """Abre la ventana de ayuda en el tema indicado (por defecto, primeros pasos)."""
+        if self._ayuda_dialog is None:
+            self._ayuda_dialog = AyudaDialog(self)
+        self._ayuda_dialog.mostrar_tema(clave or ayuda.TEMA_POR_DEFECTO)
 
     def setup_statusbar(self):
         sb = self.statusBar()
@@ -490,6 +517,7 @@ class MainWindow(QMainWindow):
             self.modules[name] = {"instance": instance, "index": index, "title": title}
 
         module_data = self.modules[name]
+        self._modulo_actual = name
         self.stacked_widget.setCurrentIndex(module_data["index"])
 
         if hasattr(module_data["instance"], "cargar_datos"):
