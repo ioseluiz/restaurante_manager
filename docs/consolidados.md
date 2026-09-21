@@ -30,8 +30,18 @@ información de todas las otras para calcular el balance mensual.
 
 ## 2. Relación con otros módulos
 
-El módulo de Consolidados es **autónomo**: no depende de ningún otro módulo
-del sistema ni lo alimenta directamente.
+El módulo de Consolidados **no necesita que otro módulo esté cargado** para
+funcionar (cada pestaña se puede usar sola), pero **sí alimenta a otros**:
+
+| Dato de Consolidados | Lo usa |
+|---|---|
+| Diario de Ventas (total de ventas) | Panel de Control (tarjetas y gráfico de ventas), Rentabilidad (ventas del mes) |
+| Pagos en efectivo de Víveres, Carnes y Desayunos | Rentabilidad (costo real de ventas) |
+| Pagos en efectivo por categoría (Planilla, Honorarios, Mantenimiento…) | Rentabilidad (gastos operativos) |
+| Egresos con «Tipo de Gasto» | Presupuestos (control de ejecución de gastos fijos) y Costo de Platos (gastos indirectos) |
+
+Además, en Planilla un vale puede vincularse con una entrada del Diario de
+Ventas.
 
 > **Vínculo con Presupuestos (Tipo de Gasto):** los registros de egreso tienen
 > un campo opcional **"Tipo de Gasto"** cuya lista proviene del mismo catálogo
@@ -56,8 +66,8 @@ del sistema ni lo alimenta directamente.
 > | | Diario de Ventas (Consolidados) | Registro Ventas Diarias (Ventas) |
 > |---|---|---|
 > | ¿Qué registra? | Montos totales del día por método de cobro | Unidades vendidas de cada ítem del menú |
-> | Origen del dato | El cajero o administrador al cierre del día | El operador al registrar lo producido |
-> | ¿Para qué sirve? | Balance financiero mensual | Descuento de inventario (Kardex) |
+> | Origen del dato | El cajero o administrador al cierre del día | El operador, con las unidades vendidas del día |
+> | ¿Para qué sirve? | Balance financiero mensual, panel y rentabilidad | Descuento de inventario, costo teórico y platos vendidos |
 > | Tabla en BD | `diario_ventas` | `registro_ventas_diarias` |
 
 ---
@@ -85,11 +95,21 @@ Una tabla mensual que resume en una sola fila por mes todo lo que entró y sali�
 - **Total Gastos** → rojo en negrita (egreso total).
 - **Balance General** → verde si positivo (ganancia), rojo si negativo (pérdida).
 
+> **Nota:** la columna **Efectivo (-)** son los **pagos en efectivo** (egresos de
+> la pestaña «Pagos en Efectivo»). No es el efectivo cobrado del Diario de
+> Ventas, que forma parte del Total Ventas.
+
+### Gráficos
+
+Debajo de la tabla hay dos gráficos de dona del mes elegido: **«Ventas por
+método de cobro»** y **«Gastos por método de pago»**. El selector **«Período
+del gráfico»** cambia el mes y **Mes Actual** vuelve al mes en curso.
+**Actualizar Datos** recarga la tabla y los gráficos.
+
 ### Exportar
 
-El botón **"Exportar CSV"** descarga la tabla completa en formato CSV con un
-selector de carpeta y mes. Útil para llevar el resumen a Excel o enviarlo al
-contador.
+El botón **"Exportar CSV"** pide elegir el **mes** a exportar (o «Todos») y el
+archivo de destino. Útil para llevar el resumen a Excel o enviarlo al contador.
 
 ---
 
@@ -110,12 +130,13 @@ girados y cuánto suma por mes.
 | Nombre Cheque | Nombre del beneficiario (a quién se le pagó) |
 | Detalle | Descripción del concepto del pago |
 | Monto | Valor del cheque |
+| Tipo de Gasto | Opcional: vincula el cheque a un gasto fijo (Alquiler, Luz…) del catálogo del Presupuesto |
 
 ### Cómo registrar un cheque
 
 1. Hacer clic en **"+ Nuevo Registro"**.
 2. Completar los campos: fecha, número de cheque, nombre del beneficiario,
-   detalle y monto.
+   detalle, monto y, si corresponde, el tipo de gasto.
 3. Hacer clic en **"Guardar"**.
 
 Para ingresar varios cheques seguidos usar **"Guardar y Añadir Otro"**, que
@@ -129,7 +150,9 @@ cheque en cada período.
 
 ### Filtros disponibles
 
-Se puede filtrar la lista por: Fecha, No. CK, Nombre del cheque y Detalle.
+Se puede filtrar la lista por: Fecha (formato AAAA-MM-DD), No. CK, Nombre del
+cheque y Detalle. Los botones **Editar Seleccionado** y **Eliminar** actúan sobre
+la fila elegida.
 
 ---
 
@@ -177,6 +200,10 @@ fecha de pago y tasa de interés de la tarjeta seleccionada.
 | Comercio | Nombre del comercio o proveedor (solo para compras) |
 | Descripción | Detalle del concepto |
 | Monto | Valor de la transacción |
+| Tipo de Gasto | Opcional (para compras): vincula el cargo a un gasto fijo del Presupuesto |
+
+Se registran con **+ Nueva Transacción** (o **Guardar y Añadir Otro** para
+varias seguidas).
 
 Las filas se colorean automáticamente: **rojo claro** para compras y **verde
 claro** para pagos.
@@ -281,6 +308,9 @@ Al seleccionar una se carga su resumen mensual y el listado de transacciones.
 | Proveedor / Comercio | A quién se le transfirió |
 | Descripción | Concepto del pago |
 | Monto | Valor de la transferencia |
+| Tipo de Gasto | Opcional: vincula el pago a un gasto fijo del Presupuesto |
+
+Las transacciones se registran con **+ Nueva Transacción**.
 
 Todas las transacciones Yappy se consideran **egresos** y se suman al Total
 Gastos en el Resumen General.
@@ -304,10 +334,11 @@ General mensual.
 | Pagos Pedidos Ya | Monto cobrado por Pedidos Ya | — |
 | Pagos Clave | Monto cobrado por sistema Clave | — |
 | Pagos Visa/MC | Monto cobrado por Visa o MasterCard | — |
+| Pagos en Efectivo | Monto cobrado en efectivo | Se incluye en el total |
 | Vale | Monto de vales emitidos ese día | Si > 0 aparece campo de descripción |
 | No. Facturas | Cantidad de facturas emitidas en el día | Entero |
-| Sobrante Caja | Dinero sobrante al cuadrar la caja | Suma al total |
-| Faltante Caja | Dinero faltante al cuadrar la caja | Suma al total |
+| Sobrante Caja (+) | Dinero sobrante al cuadrar la caja | Se **suma** al total |
+| Faltante Caja (−) | Dinero faltante al cuadrar la caja | Se **resta** del total (se escribe como monto positivo) |
 | Depósitos | Monto depositado en banco ese día | Solo informativo |
 | TOTAL VENTAS | Calculado automáticamente | Campo de solo lectura |
 
@@ -317,21 +348,25 @@ El sistema calcula el total automáticamente cada vez que se modifica
 cualquier campo de monto:
 
 ```
-TOTAL VENTAS = Yappy + Pedidos Ya + Clave + Visa/MC + Vale + Sobrante + Faltante
+TOTAL VENTAS = Yappy + Pedidos Ya + Clave + Visa/MC + Efectivo + Vale + Sobrante − Faltante
 ```
 
 El campo **TOTAL VENTAS** es de solo lectura — no se puede editar
 directamente. Cuadra automáticamente conforme se ingresan los valores.
 
+> **Registros anteriores:** hasta la versión previa el faltante se **sumaba** al
+> total. Los registros ya guardados conservan el total que tenían; si abre uno para
+> editarlo y lo guarda, el total se recalcula con la regla actual (faltante resta).
+
 ### Cómo registrar el diario de un día
 
 1. Hacer clic en **"+ Nuevo Registro"**.
 2. Seleccionar la fecha del día.
-3. Ingresar los montos cobrados por cada método de pago.
+3. Ingresar los montos cobrados por cada método de pago (Yappy, Pedidos Ya, Clave, Visa/MC y Efectivo).
 4. Si hubo vales, ingresar el monto; aparecerá un campo adicional para
    describir el vale (ej. "Vale de alimentación empleados").
 5. Registrar el número de facturas emitidas ese día.
-6. Si la caja tuvo diferencia, ingresar sobrante o faltante según corresponda.
+6. Si la caja tuvo diferencia, ingresar el sobrante (suma) o el faltante (resta), siempre como monto positivo.
 7. Si se realizó un depósito bancario, ingresar el monto en **Depósitos**.
 8. Verificar que el **TOTAL VENTAS** calculado sea correcto.
 9. Hacer clic en **"Guardar"**.
@@ -369,10 +404,10 @@ rendimiento mensual sin navegar a la pestaña de Resumen General.
 Cuadrar la caja al final del día operativo
          ↓
 Consolidados → Diario de Ventas → + Nuevo Registro
-  • Ingresar montos por método de pago (Yappy, Clave, Visa/MC, Pedidos Ya)
+  • Ingresar montos por método de pago (Yappy, Clave, Visa/MC, Pedidos Ya, Efectivo)
   • Registrar vales si aplica
   • Ingresar número de facturas
-  • Anotar sobrante o faltante de caja
+  • Anotar sobrante (suma) o faltante (resta) de caja
   • Registrar depósito bancario si se realizó
   • Verificar TOTAL VENTAS calculado y guardar
 ```
@@ -446,8 +481,8 @@ no usarla más.
 
 ## 12. Tablas en la base de datos
 
-El módulo utiliza las siguientes tablas, todas independientes del resto del
-sistema:
+El módulo utiliza las siguientes tablas. No dependen (por clave foránea) de
+tablas de otros módulos, aunque otros módulos sí las leen (ver sección 2):
 
 | Tabla | Contenido |
 |---|---|

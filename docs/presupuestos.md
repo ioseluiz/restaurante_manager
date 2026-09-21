@@ -182,7 +182,10 @@ Ejemplo: si el % promedio es 12%, el Factor = 1.12
 Para cada producto en los reportes seleccionados:
 
 1. Se agrupa por código de producto y día de la semana.
-2. Se promedia la cantidad vendida por día entre los reportes:
+2. Se toma el **promedio por día que trae el reporte** (columna **Prom/Med** del
+   CSV del POS, no la cantidad total) y se promedia entre los reportes
+   seleccionados, dividiendo por el número de reportes elegidos (un reporte donde
+   el producto no aparece cuenta como cero):
    ```
    Promedio_lunes = (lunes_reporte1 + lunes_reporte2 + ...) / cantidad_reportes
    ```
@@ -322,7 +325,7 @@ cantidad y monto manual.
 
 ### 7.4 Eliminar una línea del presupuesto
 
-Botón **"X"** junto a cualquier insumo.
+Botón **"Borrar"** junto a cualquier insumo.
 
 Elimina esa línea del presupuesto y recalcula el total. Útil si un insumo
 no se va a comprar ese mes (hay existencia suficiente) o si fue incluido
@@ -365,7 +368,7 @@ correspondiente.
 
 Al registrar una compra en el módulo **Compras y Proveedores**:
 1. Completar los datos de la compra normalmente (proveedor, fecha, productos).
-2. En el campo **"Presupuesto asociado"**, seleccionar el presupuesto del mes
+2. En el campo **"Vincular a Presupuesto"**, seleccionar el presupuesto del mes
    correspondiente.
 3. Guardar la compra.
 
@@ -397,8 +400,8 @@ La vista muestra un árbol comparativo por categoría e insumo:
 | Columna | Qué muestra |
 |---|---|
 | Monto Presupuestado | Monto estimado al generar el presupuesto |
-| Monto Ejecutado | Suma real de lo que se gastó en compras vinculadas a ese presupuesto |
-| Saldo | Diferencia: azul = dentro del margen, rojo = excedido |
+| Monto Ejecutado (Real) | Suma real de lo que se gastó en compras vinculadas a ese presupuesto |
+| Saldo (Diferencia) | Diferencia: azul = dentro del margen, rojo = excedido |
 
 Al pie de la pantalla aparece el **resumen global**:
 - Total original presupuestado
@@ -423,8 +426,9 @@ final del árbol, cada una comparando presupuestado vs. ejecutado real:
 
 - **PLANILLA:** el ejecutado se calcula **automáticamente** a partir de los
   períodos de pago (horas reales) cuya fecha de inicio cae en el mes/año del
-  presupuesto, con las mismas reglas del módulo Planilla (bruto + aportes
-  patronales). No requiere captura adicional.
+  presupuesto, con el **costo laboral completo** (el mismo del Resumen de
+  Planilla y del bloque de planilla del presupuesto; ver 12.5). No requiere
+  captura adicional.
 - **GASTOS FIJOS:** el ejecutado se toma de los egresos registrados en
   **Consolidados** (cheques, tarjeta tipo COMPRA, Yappy y efectivo) del mes que
   hayan sido **etiquetados con un "Tipo de Gasto"**. Se compara concepto por
@@ -552,7 +556,8 @@ Total General = Total Compras + Total Planilla
   aparece una categoría **"PLANILLA (PLANIFICADA)"** junto a las categorías de
   insumos, con el monto de la planilla del mes y cada empleado como sub-fila.
 - **Pestaña "Planilla":** un editor detallado con el desglose por empleado
-  (salario bruto, deducciones del colaborador, costo patronal y costo total).
+  (salario bruto, deducciones del colaborador, costo patronal, provisiones y
+  costo total).
 
 Ambas vistas leen la misma información: editar en una se refleja en la otra y
 en el Total General.
@@ -593,20 +598,35 @@ instante.
 
 ### 12.5 Cómo se calcula el costo
 
-Por cada empleado, el costo que entra al presupuesto es el **costo real para el
-restaurante**:
+Por cada empleado, el costo que entra al presupuesto es el **costo laboral
+completo** (el mismo que calcula el *Resumen de Planilla*):
 
 ```
-Salario bruto  = Σ (horas_tipo × salario_hora × recargo_tipo)
-Costo patronal = Salario bruto × (Seguro Social empleador + Seguro Educativo empleador)
-Costo total    = Salario bruto + Costo patronal      ← suma al presupuesto
+Salario bruto         = Σ (horas_tipo × salario_hora × recargo_tipo)
+Costo patronal        = Salario bruto × (Seguro Social + Seguro Educativo + Riesgos Profesionales, del empleador)
+Provisiones           = Salario bruto × (Décimo tercer mes + Vacaciones + Prima de antigüedad)
+Costo total           = Salario bruto + Costo patronal + Provisiones      ← suma al presupuesto
 ```
 
-Los recargos por tipo de hora y los porcentajes de aportes se toman de la
-configuración del módulo de **Planilla**, por lo que planilla y presupuesto
-calculan siempre con las mismas reglas. Las deducciones del colaborador (su
-Seguro Social y Educativo) se muestran como referencia pero **no** se restan
-del costo del presupuesto, porque son parte del bruto que el restaurante paga.
+- La **prima de antigüedad** solo se provisiona a empleados con contrato
+  **INDEFINIDO**; el décimo tercer mes y las vacaciones aplican a todos.
+- Los recargos por tipo de hora y todos los porcentajes se toman de la
+  configuración del módulo de **Planilla**.
+- Las deducciones del colaborador (su Seguro Social, Seguro Educativo e ISR) se
+  muestran como referencia pero **no** se suman al costo, porque forman parte del
+  bruto que el restaurante paga.
+- En la tabla del bloque, **Costo Patronal** incluye el riesgo profesional y
+  **Provisiones** es una columna aparte, de modo que
+  *Salario Bruto + Costo Patronal + Provisiones = Costo Total*.
+
+El **ejecutado de planilla** del Control Presupuestal y los indirectos de Costo de
+Platos usan exactamente el mismo cálculo, así que planilla, presupuesto y costo de
+platos siempre coinciden.
+
+> **Filas creadas antes de este cambio:** las filas del bloque de planilla que ya
+> estaban guardadas conservan su costo anterior (sin riesgo profesional ni
+> provisiones). Se actualizan al **Editar** la fila o al volver a **copiar la
+> planilla de un período**.
 
 ### 12.6 Incluir planilla al crear el presupuesto
 
