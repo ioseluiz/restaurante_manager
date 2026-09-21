@@ -1158,6 +1158,12 @@ class DatabaseManager:
         except Exception:
             pass  # la columna ya existe
 
+        # Abastecimiento interno: los traslados se anulan (no se borran) y quedan con su fecha de anulación.
+        try:
+            self.cursor.execute("ALTER TABLE abastecimiento_interno ADD COLUMN anulado_en DATETIME")
+        except Exception:
+            pass  # la columna ya existe
+
         self.conn.commit()
 
     def _migrate_costeo_platos(self):
