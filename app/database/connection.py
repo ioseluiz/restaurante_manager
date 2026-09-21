@@ -1148,6 +1148,8 @@ class DatabaseManager:
         except Exception:
             pass
 
+        self._migrate_costeo_platos()
+
         # Presupuesto: la planilla del presupuesto usa el costo laboral completo (con provisiones).
         try:
             self.cursor.execute(
@@ -1157,6 +1159,105 @@ class DatabaseManager:
             pass  # la columna ya existe
 
         self.conn.commit()
+
+    def _migrate_costeo_platos(self):
+        """Esquema del módulo Costo de platos (idempotente).
+
+        rendimiento NULL en menu_items => la receta es por porción (comportamiento
+        histórico). Con rendimiento => cantidad_necesaria es por tanda.
+        """
+        for ddl in [
+            "ALTER TABLE menu_items ADD COLUMN categoria_costeo TEXT",
+            "ALTER TABLE menu_items ADD COLUMN es_componente INTEGER DEFAULT 0",
+            "ALTER TABLE menu_items ADD COLUMN rendimiento REAL",
+            "ALTER TABLE menu_items ADD COLUMN unidad_rendimiento_id INTEGER REFERENCES unidades_medida(id)",
+            "ALTER TABLE menu_items ADD COLUMN porcion_servida REAL",
+            "ALTER TABLE menu_items ADD COLUMN unidad_porcion_id INTEGER REFERENCES unidades_medida(id)",
+            "ALTER TABLE recetas ADD COLUMN unidad_id INTEGER REFERENCES unidades_medida(id)",
+            """CREATE TABLE IF NOT EXISTS receta_componentes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                menu_item_id INTEGER NOT NULL,
+                componente_id INTEGER NOT NULL,
+                cantidad REAL NOT NULL DEFAULT 0.0,
+                unidad_id INTEGER,
+                FOREIGN KEY (menu_item_id)  REFERENCES menu_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (componente_id) REFERENCES menu_items(id),
+                FOREIGN KEY (unidad_id)     REFERENCES unidades_medida(id),
+                UNIQUE (menu_item_id, componente_id))""",
+            """CREATE TABLE IF NOT EXISTS plato_extras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                menu_item_id INTEGER NOT NULL,
+                componente_id INTEGER NOT NULL,
+                cantidad_porciones REAL NOT NULL DEFAULT 1.0,
+                tipo TEXT NOT NULL DEFAULT 'ACOMPANAMIENTO'
+                    CHECK (tipo IN ('ACOMPANAMIENTO','BEBIDA','EMPAQUE')),
+                canal TEXT NOT NULL DEFAULT 'AMBOS'
+                    CHECK (canal IN ('LOCAL','LLEVAR','AMBOS')),
+                FOREIGN KEY (menu_item_id)  REFERENCES menu_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (componente_id) REFERENCES menu_items(id))""",
+            """CREATE TABLE IF NOT EXISTS costeo_config (
+                clave TEXT PRIMARY KEY,
+                valor TEXT NOT NULL)""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass  # columna/tabla ya existe
+
+        for clave, valor in [
+            ("dias_mes", "30"),
+            ("platos_dia_default", "198"),
+            ("pct_ganancia_local", "30"),
+            ("pct_ganancia_pedidosya", "50"),
+            ("base_indirectos", "REAL"),          # REAL | PRESUPUESTO
+            ("fuente_costo_insumo", "VIGENTE"),   # VIGENTE | PROMEDIO
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO costeo_config (clave, valor) VALUES (?,?)",
+                    (clave, valor),
+                )
+            except Exception:
+                pass
+
+        try:
+            self._crear_vista_recetas_explotadas()
+        except Exception:
+            pass
+
+        # Conversiones estándar entre unidades que ya existan (por abreviatura).
+        # factor: cantidad_origen * factor = cantidad_destino
+        try:
+            ids = {}
+            for uid, abrev in self.cursor.execute(
+                "SELECT id, abreviatura FROM unidades_medida"
+            ).fetchall():
+                ids.setdefault(str(abrev).strip().lower(), uid)
+            pares = [
+                ("kg", "g", 1000.0), ("lb", "g", 453.592), ("oz", "g", 28.3495),
+                ("lb", "kg", 0.453592),
+                ("l", "ml", 1000.0), ("lt", "ml", 1000.0), ("gal", "ml", 3785.41),
+                ("gal", "l", 3.78541),
+            ]
+            for o, d, f in pares:
+                if o in ids and d in ids:
+                    for a, b, fac in ((ids[o], ids[d], f), (ids[d], ids[o], 1.0 / f)):
+                        existe = self.cursor.execute(
+                            "SELECT 1 FROM conversiones_unidades WHERE unidad_origen_id=? AND unidad_destino_id=?",
+                            (a, b),
+                        ).fetchone()
+                        if not existe:
+                            self.cursor.execute(
+                                "INSERT INTO conversiones_unidades (unidad_origen_id, unidad_destino_id, factor_conversion) VALUES (?,?,?)",
+                                (a, b, fac),
+                            )
+        except Exception:
+            pass
+
+    def _crear_vista_recetas_explotadas(self):
+        from app.database.costeo_sql import NOMBRE_VISTA_RECETAS, SQL_VISTA_RECETAS_EXPLOTADAS
+        self.cursor.execute(f"DROP VIEW IF EXISTS {NOMBRE_VISTA_RECETAS}")
+        self.cursor.execute(SQL_VISTA_RECETAS_EXPLOTADAS)
 
     def create_default_admin(self):
         try:

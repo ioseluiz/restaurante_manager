@@ -985,8 +985,8 @@ class CrearPresupuestoDialog(QDialog):
                 # --- MODIFICADO: Ya no buscamos factor_calculo de insumos, sino aplicamos pct global del reporte ---
                 query_recetas = """
                     SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
-                           r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
-                    FROM recetas r
+                           r.cantidad_necesaria AS cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
+                    FROM v_recetas_explotadas r
                     JOIN menu_items m ON r.menu_item_id = m.id
                     JOIN insumos i ON r.insumo_id = i.id
                     LEFT JOIN categorias_insumos c ON i.categoria_id = c.id
@@ -1805,8 +1805,8 @@ class VerPresupuestoDialog(QDialog):
 
                 query_recetas = """
                     SELECT r.insumo_id, i.nombre, c.nombre as categoria, 
-                           r.cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
-                    FROM recetas r
+                           r.cantidad_necesaria AS cantidad_necesaria, m.nombre as menu_nombre, u.abreviatura
+                    FROM v_recetas_explotadas r
                     JOIN menu_items m ON r.menu_item_id = m.id
                     JOIN insumos i ON r.insumo_id = i.id
                     LEFT JOIN categorias_insumos c ON i.categoria_id = c.id

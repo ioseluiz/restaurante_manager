@@ -150,6 +150,7 @@ class VentasDiariasView(QWidget):
                 FROM menu_items m
                 LEFT JOIN detalle_ventas_diarias d 
                 ON m.id = d.menu_item_id AND d.registro_diario_id = ?
+                WHERE COALESCE(m.es_componente, 0) = 0
                 ORDER BY m.nombre ASC
             """
             items_data = self.db.fetch_all(query, (self.registro_actual_id,))
@@ -163,7 +164,10 @@ class VentasDiariasView(QWidget):
             )
             self.btn_process.setEnabled(False)  # Debe guardar primero
 
-            query = "SELECT id, codigo, nombre, 0 FROM menu_items ORDER BY nombre ASC"
+            query = (
+                "SELECT id, codigo, nombre, 0 FROM menu_items "
+                "WHERE COALESCE(es_componente, 0) = 0 ORDER BY nombre ASC"
+            )
             items_data = self.db.fetch_all(query)
 
         # 2. Llenar Tabla

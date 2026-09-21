@@ -39,6 +39,7 @@ from app.views.modulos.sucursales_crud import SucursalesCRUD
 from app.views.modulos.grafico_precios import GraficoPreciosView
 from app.views.modulos.planilla import PlanillaView
 from app.views.modulos.rentabilidad_view import RentabilidadView
+from app.views.modulos.costo_platos import CostoPlatosView
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -283,6 +284,11 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_rentabilidad)
 
+        self.btn_costo_platos = self.create_nav_button(
+            "Costo de Platos", "assets/icons/nav_costo_platos.svg", self.show_costo_platos
+        )
+        sidebar_layout.addWidget(self.btn_costo_platos)
+
         self.btn_grafico_precios = self.create_nav_button(
             "Análisis de Precios", "assets/icons/nav_grafico_precios.svg", self.show_grafico_precios
         )
@@ -523,6 +529,9 @@ class MainWindow(QMainWindow):
 
     def show_rentabilidad(self):
         self.load_module("rentabilidad", RentabilidadView, "Análisis de Rentabilidad", needs_db=True)
+
+    def show_costo_platos(self):
+        self.load_module("costo_platos", CostoPlatosView, "Costo de Platos", needs_db=True)
 
     def show_grafico_precios(self):
         self.load_module("grafico_precios", GraficoPreciosView, "Análisis de Precios", needs_db=True)

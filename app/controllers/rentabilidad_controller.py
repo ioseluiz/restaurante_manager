@@ -173,7 +173,7 @@ class RentabilidadController:
             JOIN (
                 SELECT rec.menu_item_id,
                        SUM(rec.cantidad_necesaria * i.costo_unitario) AS costo_receta
-                FROM recetas rec
+                FROM v_recetas_explotadas rec
                 JOIN insumos i ON rec.insumo_id = i.id
                 GROUP BY rec.menu_item_id
             ) rc ON rc.menu_item_id = d.menu_item_id
