@@ -135,7 +135,7 @@ class TabInsumos(QWidget):
             (0, "Filtrar ID"),
             (1, "Filtrar Nombre"),
             (3, "Filtrar Categoría"),
-            (6, "Filtrar Presentación"),
+            (4, "Filtrar Presentación"),
         ]
 
         for col_idx, placeholder in config_filtros:
@@ -150,15 +150,13 @@ class TabInsumos(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(
             [
                 "ID",
                 "Nombre",
                 "Unidad Base",
                 "Categoría",
-                "Grupo Calc.",
-                "Factor",
                 "Presentación",
             ]
         )
@@ -188,7 +186,7 @@ class TabInsumos(QWidget):
 
         # Se agrega validación para saber si tiene presentación de compra definida
         query = """
-            SELECT i.id, i.nombre, u.nombre, c.nombre, i.grupo_calculo, i.factor_calculo,
+            SELECT i.id, i.nombre, u.nombre, c.nombre,
                    CASE WHEN (SELECT COUNT(p.id) FROM presentaciones_compra p WHERE p.insumo_id = i.id) > 0 
                         THEN 'Definida' ELSE 'Sin definir' END as estado_presentacion
             FROM insumos i
@@ -212,17 +210,8 @@ class TabInsumos(QWidget):
                 r_idx, 3, QTableWidgetItem(str(row[3]) if row[3] else "-")
             )
 
-            # Grupo
-            self.table.setItem(
-                r_idx, 4, QTableWidgetItem(str(row[4]) if row[4] else "General")
-            )
-
-            # Factor
-            val_factor = row[5] if row[5] else 1.0
-            self.table.setItem(r_idx, 5, NumericItem(str(val_factor)))
-
             # Estado Presentación
-            self.table.setItem(r_idx, 6, QTableWidgetItem(str(row[6])))
+            self.table.setItem(r_idx, 4, QTableWidgetItem(str(row[4])))
 
         # Ajuste inicial de columnas
         self.table.resizeColumnsToContents()
@@ -301,18 +290,6 @@ class InsumoDialog(QDialog):
         self.cmb_unidad = QComboBox()
         self.cmb_categoria = QComboBox()
 
-        self.cmb_grupo_calc = QComboBox()
-        self.cmb_grupo_calc.addItems(["General", "COMBOS", "DESAYUNO", "CRIOLLA"])
-        self.cmb_grupo_calc.setEditable(True)
-
-        self.spin_factor = QDoubleSpinBox()
-        self.spin_factor.setRange(0.1, 10.0)
-        self.spin_factor.setSingleStep(0.1)
-        self.spin_factor.setValue(1.0)
-        self.spin_factor.setToolTip(
-            "Factor multiplicador para el cálculo (Ej: 1.0 = exacto, 1.1 = +10% seguridad)"
-        )
-
         # Cargar Combos BD
         unidades = self.db.fetch_all(
             "SELECT id, nombre, abreviatura FROM unidades_medida"
@@ -328,8 +305,6 @@ class InsumoDialog(QDialog):
         layout.addRow("Nombre Insumo:", self.txt_nombre)
         layout.addRow("Unidad de Inventario:", self.cmb_unidad)
         layout.addRow("Categoría:", self.cmb_categoria)
-        layout.addRow("Grupo de Cálculo:", self.cmb_grupo_calc)
-        layout.addRow("Factor Cálculo:", self.spin_factor)
 
         self.btn_codigos = QPushButton("Códigos de barras / QR…")
         self.btn_codigos.clicked.connect(self._abrir_codigos)
@@ -360,7 +335,7 @@ class InsumoDialog(QDialog):
         dlg.exec_()
 
     def cargar_datos_edicion(self):
-        query = "SELECT nombre, unidad_base_id, categoria_id, grupo_calculo, factor_calculo FROM insumos WHERE id=?"
+        query = "SELECT nombre, unidad_base_id, categoria_id FROM insumos WHERE id=?"
         rows = self.db.fetch_all(query, (self.insumo_id,))
         if rows:
             row = rows[0]
@@ -374,23 +349,10 @@ class InsumoDialog(QDialog):
             if idx_c >= 0:
                 self.cmb_categoria.setCurrentIndex(idx_c)
 
-            grupo = row[3]
-            idx_g = self.cmb_grupo_calc.findText(grupo) if grupo else 0
-            if idx_g >= 0:
-                self.cmb_grupo_calc.setCurrentIndex(idx_g)
-            else:
-                self.cmb_grupo_calc.setCurrentText(grupo)
-
-            factor = row[4]
-            if factor:
-                self.spin_factor.setValue(factor)
-
     def guardar(self):
         nom = self.txt_nombre.text().strip()
         uid = self.cmb_unidad.currentData()
         cid = self.cmb_categoria.currentData()
-        grupo = self.cmb_grupo_calc.currentText()
-        factor = self.spin_factor.value()
 
         if not nom or not uid:
             return QMessageBox.warning(
@@ -401,18 +363,16 @@ class InsumoDialog(QDialog):
             if self.insumo_id:
                 query = """
                     UPDATE insumos 
-                    SET nombre=?, unidad_base_id=?, categoria_id=?, grupo_calculo=?, factor_calculo=? 
+                    SET nombre=?, unidad_base_id=?, categoria_id=?
                     WHERE id=?
                 """
-                self.db.execute_query(
-                    query, (nom, uid, cid, grupo, factor, self.insumo_id)
-                )
+                self.db.execute_query(query, (nom, uid, cid, self.insumo_id))
             else:
                 query = """
-                    INSERT INTO insumos (nombre, unidad_base_id, categoria_id, grupo_calculo, factor_calculo) 
-                    VALUES (?,?,?,?,?)
+                    INSERT INTO insumos (nombre, unidad_base_id, categoria_id)
+                    VALUES (?,?,?)
                 """
-                self.db.execute_query(query, (nom, uid, cid, grupo, factor))
+                self.db.execute_query(query, (nom, uid, cid))
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
