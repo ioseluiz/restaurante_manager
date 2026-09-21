@@ -20,11 +20,28 @@ DEFAULT_RECARGOS = {
 
 # Porcentajes de deducción por defecto (en %)
 DEFAULT_DEDUCCIONES_PCT = {
-    "seguro_social_colaborador":   9.75,
-    "seguro_social_empleador":    12.25,
-    "seguro_educativo_colaborador": 1.25,
-    "seguro_educativo_empleador":   1.50,
+    "seguro_social_colaborador":       9.75,
+    "seguro_social_empleador":        12.25,
+    "seguro_educativo_colaborador":    1.25,
+    "seguro_educativo_empleador":      1.50,
+    # Cargas patronales y provisiones (Panamá) — configurables
+    "riesgos_profesionales_empleador": 2.10,
+    "provision_decimo":                8.33,
+    "provision_vacaciones":            8.33,
+    "provision_prima_antiguedad":      1.92,
 }
+
+# Tabla de ISR por defecto (DGI personas naturales): (desde, hasta, tasa, cuota_fija).
+# hasta = None significa "sin límite superior".
+DEFAULT_ISR_TRAMOS = [
+    (0.0,      11000.0,  0.00,     0.00),
+    (11000.0,  50000.0,  0.15,     0.00),
+    (50000.0,  None,     0.25,  5850.00),
+]
+
+# Períodos de pago por año por defecto (quincenal). Se usa para anualizar la
+# base del ISR cuando el llamador no calcula el factor desde las fechas.
+DEFAULT_FACTOR_ANUAL = 24.0
 
 
 def cargar_config(db):
@@ -54,6 +71,39 @@ def cargar_config(db):
         pass
 
     return recargos, pcts
+
+
+def cargar_isr_tramos(db):
+    """Lee la tabla progresiva de ISR desde la base de datos, cayendo a
+    DEFAULT_ISR_TRAMOS si no hay registros. Devuelve lista de
+    (desde, hasta|None, tasa, cuota_fija)."""
+    try:
+        rows = db.fetch_all(
+            "SELECT desde, hasta, tasa, cuota_fija FROM planilla_isr_tramos ORDER BY orden, desde", ()
+        )
+        tramos = [
+            (float(d or 0), (float(h) if h is not None else None),
+             float(t or 0), float(c or 0))
+            for d, h, t, c in rows
+        ]
+        if tramos:
+            return tramos
+    except Exception:
+        pass
+    return list(DEFAULT_ISR_TRAMOS)
+
+
+def calcular_isr(base_anual, tramos):
+    """Impuesto sobre la renta ANUAL para una base gravable anual, según los
+    tramos (desde, hasta|None, tasa, cuota_fija). Retorna 0 si cae en el
+    tramo exento."""
+    base = float(base_anual or 0)
+    if base <= 0:
+        return 0.0
+    for desde, hasta, tasa, cuota in tramos:
+        if base > desde and (hasta is None or base <= hasta):
+            return cuota + (base - desde) * tasa
+    return 0.0
 
 
 def calcular_costo(salario_hora, horas, recargos, pcts):
@@ -100,3 +150,63 @@ def calcular_costo(salario_hora, horas, recargos, pcts):
         "costo_patronal":    costo_patronal,
         "costo_total":       costo_total,
     }
+
+
+def calcular_costo_completo(salario_hora, horas, recargos, pcts,
+                            tipo_contrato="INDEFINIDO", tramos_isr=None,
+                            factor_anual=DEFAULT_FACTOR_ANUAL):
+    """Costo laboral REAL para la empresa (Panamá), incluyendo cargas
+    patronales adicionales y provisiones laborales.
+
+    Envuelve calcular_costo() y añade:
+      riesgos_prof         — aporte patronal de riesgos profesionales
+      provision_decimo     — provisión del décimo tercer mes (XIII)
+      provision_vacaciones — provisión de vacaciones
+      provision_prima      — provisión prima de antigüedad (solo INDEFINIDO)
+      provisiones_total    — suma de las tres provisiones
+      isr                  — retención de ISR del colaborador (por período)
+      costo_patronal_total — SS + SE + riesgos profesionales (empleador)
+      costo_total_completo — bruto + costo_patronal_total + provisiones_total
+
+    El ISR se estima anualizando la base del período por `factor_anual`
+    (períodos de pago al año) y prorrateando el impuesto anual de vuelta.
+    Mantiene todas las claves de calcular_costo() para compatibilidad.
+    """
+    base = calcular_costo(salario_hora, horas, recargos, pcts)
+    bruto = base["salario_bruto"]
+
+    pct_riesgos = pcts.get("riesgos_profesionales_empleador", 0.0) / 100
+    pct_decimo  = pcts.get("provision_decimo",                0.0) / 100
+    pct_vac     = pcts.get("provision_vacaciones",            0.0) / 100
+    pct_prima   = pcts.get("provision_prima_antiguedad",      0.0) / 100
+
+    es_indefinido = str(tipo_contrato or "").strip().upper() == "INDEFINIDO"
+
+    riesgos     = bruto * pct_riesgos
+    prov_decimo = bruto * pct_decimo
+    prov_vac    = bruto * pct_vac
+    prov_prima  = bruto * pct_prima if es_indefinido else 0.0
+    provisiones = prov_decimo + prov_vac + prov_prima
+
+    tramos = tramos_isr if tramos_isr is not None else list(DEFAULT_ISR_TRAMOS)
+    factor = float(factor_anual or 0)
+    if factor > 0:
+        isr = calcular_isr(bruto * factor, tramos) / factor
+    else:
+        isr = 0.0
+
+    costo_patronal_total = base["costo_patronal"] + riesgos
+    costo_total_completo = bruto + costo_patronal_total + provisiones
+
+    result = dict(base)
+    result.update({
+        "riesgos_prof":         riesgos,
+        "provision_decimo":     prov_decimo,
+        "provision_vacaciones": prov_vac,
+        "provision_prima":      prov_prima,
+        "provisiones_total":    provisiones,
+        "isr":                  isr,
+        "costo_patronal_total": costo_patronal_total,
+        "costo_total_completo": costo_total_completo,
+    })
+    return result

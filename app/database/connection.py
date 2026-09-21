@@ -529,11 +529,14 @@ class DatabaseManager:
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre        TEXT NOT NULL,
                 apellido      TEXT NOT NULL,
+                cedula        TEXT,
                 puesto        TEXT,
                 sucursal_id   INTEGER,
                 salario_hora  REAL DEFAULT 0.0,
+                tipo_contrato TEXT DEFAULT 'INDEFINIDO',
                 activo        INTEGER DEFAULT 1,
                 fecha_ingreso DATE,
+                fecha_baja    DATE,
                 FOREIGN KEY (sucursal_id) REFERENCES sucursales(id)
             );
         """)
@@ -656,6 +659,47 @@ class DatabaseManager:
                 motivo_ajuste TEXT,
                 FOREIGN KEY (conteo_id) REFERENCES conteos_inventario(id) ON DELETE CASCADE,
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
+            );
+        """)
+
+        # Tramos de ISR (tabla progresiva DGE/DGI, configurable)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS planilla_isr_tramos (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                desde      REAL NOT NULL DEFAULT 0.0,
+                hasta      REAL,
+                tasa       REAL NOT NULL DEFAULT 0.0,
+                cuota_fija REAL NOT NULL DEFAULT 0.0,
+                orden      INTEGER NOT NULL DEFAULT 0
+            );
+        """)
+
+        # Provisiones laborales devengadas por período (XIII, vacaciones, prima)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS provisiones_laborales (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                periodo_id  INTEGER,
+                tipo        TEXT NOT NULL,
+                monto       REAL NOT NULL DEFAULT 0.0,
+                fecha       DATE,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Pagos reales de las provisiones (pago de XIII, vacaciones tomadas, etc.)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pagos_provisiones (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                tipo        TEXT NOT NULL,
+                fecha       DATE NOT NULL,
+                monto       REAL NOT NULL DEFAULT 0.0,
+                descripcion TEXT,
+                periodo_id  INTEGER,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE SET NULL
             );
         """)
 
@@ -1024,6 +1068,83 @@ class DatabaseManager:
                       AND pc.costo_unitario_calculado > 0
                   )
             """)
+        except Exception:
+            pass
+
+        # ---------------------------------------------------------------
+        # Nómina completa (Panamá): tipo de contrato, provisiones e ISR
+        # ---------------------------------------------------------------
+        # Nuevas columnas de empleado (instalaciones existentes)
+        for col_def in [
+            "ALTER TABLE empleados ADD COLUMN cedula        TEXT",
+            "ALTER TABLE empleados ADD COLUMN tipo_contrato TEXT DEFAULT 'INDEFINIDO'",
+            "ALTER TABLE empleados ADD COLUMN fecha_baja    DATE",
+        ]:
+            try:
+                self.cursor.execute(col_def)
+            except Exception:
+                pass
+
+        # Tablas de provisiones e ISR (instalaciones existentes)
+        for ddl in [
+            """CREATE TABLE IF NOT EXISTS planilla_isr_tramos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                desde REAL NOT NULL DEFAULT 0.0, hasta REAL,
+                tasa REAL NOT NULL DEFAULT 0.0, cuota_fija REAL NOT NULL DEFAULT 0.0,
+                orden INTEGER NOT NULL DEFAULT 0)""",
+            """CREATE TABLE IF NOT EXISTS provisiones_laborales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, periodo_id INTEGER,
+                tipo TEXT NOT NULL, monto REAL NOT NULL DEFAULT 0.0, fecha DATE,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE)""",
+            """CREATE TABLE IF NOT EXISTS pagos_provisiones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, tipo TEXT NOT NULL,
+                fecha DATE NOT NULL, monto REAL NOT NULL DEFAULT 0.0,
+                descripcion TEXT, periodo_id INTEGER,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE SET NULL)""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass
+
+        # Seed de aportes patronales y provisiones (Panamá). Configurables desde
+        # la pestaña Configuración de Planilla. INSERT OR IGNORE respeta cambios.
+        # aplica_a: 'empleador' = carga patronal sobre el bruto;
+        #           'provision' = provisión laboral acumulable (pasivo).
+        for concepto, nombre, pct, aplica_a in [
+            ("riesgos_profesionales_empleador", "Riesgos Profesionales (Empleador)", 2.10, "empleador"),
+            ("provision_decimo",               "Provisión Décimo Tercer Mes (XIII)", 8.33, "provision"),
+            ("provision_vacaciones",           "Provisión Vacaciones",               8.33, "provision"),
+            ("provision_prima_antiguedad",     "Provisión Prima de Antigüedad",      1.92, "provision"),
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO planilla_config_deducciones (concepto, nombre_display, porcentaje, aplica_a) VALUES (?,?,?,?)",
+                    (concepto, nombre, pct, aplica_a),
+                )
+            except Exception:
+                pass
+
+        # Seed de tramos ISR (tabla progresiva DGI personas naturales).
+        # Solo si la tabla está vacía, para respetar personalizaciones.
+        try:
+            vacia = self.cursor.execute(
+                "SELECT COUNT(*) FROM planilla_isr_tramos"
+            ).fetchone()[0]
+            if not vacia:
+                for desde, hasta, tasa, cuota, orden in [
+                    (0.0,      11000.0,  0.00,     0.00, 1),
+                    (11000.0,  50000.0,  0.15,     0.00, 2),
+                    (50000.0,  None,     0.25,  5850.00, 3),
+                ]:
+                    self.cursor.execute(
+                        "INSERT INTO planilla_isr_tramos (desde, hasta, tasa, cuota_fija, orden) VALUES (?,?,?,?,?)",
+                        (desde, hasta, tasa, cuota, orden),
+                    )
         except Exception:
             pass
 
