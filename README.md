@@ -99,6 +99,10 @@ python main.py
 *   **Usuario:** `admin`
 *   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
 
+## 🏷️ Versiones
+
+La versión aparece en el título de la ventana, en la barra de estado y en **Ayuda → Acerca de**. Vive en `app/version.py`; el CI la reemplaza con la del tag al compilar. Un tag con sufijo (`v1.3.0-beta.1`) publica el instalador como **pre-release** y uno sin sufijo (`v1.3.0`) como release oficial. Detalles en `docs/versiones.md`.
+
 ## 🧪 Pruebas
 
 ```bash
@@ -118,7 +122,7 @@ python -m pytest tests
 ## 📚 Documentación
 *   **Ayuda en pantalla:** menú **Ayuda** o tecla **F1** (contenido en `assets/ayuda/`).
 *   **Manual de usuario (PDF):** `docs/Manual_de_Usuario_ItalosManager.pdf`, generado desde la ayuda en pantalla con `python generar_manual.py`.
-*   **Guías técnicas:** carpeta `docs/` (ventas, inventario, presupuestos, consolidados, costo de platos y mantenimiento de la ayuda).
+*   **Guías técnicas:** carpeta `docs/` (ventas, inventario, presupuestos, consolidados, costo de platos, mantenimiento de la ayuda y versiones).
 
 ---
 Desarrollado para optimizar la eficiencia operativa de **Italos Manager**.

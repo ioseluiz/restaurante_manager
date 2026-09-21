@@ -20,6 +20,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QKeySequence
 from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from app.utils.button_icons import auto_icon_buttons
 from app.utils import ayuda
+from app.version import etiqueta_version
 from app.views.ayuda_dialog import AyudaDialog
 
 # --- IMPORTACIÓN DE VISTAS ---
@@ -115,7 +116,7 @@ class MainWindow(QMainWindow):
         self.sidebar_collapsed = False
         self._nav_buttons = []  # list of {"btn": QPushButton, "text": str}
 
-        self.setWindowTitle("Sistema de Gestión de Restaurante")
+        self.setWindowTitle(f"Sistema de Gestión de Restaurante — {etiqueta_version()}")
         self.setWindowIcon(QIcon(ruta_recurso("assets/icons/app.ico")))
 
         self.init_ui()
@@ -148,6 +149,24 @@ class MainWindow(QMainWindow):
         act_indice.triggered.connect(lambda: self.mostrar_ayuda(ayuda.TEMA_POR_DEFECTO))
         menu_ayuda.addAction(act_indice)
 
+        menu_ayuda.addSeparator()
+        act_acerca = QAction("Acerca de Italos Manager…", self)
+        act_acerca.setStatusTip("Versión de la aplicación y base de datos en uso")
+        act_acerca.triggered.connect(self.mostrar_acerca_de)
+        menu_ayuda.addAction(act_acerca)
+
+    def mostrar_acerca_de(self):
+        ruta_bd = getattr(self.db, "db_path", "—")
+        QMessageBox.about(
+            self,
+            "Acerca de Italos Manager",
+            "<h3>Italos Manager</h3>"
+            "Sistema de gestión de restaurante.<br><br>"
+            f"<b>Versión:</b> {etiqueta_version()}<br>"
+            f"<b>Base de datos en uso:</b> {ruta_bd}<br><br>"
+            "Indique esta versión cuando reporte un problema.",
+        )
+
     def mostrar_ayuda(self, clave=None):
         """Abre la ventana de ayuda en el tema indicado (por defecto, primeros pasos)."""
         if self._ayuda_dialog is None:
@@ -177,6 +196,12 @@ class MainWindow(QMainWindow):
         lbl_gh.setOpenExternalLinks(True)
         lbl_gh.setStyleSheet("font-size: 11px;")
         gh_row.addWidget(lbl_gh)
+
+        # Versión de la aplicación (a la derecha, junto al crédito de GitHub)
+        lbl_version = QLabel(etiqueta_version())
+        lbl_version.setToolTip("Versión de Italos Manager (Ayuda → Acerca de)")
+        lbl_version.setStyleSheet("font-size: 11px; font-weight: normal; color: #555555; padding-right: 10px;")
+        sb.addPermanentWidget(lbl_version)
 
         sb.addPermanentWidget(gh_widget)
 

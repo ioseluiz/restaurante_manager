@@ -5,6 +5,7 @@ Esta ayuda explica **cómo usar cada módulo** y **qué debe estar listo antes**
 - **F1**: abre la ayuda del módulo que tiene a la vista.
 - **Ctrl + F1** o menú **Ayuda → Índice de ayuda**: abre esta guía con la lista de módulos.
 - El **buscador** de la izquierda encuentra palabras en todos los temas (no distingue tildes).
+- **Ayuda → Acerca de Italos Manager…** muestra la **versión** de la aplicación y la base de datos en uso. La versión también aparece en el título de la ventana y en la barra de estado (abajo a la derecha); indíquela cuando reporte un problema.
 
 La ventana de ayuda puede quedar abierta mientras trabaja.
 
