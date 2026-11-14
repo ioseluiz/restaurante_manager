@@ -39,6 +39,21 @@ def _parse_fecha(texto):
     return None
 
 
+def pct_platos_llevar(db):
+    """Fracción (0–1) de platos que salen para llevar (Parámetros de Costo de Platos)."""
+    row = db.fetch_one("SELECT valor FROM costeo_config WHERE clave = 'pct_platos_llevar'")
+    try:
+        return max(0.0, min(100.0, float(row[0]))) / 100.0 if row else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def peso_canal_empaque(canal, pct_llevar):
+    """Parte de los platos vendidos que lleva un empaque según su canal: LLEVAR × %, LOCAL × (1 − %),
+    AMBOS × 1. Los empaques no pasan por la caja; acompañamientos y bebidas sí (líneas propias)."""
+    return {"LLEVAR": pct_llevar, "LOCAL": 1.0 - pct_llevar}.get(canal, 1.0)
+
+
 def precio_sugerido(costo, pct_ganancia):
     """costo / (1 - pct/100). None si el porcentaje no es válido (>=100)."""
     try:

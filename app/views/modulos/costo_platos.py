@@ -517,7 +517,13 @@ class CostoPlatosView(QWidget):
         self.sp_pct_llevar.setSuffix(" %")
         self.cmb_base = QComboBox()
         self.cmb_base.addItem("Gastos reales del mes (consolidados)", "REAL")
-        self.cmb_base.addItem("Presupuesto del mes", "PRESUPUESTO")
+        self.cmb_base.addItem("Gastos fijos del presupuesto del mes (planilla real)", "PRESUPUESTO")
+        self.sp_pct_platos_llevar = QDoubleSpinBox()
+        self.sp_pct_platos_llevar.setRange(0, 100)
+        self.sp_pct_platos_llevar.setSuffix(" %")
+        self.sp_pct_platos_llevar.setToolTip(
+            "Parte de los platos vendidos que sale para llevar. Con este % las ventas diarias descuentan y el "
+            "presupuesto compra los empaques del plato (extras de tipo Empaque), que la caja no registra.")
         self.cmb_fuente = QComboBox()
         self.cmb_fuente.addItem("Precio vigente de la presentación de compra", "VIGENTE")
         self.cmb_fuente.addItem("Costo promedio ponderado del inventario", "PROMEDIO")
@@ -526,6 +532,7 @@ class CostoPlatosView(QWidget):
         form.addRow("% de ganancia — Local:", self.sp_pct_local)
         form.addRow("% de ganancia — Llevar / PedidosYa:", self.sp_pct_llevar)
         form.addRow("Base de gastos indirectos:", self.cmb_base)
+        form.addRow("% de platos para llevar (empaques):", self.sp_pct_platos_llevar)
         form.addRow("Costo de los insumos:", self.cmb_fuente)
         lay.addLayout(form)
 
@@ -548,6 +555,7 @@ class CostoPlatosView(QWidget):
         self.sp_pct_llevar.setValue(c.config_float("pct_ganancia_pedidosya", 50))
         self.cmb_base.setCurrentIndex(max(0, self.cmb_base.findData(c.config("base_indirectos", "REAL"))))
         self.cmb_fuente.setCurrentIndex(max(0, self.cmb_fuente.findData(c.config("fuente_costo_insumo", "VIGENTE"))))
+        self.sp_pct_platos_llevar.setValue(c.config_float("pct_platos_llevar", 0))
         self.cmb_canal.setItemText(0, f"Local ({self.sp_pct_local.value():g}% ganancia)")
         self.cmb_canal.setItemText(1, f"Llevar / PedidosYa ({self.sp_pct_llevar.value():g}% ganancia)")
 
@@ -576,6 +584,7 @@ class CostoPlatosView(QWidget):
             ("pct_ganancia_pedidosya", self.sp_pct_llevar.value()),
             ("base_indirectos", self.cmb_base.currentData()),
             ("fuente_costo_insumo", self.cmb_fuente.currentData()),
+            ("pct_platos_llevar", self.sp_pct_platos_llevar.value()),
         ]:
             self.db.execute_query(
                 "INSERT INTO costeo_config (clave, valor) VALUES (?, ?) "

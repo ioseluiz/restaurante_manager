@@ -257,6 +257,8 @@ guardadas por día.
   `REVERSO_VENTA`.
 - **Rentabilidad:** costo teórico del mes = cantidades vendidas × costo de la
   receta de cada plato.
+- **Empaques:** al actualizar el inventario también se descuentan los empaques
+  de cada plato según el % de platos para llevar (Parámetros de Costo de Platos).
 - **Costo de Platos:** el total de platos vendidos del mes reparte los gastos
   indirectos entre los platos.
 - **Panel de Control:** ventas por plato.

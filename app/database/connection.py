@@ -1244,6 +1244,7 @@ class DatabaseManager:
             ("pct_ganancia_pedidosya", "50"),
             ("base_indirectos", "REAL"),          # REAL | PRESUPUESTO
             ("fuente_costo_insumo", "VIGENTE"),   # VIGENTE | PROMEDIO
+            ("pct_platos_llevar", "0"),            # % de platos para llevar: descuenta/presupuesta empaques
         ]:
             try:
                 self.cursor.execute(

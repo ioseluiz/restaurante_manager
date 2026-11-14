@@ -213,6 +213,23 @@ Ejemplo:
 Si un insumo aparece en la receta de varios platos, las cantidades de todos
 los platos se suman para obtener el requerimiento total de ese insumo.
 
+**Empaques para llevar.** Los extras de tipo *Empaque* que tenga el plato en Costo
+de Platos se suman con el **% de platos para llevar** (Parámetros de Costo de Platos):
+
+```
+Empaques = Total_mensual_platos × Porciones_del_extra × Peso_canal × Factor
+Peso_canal: Llevar = %  ·  Local = 1 − %  ·  Ambos = 1
+
+Ejemplo: 20 platos/mes, envase solo para llevar, 40 %, factor 1.10
+  → 20 × 1 × 0.40 × 1.10 = 8.8 envases → 1 paquete de 50
+```
+
+Acompañamientos y bebidas no se suman desde los extras: la caja los vende como
+productos propios (TAZA DE ARROZ, SODA…) y entran por su propio código del reporte.
+
+El cálculo vive en `app/utils/calculo_presupuesto.py` (`calcular_compras`) y lo
+usan tanto «Calcular y Generar» como «Recalcular con Precios Actuales».
+
 ### 5.4 Conversión a unidad de compra y costo
 
 Una vez calculado el requerimiento total en unidad base, el sistema convierte
@@ -316,7 +333,8 @@ Permite agregar artículos que el restaurante compra pero que no forman parte
 de ninguna receta y por lo tanto no aparecen en el cálculo automático.
 Ejemplos:
 - Productos de limpieza
-- Empaques y bolsas para llevar
+- Empaques y bolsas para llevar que no estén asociados a los platos (los asociados como extra de tipo
+  Empaque en Costo de Platos se calculan solos con el % de platos para llevar)
 - Materiales de oficina
 - Artículos de mantenimiento
 - Insumos estacionales puntuales

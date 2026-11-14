@@ -87,8 +87,9 @@ class KardexController:
         """Descuenta del stock los insumos consumidos por las ventas de un día.
 
         Por cada plato vendido usa v_recetas_explotadas (receta por porción o por tanda, con los
-        insumos de sus sub-recetas) × unidades vendidas, y suma por insumo: un movimiento `VENTA`
-        por insumo, con referencia_id = id del registro diario. Todo en una transacción.
+        insumos de sus sub-recetas) × unidades vendidas, más sus empaques (extras de tipo EMPAQUE)
+        ponderados por el % de platos para llevar, y suma por insumo: un movimiento `VENTA` por
+        insumo, con referencia_id = id del registro diario. Todo en una transacción.
 
         Devuelve {"fecha", "movimientos", "sin_receta": [nombres], "negativos": [nombres]}.
         Lanza ValueError si el día no existe o ya estaba procesado.
@@ -108,8 +109,18 @@ class KardexController:
             "GROUP BY d.menu_item_id, m.nombre",
             (registro_id,),
         )
+        from app.controllers.costeo_controller import peso_canal_empaque, pct_platos_llevar
+
+        pct_llevar = pct_platos_llevar(self.db)
         consumo, sin_receta = {}, []
         for item_id, nombre, unidades in platos:
+            for insumo_id, por_plato, canal in self.db.fetch_all(
+                "SELECT r.insumo_id, r.cantidad_necesaria * e.cantidad_porciones, e.canal FROM plato_extras e "
+                "JOIN v_recetas_explotadas r ON r.menu_item_id = e.componente_id "
+                "WHERE e.menu_item_id = ? AND e.tipo = 'EMPAQUE'", (item_id,)
+            ):
+                cant = (por_plato or 0.0) * peso_canal_empaque(canal, pct_llevar) * unidades
+                consumo[insumo_id] = consumo.get(insumo_id, 0.0) + cant
             insumos = self.db.fetch_all(
                 "SELECT insumo_id, cantidad_necesaria FROM v_recetas_explotadas WHERE menu_item_id=?", (item_id,)
             )

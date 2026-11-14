@@ -65,6 +65,11 @@ Opciones: crear insumos faltantes (con unidad y costo del Excel) y completar el 
 `v_recetas_explotadas` (vista SQL) devuelve los insumos **por porción** de cada plato aplicando rendimiento/porción e
 incluyendo los de sus sub-recetas. La usan los **Presupuestos** (los dos cálculos: generar y recalcular), la
 **Rentabilidad (costo teórico)** y el **descuento de inventario por ventas diarias** (Kardex, movimientos `VENTA`).
+
+**Extras del plato fuera del costeo.** Acompañamientos y bebidas no se descuentan ni presupuestan desde `plato_extras`:
+la caja los registra como líneas propias con su receta (TAZA DE ARROZ, SODA…). Los **empaques** sí, con el parámetro
+`pct_platos_llevar` (`peso_canal_empaque`: LLEVAR × %, LOCAL × (1 − %), AMBOS × 1) en el Kardex y en
+`app/utils/calculo_presupuesto.py`.
 Con rendimiento vacío y sin sub-recetas, el resultado es idéntico al de las recetas simples.
 Los componentes no aparecen en **Menú** ni en **Ventas diarias**.
 

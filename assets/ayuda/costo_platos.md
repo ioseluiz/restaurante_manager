@@ -13,7 +13,7 @@ Responde: **¿cuánto cuesta producir cada plato y a qué precio debería vender
 **Costo total = ingredientes + acompañamientos + bebida + empaque + indirectos**
 
 - **Ingredientes:** receta × costo de cada insumo. Una receta puede ser **por porción** o **por tanda** (ver abajo).
-- **Acompañamientos, bebida y empaque:** los que asocie a cada plato; el empaque solo cuenta en el canal *Llevar*.
+- **Acompañamientos, bebida y empaque:** los que asocie a cada plato; el empaque solo cuenta en el canal *Llevar*. Son para **costear el plato**: la caja registra acompañamientos y bebidas como líneas propias (TAZA DE ARROZ, SODA…), que descuentan su propio inventario. Los empaques no pasan por la caja y se descuentan con el *% de platos para llevar* (Parámetros).
 - **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla usada es el **costo laboral completo** (igual que el Resumen de Planilla: incluye aportes patronales, riesgo profesional y provisiones). Los platos vendidos salen de las ventas diarias; si no hay, del reporte del POS que cubra el mes (su promedio diario × días del mes); si tampoco, de *platos por día × días del mes* (Parámetros).
 - **Precio sugerido** = costo ÷ (1 − % de ganancia). Hay un % para *Local* y otro para *Llevar / PedidosYa*.
 
@@ -47,7 +47,8 @@ Opciones: *crear insumos que no existan* (con el costo que trae el Excel), *comp
 ## Parámetros
 
 - **% de ganancia** para Local y para Llevar/PedidosYa.
-- **Base de gastos indirectos:** gastos reales del mes o del presupuesto.
+- **Base de gastos indirectos:** gastos reales del mes (consolidados) o *gastos fijos del presupuesto del mes*. En los dos casos la planilla es la real del mes.
+- **% de platos para llevar (empaques):** parte de los platos que sale para llevar. Con este % las [ventas diarias](ayuda:ventas) descuentan del inventario y los [Presupuestos](ayuda:presupuestos) compran los **empaques** del plato (extras de tipo Empaque: canal Llevar × %, Local × el resto, Ambos siempre). Con 0 % no se descuentan empaques.
 - **Platos por día:** se usa solo si no hay ventas registradas del mes.
 - **Costo de los insumos:** precio vigente de la presentación (por defecto) o costo promedio del inventario.
 
