@@ -1,9 +1,10 @@
 # [FILE: app/database/connection.py]
 import sqlite3
 import os
-import hashlib
 import shutil
 from datetime import datetime
+
+from app.controllers.auth_controller import hash_password
 
 
 class DatabaseManager:
@@ -1291,7 +1292,7 @@ class DatabaseManager:
                 "SELECT * FROM usuarios WHERE username='admin'"
             ).fetchone()
             if not check:
-                pwd_hash = hashlib.sha256("admin123".encode()).hexdigest()
+                pwd_hash = hash_password("admin123")
                 self.cursor.execute(
                     "INSERT INTO usuarios (username, password_hash, rol) VALUES (?,?,?)",
                     ("admin", pwd_hash, "admin"),

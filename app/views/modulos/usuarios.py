@@ -1,4 +1,4 @@
-import hashlib
+from app.controllers.auth_controller import hash_password
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -201,7 +201,7 @@ class UsuarioDialog(QDialog):
             # Modo Edición
             if self.user_id:
                 if pwd:  # Si escribió contraseña, actualizamos todo
-                    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                    pwd_hash = hash_password(pwd)
                     self.db.execute_query(
                         "UPDATE usuarios SET username=?, password_hash=?, rol=? WHERE id=?",
                         (user, pwd_hash, rol, self.user_id),
@@ -220,7 +220,7 @@ class UsuarioDialog(QDialog):
                         "La contraseña es obligatoria para nuevos usuarios.",
                     )
 
-                pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                pwd_hash = hash_password(pwd)
                 self.db.execute_query(
                     "INSERT INTO usuarios (username, password_hash, rol) VALUES (?,?,?)",
                     (user, pwd_hash, rol),

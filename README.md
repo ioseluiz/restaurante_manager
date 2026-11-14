@@ -31,7 +31,7 @@ El menú lateral da acceso a los siguientes módulos:
 *   **Planilla:** empleados, períodos de pago con horas y recargos, vales, resumen con reglas de Panamá (seguro social, seguro educativo, riesgo profesional, ISR) y provisiones laborales. Su costo completo es el que usan los presupuestos y el costo de platos.
 
 ### 🔐 Seguridad, configuración y ayuda
-*   **Usuarios:** roles `admin`, `gerente` y `empleado`. Solo el rol administrador ve la gestión de usuarios y la configuración de la base de datos.
+*   **Usuarios:** roles `admin` (todo), `gerente` (todo menos usuarios y configuración de la base de datos) y `empleado` (solo la operación diaria: sin Panel, Presupuestos, Consolidados, Rentabilidad, Costo de Platos, Análisis de Precios, Planilla ni Sucursales). Contraseñas cifradas con sal (PBKDF2).
 *   **Configurar BD** (administrador): cambiar la base de datos en uso y crear copias de respaldo.
 *   **Ayuda en pantalla:** menú **Ayuda** (o **F1**) con la guía de cada módulo.
 
