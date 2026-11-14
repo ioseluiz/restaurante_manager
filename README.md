@@ -114,6 +114,11 @@ pip install pytest
 python -m pytest tests
 ```
 
+Ejecútelas con el Python del entorno virtual (el que tiene PyQt5); sin PyQt5, las pruebas de los diálogos se omiten.
+`tests/e2e/` recorre el flujo completo (compra → inventario → ventas → costeo → presupuesto → rentabilidad) sobre un
+escenario con resultados calculados a mano. Las marcadas `xfail` son hallazgos pendientes (`docs/revision_hallazgos.md`).
+Para probar a mano en la app: `python scripts/crear_bd_prueba.py C:/temp/prueba_e2e.db` y seguir `docs/pruebas_manual_ui.md`.
+
 ## 🛠️ Tecnologías Utilizadas
 *   **Lenguaje:** Python 3
 *   **Interfaz Gráfica:** PyQt5 (con estilos personalizados)
@@ -127,6 +132,7 @@ python -m pytest tests
 *   **Ayuda en pantalla:** menú **Ayuda** o tecla **F1** (contenido en `assets/ayuda/`).
 *   **Manual de usuario (PDF):** `docs/Manual_de_Usuario_ItalosManager.pdf`, generado desde la ayuda en pantalla con `python generar_manual.py`.
 *   **Guías técnicas:** carpeta `docs/` (ventas, inventario, presupuestos, consolidados, costo de platos, mantenimiento de la ayuda y versiones).
+*   **Cálculos y revisión:** `docs/calculos.md` (cada fórmula con un ejemplo resuelto), `docs/revision_hallazgos.md` (hallazgos de la revisión end-to-end y conciliación con los Excel del cliente) y `docs/pruebas_manual_ui.md` (checklist manual).
 
 ---
 Desarrollado para optimizar la eficiencia operativa de **Italos Manager**.
