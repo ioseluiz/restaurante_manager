@@ -13,8 +13,9 @@ Modelo de cálculo (todo agrupado por strftime('%Y-%m', fecha)):
 
   COSTO DE VENTAS (doble base)
     Real (caja) ............... pagos_efectivo: costo_viveres + costo_carnes + desayunos
-    Teórico (recetas) ......... SUM(ventas por plato × costo de receta)
+    Teórico (recetas) ......... SUM(ventas por plato × costo de ingredientes) con CosteoController
                                 fallback: SUM(detalle_reportes_ventas.total_costo) del POS
+    Teórico con extras ........ referencia: costo total del plato (canal local), con extras
     Merma / Desviación ........ Real − Teórico
 
   UTILIDAD BRUTA .............. Ventas − Costo Real
@@ -154,39 +155,49 @@ class RentabilidadController:
     # ------------------------------------------------------------------
     # Costo teórico por recetas (con fallback a reportes del POS)
     # ------------------------------------------------------------------
+    def _platos_vendidos_mes(self, anio, mes):
+        """[(menu_item_id, unidades)] de las ventas diarias del mes."""
+        return self.db.fetch_all(
+            "SELECT d.menu_item_id, SUM(d.cantidad) FROM detalle_ventas_diarias d "
+            "JOIN registro_ventas_diarias r ON d.registro_diario_id = r.id "
+            "WHERE strftime('%Y-%m', r.fecha) = ? AND d.cantidad > 0 GROUP BY d.menu_item_id",
+            (f"{anio:04d}-{mes:02d}",),
+        )
+
     def costo_teorico_mes(self, anio, mes):
         """
         Costo teórico de los platos vendidos en el mes:
-            Σ (cantidad vendida × costo de la receta)
-        donde costo de la receta = Σ (cantidad_necesaria × insumos.costo_unitario).
+            Σ (unidades vendidas × costo de ingredientes de UNA porción)
+        con el mismo motor de Costo de Platos (CosteoController: receta por porción o tanda,
+        sub-recetas, conversión de unidades y la fuente de costo configurada). No suma los extras
+        del plato: la caja registra acompañamientos y bebidas como líneas propias, que ya aportan
+        su costo (ver costo_teorico_con_extras_mes).
 
-        Devuelve un float, o None si no hay datos suficientes (ni ventas por
-        plato con receta, ni reportes del POS con costo).
+        Devuelve un float, o None si no hay datos suficientes (ni ventas por plato con costo,
+        ni reportes del POS con costo).
         """
-        mes_key = f"{anio:04d}-{mes:02d}"
+        from app.controllers.costeo_controller import CosteoController
 
-        row = self.db.fetch_one(
-            """
-            SELECT COALESCE(SUM(d.cantidad * rc.costo_receta), 0)
-            FROM detalle_ventas_diarias d
-            JOIN registro_ventas_diarias r ON d.registro_diario_id = r.id
-            JOIN (
-                SELECT rec.menu_item_id,
-                       SUM(rec.cantidad_necesaria * i.costo_unitario) AS costo_receta
-                FROM v_recetas_explotadas rec
-                JOIN insumos i ON rec.insumo_id = i.id
-                GROUP BY rec.menu_item_id
-            ) rc ON rc.menu_item_id = d.menu_item_id
-            WHERE strftime('%Y-%m', r.fecha) = ?
-            """,
-            (mes_key,),
-        )
-        val = float(row[0] or 0.0)
+        ctrl = CosteoController(self.db)
+        val = sum(float(u or 0) * ctrl.costo_ingredientes(item)["total"]
+                  for item, u in self._platos_vendidos_mes(anio, mes))
         if val > 0:
             return val
 
         # Fallback: costo reportado por el POS para ese mes
         return self._costo_pos_mes(anio, mes)
+
+    def costo_teorico_con_extras_mes(self, anio, mes):
+        """Referencia: Σ unidades × costo total del plato en canal LOCAL (ingredientes + acompañamientos +
+        bebida, como en la pantalla de Costo de Platos, sin indirectos). Cuenta dos veces lo que la caja
+        también registra como línea propia. None si no hay ventas por plato."""
+        from app.controllers.costeo_controller import CosteoController
+
+        ctrl = CosteoController(self.db)
+        platos = self._platos_vendidos_mes(anio, mes)
+        if not platos:
+            return None
+        return sum(float(u or 0) * ctrl.costo_plato(item, "LOCAL")["total"] for item, u in platos)
 
     def _costo_pos_mes(self, anio, mes):
         """SUM(detalle_reportes_ventas.total_costo) de los reportes cuyo período
@@ -220,6 +231,7 @@ class RentabilidadController:
             'anio', 'mes', 'mes_key',
             'ventas',
             'costo_real', 'costo_teorico' (float|None), 'merma' (float|None),
+            'costo_teorico_con_extras' (float|None, referencia),
             'utilidad_bruta', 'margen_bruto',
             'cogs_desglose'  {col: monto},
             'gastos'         {clave: monto},   # incluye categorías + canales
@@ -238,6 +250,7 @@ class RentabilidadController:
 
         costo_teorico = self.costo_teorico_mes(anio, mes)
         merma = (costo_real - costo_teorico) if costo_teorico is not None else None
+        costo_teorico_con_extras = self.costo_teorico_con_extras_mes(anio, mes)
 
         utilidad_bruta = ventas - costo_real
 
@@ -260,6 +273,8 @@ class RentabilidadController:
         if costo_teorico is not None:
             pct["costo_teorico"] = _pct(costo_teorico, ventas)
             pct["merma"] = _pct(merma, ventas)
+        if costo_teorico_con_extras is not None:
+            pct["costo_teorico_con_extras"] = _pct(costo_teorico_con_extras, ventas)
         for c in COGS_COLS:
             pct[c] = _pct(cogs_desglose[c], ventas)
         for k, v in gastos.items():
@@ -272,6 +287,7 @@ class RentabilidadController:
             "ventas": ventas,
             "costo_real": costo_real,
             "costo_teorico": costo_teorico,
+            "costo_teorico_con_extras": costo_teorico_con_extras,
             "merma": merma,
             "cogs_desglose": cogs_desglose,
             "utilidad_bruta": utilidad_bruta,

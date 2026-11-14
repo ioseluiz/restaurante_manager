@@ -65,6 +65,8 @@ Opciones: crear insumos faltantes (con unidad y costo del Excel) y completar el 
 `v_recetas_explotadas` (vista SQL) devuelve los insumos **por porción** de cada plato aplicando rendimiento/porción e
 incluyendo los de sus sub-recetas. La usan los **Presupuestos** (los dos cálculos: generar y recalcular), la
 **Rentabilidad (costo teórico)** y el **descuento de inventario por ventas diarias** (Kardex, movimientos `VENTA`).
+Rentabilidad calcula el teórico con `CosteoController.costo_ingredientes` (misma fuente de costo que esta pantalla) y
+muestra como referencia el teórico con extras (`costo_plato` canal local).
 
 **Extras del plato fuera del costeo.** Acompañamientos y bebidas no se descuentan ni presupuestan desde `plato_extras`:
 la caja los registra como líneas propias con su receta (TAZA DE ARROZ, SODA…). Los **empaques** sí, con el parámetro
