@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_submodules
 
 
 a = Analysis(
@@ -11,6 +12,8 @@ a = Analysis(
         'matplotlib.backends.backend_agg',
         'PyQt5.sip',
         'openpyxl',
+        # reportlab importa los tipos de código de barras con exec(): PyInstaller no los detecta solo
+        *collect_submodules('reportlab.graphics.barcode'),
     ],
     hookspath=[],
     hooksconfig={},
