@@ -1,57 +1,21 @@
 # [FILE: app/controllers/kardex_controller.py]
+def costo_promedio_ponderado(stock_anterior, costo_anterior, entrada, costo_entrada):
+    """Nuevo costo por unidad base tras una entrada de `entrada` unidades a `costo_entrada`.
+
+    Si no había stock positivo o costo previo, el costo es el de la entrada: un stock negativo
+    (ventas descontadas antes de recibir la compra) no tiene costo real que promediar.
+    """
+    stock_anterior = float(stock_anterior or 0)
+    costo_anterior = float(costo_anterior or 0)
+    if stock_anterior <= 0 or costo_anterior <= 0:
+        return float(costo_entrada)
+    return (stock_anterior * costo_anterior + entrada * costo_entrada) / (stock_anterior + entrada)
+
+
 class KardexController:
     def __init__(self, db_manager):
         self.db = db_manager
 
-    def registrar_movimiento(
-        self, insumo_id, cantidad, tipo, referencia_id=None, observacion=""
-    ):
-        """
-        Registra un movimiento, actualiza el stock y guarda el historial.
-        cantidad: Positivo (Entrada) o Negativo (Salida)
-        """
-        try:
-            # 1. Obtener Stock Actual
-            row = self.db.fetch_one(
-                "SELECT stock_actual FROM insumos WHERE id=?", (insumo_id,)
-            )
-            if not row:
-                raise Exception(f"Insumo ID {insumo_id} no encontrado.")
-
-            stock_anterior = row[0]
-            stock_nuevo = stock_anterior + cantidad
-
-            # 2. Actualizar Tabla Insumos
-            self.db.execute_query(
-                "UPDATE insumos SET stock_actual=? WHERE id=?", (stock_nuevo, insumo_id)
-            )
-
-            # 3. Insertar en Kardex
-            self.db.execute_query(
-                """
-                INSERT INTO movimientos_inventario 
-                (insumo_id, tipo_movimiento, cantidad, stock_anterior, stock_nuevo, referencia_id, observacion)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    insumo_id,
-                    tipo,
-                    cantidad,
-                    stock_anterior,
-                    stock_nuevo,
-                    referencia_id,
-                    observacion,
-                ),
-            )
-
-            return True
-        except Exception as e:
-            print(f"Error en Kardex: {e}")
-            raise e
-
-    # ------------------------------------------------------------------
-    # Ventas diarias -> descuento de insumos
-    # ------------------------------------------------------------------
     def _aplicar(self, cur, insumo_id, cantidad, tipo, referencia_id, observacion):
         """Mueve el stock y registra el Kardex SIN confirmar (lo confirma quien llama)."""
         row = cur.execute("SELECT stock_actual FROM insumos WHERE id=?", (insumo_id,)).fetchone()
@@ -68,12 +32,64 @@ class KardexController:
         )
         return nuevo
 
+    # ------------------------------------------------------------------
+    # Recepción de compras -> stock + costo promedio ponderado
+    # ------------------------------------------------------------------
+    def recibir_compra(self, compra_id, recibidos):
+        """Suma al stock lo recibido de una compra y recalcula el costo promedio, en una transacción.
+
+        recibidos: {id de detalle_compras: cantidad recibida en presentaciones}. Por cada línea con cantidad > 0
+        registra un movimiento `COMPRA` (cantidad × contenido de la presentación, en unidad base) y marca la
+        compra RECIBIDO. Si algo falla no queda nada aplicado. Lanza ValueError si la compra no existe, ya fue
+        recibida o no hay cantidades.
+        """
+        reg = self.db.fetch_one("SELECT estado FROM compras WHERE id=?", (compra_id,))
+        if not reg:
+            raise ValueError("La compra no existe.")
+        if reg[0] == "RECIBIDO":
+            raise ValueError("Esta compra ya fue recibida.")
+        lineas = self.db.fetch_all(
+            "SELECT dc.id, pc.insumo_id, pc.nombre, pc.cantidad_contenido, dc.precio_unitario "
+            "FROM detalle_compras dc JOIN presentaciones_compra pc ON pc.id = dc.presentacion_id "
+            "WHERE dc.compra_id = ?",
+            (compra_id,),
+        )
+        if not any(float(recibidos.get(det_id) or 0) > 0 for det_id, *_ in lineas):
+            raise ValueError("No hay cantidades recibidas para aplicar.")
+
+        cur = self.db.conn.cursor()
+        try:
+            for det_id, insumo_id, nombre_pres, contenido, precio_unit in lineas:
+                recibido = float(recibidos.get(det_id) or 0)
+                if recibido <= 0:
+                    continue
+                contenido = float(contenido or 1.0)
+                entrada = recibido * contenido
+                stock_viejo, costo_viejo = cur.execute(
+                    "SELECT stock_actual, costo_unitario FROM insumos WHERE id=?", (insumo_id,)
+                ).fetchone()
+                self._aplicar(cur, insumo_id, entrada, "COMPRA", compra_id,
+                              f"Entrada por Compra (Presentación: {nombre_pres})")
+                costo_entrada = float(precio_unit or 0) / contenido
+                if costo_entrada > 0:
+                    nuevo = costo_promedio_ponderado(stock_viejo, costo_viejo, entrada, costo_entrada)
+                    cur.execute("UPDATE insumos SET costo_unitario=? WHERE id=?", (round(nuevo, 6), insumo_id))
+            cur.execute("UPDATE compras SET estado='RECIBIDO' WHERE id=?", (compra_id,))
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
+
+    # ------------------------------------------------------------------
+    # Ventas diarias -> descuento de insumos
+    # ------------------------------------------------------------------
     def procesar_ventas_diarias(self, registro_id):
         """Descuenta del stock los insumos consumidos por las ventas de un día.
 
         Por cada plato vendido usa v_recetas_explotadas (receta por porción o por tanda, con los
-        insumos de sus sub-recetas) × unidades vendidas, y suma por insumo: un movimiento `VENTA`
-        por insumo, con referencia_id = id del registro diario. Todo en una transacción.
+        insumos de sus sub-recetas) × unidades vendidas, más sus empaques (extras de tipo EMPAQUE)
+        ponderados por el % de platos para llevar, y suma por insumo: un movimiento `VENTA` por
+        insumo, con referencia_id = id del registro diario. Todo en una transacción.
 
         Devuelve {"fecha", "movimientos", "sin_receta": [nombres], "negativos": [nombres]}.
         Lanza ValueError si el día no existe o ya estaba procesado.
@@ -93,8 +109,18 @@ class KardexController:
             "GROUP BY d.menu_item_id, m.nombre",
             (registro_id,),
         )
+        from app.controllers.costeo_controller import peso_canal_empaque, pct_platos_llevar
+
+        pct_llevar = pct_platos_llevar(self.db)
         consumo, sin_receta = {}, []
         for item_id, nombre, unidades in platos:
+            for insumo_id, por_plato, canal in self.db.fetch_all(
+                "SELECT r.insumo_id, r.cantidad_necesaria * e.cantidad_porciones, e.canal FROM plato_extras e "
+                "JOIN v_recetas_explotadas r ON r.menu_item_id = e.componente_id "
+                "WHERE e.menu_item_id = ? AND e.tipo = 'EMPAQUE'", (item_id,)
+            ):
+                cant = (por_plato or 0.0) * peso_canal_empaque(canal, pct_llevar) * unidades
+                consumo[insumo_id] = consumo.get(insumo_id, 0.0) + cant
             insumos = self.db.fetch_all(
                 "SELECT insumo_id, cantidad_necesaria FROM v_recetas_explotadas WHERE menu_item_id=?", (item_id,)
             )

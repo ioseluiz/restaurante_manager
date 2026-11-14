@@ -1,9 +1,10 @@
 # [FILE: app/database/connection.py]
 import sqlite3
 import os
-import hashlib
 import shutil
 from datetime import datetime
+
+from app.controllers.auth_controller import hash_password
 
 
 class DatabaseManager:
@@ -27,13 +28,33 @@ class DatabaseManager:
         self._migrate_tables()
 
     def switch_database(self, new_path):
-        """Cierra la conexión actual y abre una nueva en la ruta especificada."""
-        self.conn.close()
-        self.db_path = new_path
-        from app.database.config import save_db_path
+        """Cambia a otra base de datos de forma segura.
 
+        Valida la ruta ANTES de tocar nada y solo guarda la nueva ruta en la configuración cuando la base
+        abre correctamente. Si falla, se conserva la conexión anterior y se lanza ValueError con el motivo
+        (así una selección equivocada no deja el programa sin poder arrancar).
+        """
+        from app.database.config import save_db_path, validar_base_datos
+
+        ok, motivo = validar_base_datos(new_path)
+        if not ok:
+            raise ValueError(motivo)
+
+        ruta_anterior, conn_anterior = self.db_path, self.conn
+        try:
+            self.db_path = new_path
+            self.connect()
+        except Exception as e:
+            try:
+                self.conn.close()  # la conexión nueva, a medio abrir
+            except Exception:
+                pass
+            self.db_path, self.conn = ruta_anterior, conn_anterior
+            self.cursor = conn_anterior.cursor()
+            raise ValueError(f"No se pudo abrir la base de datos seleccionada: {e}") from e
+
+        conn_anterior.close()
         save_db_path(new_path)
-        self.connect()
 
     def create_backup(self, dest_folder):
         """Crea una copia de seguridad del archivo actual."""
@@ -1164,6 +1185,12 @@ class DatabaseManager:
         except Exception:
             pass  # la columna ya existe
 
+        # Presentación preferida por insumo (la que usan Costo de Platos y Presupuestos).
+        try:
+            self.cursor.execute("ALTER TABLE presentaciones_compra ADD COLUMN es_preferida INTEGER DEFAULT 0")
+        except Exception:
+            pass  # la columna ya existe
+
         self.conn.commit()
 
     def _migrate_costeo_platos(self):
@@ -1217,6 +1244,7 @@ class DatabaseManager:
             ("pct_ganancia_pedidosya", "50"),
             ("base_indirectos", "REAL"),          # REAL | PRESUPUESTO
             ("fuente_costo_insumo", "VIGENTE"),   # VIGENTE | PROMEDIO
+            ("pct_platos_llevar", "0"),            # % de platos para llevar: descuenta/presupuesta empaques
         ]:
             try:
                 self.cursor.execute(
@@ -1271,7 +1299,7 @@ class DatabaseManager:
                 "SELECT * FROM usuarios WHERE username='admin'"
             ).fetchone()
             if not check:
-                pwd_hash = hashlib.sha256("admin123".encode()).hexdigest()
+                pwd_hash = hash_password("admin123")
                 self.cursor.execute(
                     "INSERT INTO usuarios (username, password_hash, rol) VALUES (?,?,?)",
                     ("admin", pwd_hash, "admin"),

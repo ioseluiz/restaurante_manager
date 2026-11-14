@@ -24,13 +24,16 @@ histórico). Con rendimiento `R` y porción servida `P`, las cantidades son **po
 «no se vende». Su costo por unidad = costo de su tanda ÷ su rendimiento; un plato los usa indicando cuántas unidades
 (g, ml…). Se admite anidar (máx. 6 niveles); los ciclos se detectan y se avisan.
 
-**Costo del insumo.** Por defecto, el precio vigente de la presentación de compra (respaldo: costo promedio ponderado);
+**Costo del insumo.** Por defecto, el precio vigente de la presentación de compra **preferida** (o la primera creada si
+no hay ninguna marcada; respaldo: costo promedio ponderado);
 configurable en Parámetros. Un insumo sin costo genera una alerta ⚠.
 
 **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla es el
 **costo laboral completo** (bruto + Seguro Social/Educativo y riesgo profesional patronales + provisiones), igual que el
 Resumen de Planilla y el bloque de planilla del Presupuesto. Platos vendidos: ventas
-diarias → reporte del POS → *platos por día × días del mes* (Parámetros). Los gastos salen de los consolidados
+diarias → reporte del POS → *platos por día × días del mes* (Parámetros). Del reporte del POS se usa el promedio
+diario de su período (cantidad ÷ días) × días del mes, con los reportes cuyo período se cruza con el mes (si hay
+varios, se promedian). Los gastos salen de los consolidados
 (`tipo_gasto`) o del presupuesto, según la opción.
 
 **Precio sugerido** = costo total ÷ (1 − % de ganancia). Canal *Local* y *Llevar / PedidosYa* tienen % distintos.
@@ -62,6 +65,13 @@ Opciones: crear insumos faltantes (con unidad y costo del Excel) y completar el 
 `v_recetas_explotadas` (vista SQL) devuelve los insumos **por porción** de cada plato aplicando rendimiento/porción e
 incluyendo los de sus sub-recetas. La usan los **Presupuestos** (los dos cálculos: generar y recalcular), la
 **Rentabilidad (costo teórico)** y el **descuento de inventario por ventas diarias** (Kardex, movimientos `VENTA`).
+Rentabilidad calcula el teórico con `CosteoController.costo_ingredientes` (misma fuente de costo que esta pantalla) y
+muestra como referencia el teórico con extras (`costo_plato` canal local).
+
+**Extras del plato fuera del costeo.** Acompañamientos y bebidas no se descuentan ni presupuestan desde `plato_extras`:
+la caja los registra como líneas propias con su receta (TAZA DE ARROZ, SODA…). Los **empaques** sí, con el parámetro
+`pct_platos_llevar` (`peso_canal_empaque`: LLEVAR × %, LOCAL × (1 − %), AMBOS × 1) en el Kardex y en
+`app/utils/calculo_presupuesto.py`.
 Con rendimiento vacío y sin sub-recetas, el resultado es idéntico al de las recetas simples.
 Los componentes no aparecen en **Menú** ni en **Ventas diarias**.
 

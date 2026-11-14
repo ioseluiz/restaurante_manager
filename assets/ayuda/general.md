@@ -37,3 +37,18 @@ Los módulos están conectados: lo que registra en uno alimenta a otros. Por eso
 - **Cerrar sesión** está al final del menú lateral.
 
 Si un dato no aparece donde lo espera, revise la sección **«Antes de empezar»** del módulo correspondiente: casi siempre falta cargar algo previo.
+
+## Si el programa no abre por la base de datos
+
+Si al iniciar aparece **«No se pudo abrir la base de datos»**, el programa no encontró o no pudo leer el archivo configurado. El mensaje explica el motivo y ofrece:
+
+- **Elegir otra base de datos…**: seleccione el archivo `.db` con sus datos (por ejemplo `restaurante.db`).
+- **Usar la predeterminada**: abre (o crea, vacía) la base en la carpeta `.restaurante_manager` de su usuario. **Sus datos no se borran**: la base anterior sigue en su carpeta y puede volver a elegirla.
+- **Salir**.
+
+Causas frecuentes:
+- Se seleccionó un archivo que **empieza con «._»** (por ejemplo `._restaurante.db`). Son archivos residuales que macOS crea al copiar a otro disco: **no son bases de datos**. Elija el que tiene el mismo nombre **sin** el «._».
+- El archivo o la carpeta se movió, se borró o está en un disco que no está conectado.
+- El archivo está dañado: restaure una copia de respaldo.
+
+Desde **Configurar BD** (administrador) el cambio de base también se valida antes de guardarse: si el archivo elegido no sirve, se avisa y **se sigue usando la base anterior**. Haga **copias de respaldo** con «Crear Respaldo (Copia)» antes de mover o cambiar bases.

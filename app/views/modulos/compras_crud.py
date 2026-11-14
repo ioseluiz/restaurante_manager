@@ -270,44 +270,6 @@ class TabGestionCompras(QWidget):
         if dlg.aplicado:
             self.cargar_compras()
 
-    def procesar_recepcion(self, compra_id):
-        try:
-            kardex = KardexController(self.db)
-            detalles = self.db.fetch_all(
-                "SELECT presentacion_id, cantidad FROM detalle_compras WHERE compra_id=?",
-                (compra_id,),
-            )
-
-            for pres_id, cant_compra in detalles:
-                pres = self.db.fetch_one(
-                    "SELECT insumo_id, cantidad_contenido, nombre FROM presentaciones_compra WHERE id=?",
-                    (pres_id,),
-                )
-                if pres:
-                    insumo_id, contenido_unitario, nombre_pres = pres
-                    cantidad_total_a_sumar = cant_compra * contenido_unitario
-
-                    kardex.registrar_movimiento(
-                        insumo_id=insumo_id,
-                        cantidad=cantidad_total_a_sumar,
-                        tipo="COMPRA",
-                        referencia_id=compra_id,
-                        observacion=f"Entrada por Compra (Presentación: {nombre_pres})",
-                    )
-
-            self.db.execute_query(
-                "UPDATE compras SET estado='RECIBIDO' WHERE id=?", (compra_id,)
-            )
-            QMessageBox.information(
-                self,
-                "Éxito",
-                "Inventario actualizado y registrado en Kardex correctamente.",
-            )
-            self.cargar_compras()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-
     def ver_detalle(self):
         row = self.table.currentRow()
         if row < 0:
@@ -454,8 +416,8 @@ class RecepcionDialog(QDialog):
 
     def _cargar_lineas(self):
         detalles = self.db.fetch_all(
-            """SELECT dc.presentacion_id, pc.insumo_id, i.nombre, pc.nombre,
-                      pc.cantidad_contenido, dc.cantidad, dc.precio_unitario
+            """SELECT dc.id, dc.presentacion_id, pc.insumo_id, i.nombre, pc.nombre,
+                      pc.cantidad_contenido, dc.cantidad
                FROM detalle_compras dc
                JOIN presentaciones_compra pc ON pc.id = dc.presentacion_id
                JOIN insumos i ON i.id = pc.insumo_id
@@ -465,10 +427,8 @@ class RecepcionDialog(QDialog):
         self._filas = []
         self.tbl.setRowCount(len(detalles))
         for r, det in enumerate(detalles):
-            pres_id, insumo_id, insumo_nombre, pres_nombre, contenido, pedido, precio_unit = det
+            det_id, pres_id, insumo_id, insumo_nombre, pres_nombre, contenido, pedido = det
             contenido = float(contenido or 1.0)
-            # Costo por unidad base de esta compra (para el promedio ponderado)
-            costo_base = (float(precio_unit) / contenido) if contenido else 0.0
 
             item_i = QTableWidgetItem(insumo_nombre)
             item_i.setFlags(item_i.flags() & ~Qt.ItemIsEditable)
@@ -494,8 +454,8 @@ class RecepcionDialog(QDialog):
             self.tbl.setCellWidget(r, 4, lbl_eq)
 
             fila = {
-                "row": r, "pres_id": pres_id, "insumo_id": insumo_id,
-                "contenido": contenido, "costo_base": costo_base,
+                "row": r, "det_id": det_id, "pres_id": pres_id, "insumo_id": insumo_id,
+                "contenido": contenido,
                 "spin": spin, "lbl": lbl_eq,
             }
             self._filas.append(fila)
@@ -569,50 +529,9 @@ class RecepcionDialog(QDialog):
             return
 
         try:
-            kardex = KardexController(self.db)
-            for f in self._filas:
-                recibido = f["spin"].value()
-                if recibido <= 0:
-                    continue
-                cantidad_total = recibido * f["contenido"]
-                pres = self.db.fetch_one(
-                    "SELECT nombre FROM presentaciones_compra WHERE id=?", (f["pres_id"],)
-                )
-                nombre_pres = pres[0] if pres else ""
-
-                # Costo promedio ponderado: leer stock/costo ANTES del ingreso
-                prev = self.db.fetch_one(
-                    "SELECT stock_actual, costo_unitario FROM insumos WHERE id=?",
-                    (f["insumo_id"],),
-                )
-                stock_viejo = (prev[0] or 0.0) if prev else 0.0
-                costo_viejo = (prev[1] or 0.0) if prev else 0.0
-
-                kardex.registrar_movimiento(
-                    insumo_id=f["insumo_id"],
-                    cantidad=cantidad_total,
-                    tipo="COMPRA",
-                    referencia_id=self.compra_id,
-                    observacion=f"Entrada por Compra (Presentación: {nombre_pres})",
-                )
-
-                # Recalcular WAC y actualizar costo_unitario del insumo
-                costo_entrada = f["costo_base"]
-                if costo_entrada > 0:
-                    nuevo_stock = stock_viejo + cantidad_total
-                    if nuevo_stock > 0 and costo_viejo > 0:
-                        nuevo_costo = (
-                            stock_viejo * costo_viejo + cantidad_total * costo_entrada
-                        ) / nuevo_stock
-                    else:
-                        # Sin costo previo (o stock previo nulo) → usar el costo de entrada
-                        nuevo_costo = costo_entrada
-                    self.db.execute_query(
-                        "UPDATE insumos SET costo_unitario=? WHERE id=?",
-                        (round(nuevo_costo, 6), f["insumo_id"]),
-                    )
-            self.db.execute_query(
-                "UPDATE compras SET estado='RECIBIDO' WHERE id=?", (self.compra_id,)
+            # Stock, Kardex y costo promedio en una sola transacción
+            KardexController(self.db).recibir_compra(
+                self.compra_id, {f["det_id"]: f["spin"].value() for f in self._filas}
             )
             self.aplicado = True
             QMessageBox.information(

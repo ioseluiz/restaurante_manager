@@ -4,11 +4,11 @@ Administra **quién puede entrar** al sistema. Este módulo solo aparece para el
 
 ## Roles
 
-| Rol | Uso previsto |
+| Rol | Qué ve |
 |---|---|
-| **admin** | Acceso completo, incluida la gestión de usuarios y la configuración de la base de datos |
-| **gerente** | Operación y análisis |
-| **empleado** | Operación diaria |
+| **admin** | Todo, incluida la gestión de usuarios y la configuración de la base de datos |
+| **gerente** | Todo menos Usuarios y Configurar BD |
+| **empleado** | Solo la operación diaria: Ventas, Compras, Inventario, Toma de Inventario, Catálogo de Insumos, Etiquetas, Recetas, Menú y Unidades. No ve el Panel de Control, Presupuestos, Consolidados, Rentabilidad, Costo de Platos, Análisis de Precios, Planilla (salarios y finanzas) ni Sucursales. Al entrar abre Ventas |
 
 ## Tareas
 
@@ -22,5 +22,6 @@ Administra **quién puede entrar** al sistema. Este módulo solo aparece para el
 
 - El usuario administrador inicial (**admin**) no permite cambiar su nombre ni su rol, para evitar quedarse sin acceso.
 - **Cambie la contraseña inicial** del administrador la primera vez que ingrese.
+- Las contraseñas se guardan cifradas con una sal propia por usuario; nadie puede leerlas, ni siquiera el administrador. Si alguien la olvida, asígnele una nueva con **Editar Seleccionado**.
 - Cree un usuario por persona; no comparta cuentas.
 - Elimine el usuario de quien deja de trabajar en el restaurante.

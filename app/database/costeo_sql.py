@@ -1,6 +1,10 @@
 # [FILE: app/database/costeo_sql.py]
 """SQL compartido del módulo Costo de platos (conexión, controladores y vistas)."""
 
+# Presentación que representa el precio de un insumo (costeo y presupuesto): la marcada como
+# preferida en el catálogo; si no hay, la primera creada.
+SQL_ORDEN_PRESENTACION = "COALESCE(es_preferida, 0) DESC, id"
+
 # Factor tanda -> porción para SQL (alias `m` = menu_items). 1.0 si la receta es por porción.
 # Porción y rendimiento comparten unidad (el editor lo fuerza).
 SQL_FACTOR_PORCION = (

@@ -16,10 +16,42 @@ _UNIDADES_ESTANDAR = {
     "gal": ("vol", 3785.41),
 }
 
-from app.database.costeo_sql import SQL_FACTOR_PORCION  # noqa: F401  (reexport)
+import calendar
+import datetime
+
+from app.database.costeo_sql import SQL_FACTOR_PORCION, SQL_ORDEN_PRESENTACION  # noqa: F401  (reexport)
 
 CANALES = ("LOCAL", "LLEVAR")
 TIPOS_EXTRA = ("ACOMPANAMIENTO", "BEBIDA", "EMPAQUE")
+
+
+_FORMATOS_FECHA = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d", "%d/%m/%y")
+
+
+def _parse_fecha(texto):
+    """Fecha de un reporte del POS en cualquiera de los formatos habituales, o None."""
+    s = str(texto or "").strip()
+    for fmt in _FORMATOS_FECHA:
+        try:
+            return datetime.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def pct_platos_llevar(db):
+    """Fracción (0–1) de platos que salen para llevar (Parámetros de Costo de Platos)."""
+    row = db.fetch_one("SELECT valor FROM costeo_config WHERE clave = 'pct_platos_llevar'")
+    try:
+        return max(0.0, min(100.0, float(row[0]))) / 100.0 if row else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def peso_canal_empaque(canal, pct_llevar):
+    """Parte de los platos vendidos que lleva un empaque según su canal: LLEVAR × %, LOCAL × (1 − %),
+    AMBOS × 1. Los empaques no pasan por la caja; acompañamientos y bebidas sí (líneas propias)."""
+    return {"LLEVAR": pct_llevar, "LOCAL": 1.0 - pct_llevar}.get(canal, 1.0)
 
 
 def precio_sugerido(costo, pct_ganancia):
@@ -98,7 +130,7 @@ class CosteoController:
             return self._cache_costo_insumo[insumo_id]
         pres = self.db.fetch_one(
             "SELECT costo_unitario_calculado FROM presentaciones_compra "
-            "WHERE insumo_id = ? AND costo_unitario_calculado > 0 ORDER BY id LIMIT 1",
+            f"WHERE insumo_id = ? AND costo_unitario_calculado > 0 ORDER BY {SQL_ORDEN_PRESENTACION} LIMIT 1",
             (insumo_id,))
         wac = self.db.fetch_one("SELECT costo_unitario FROM insumos WHERE id = ?", (insumo_id,))
         c_pres = float(pres[0]) if pres and pres[0] else 0.0
@@ -274,11 +306,7 @@ class CosteoController:
             "WHERE strftime('%m', r.fecha) = ? AND strftime('%Y', r.fecha) = ?", (mes_p, anio_s))
         platos, fuente = (row[0] if row and row[0] else 0), "ventas diarias"
         if not platos:
-            row = self.db.fetch_one(
-                "SELECT SUM(d.cantidad) FROM detalle_reportes_ventas d "
-                "JOIN reportes_ventas r ON r.id = d.reporte_id WHERE r.mes = ? AND r.anio = ?",
-                (int(mes), int(anio)))
-            platos, fuente = (row[0] if row and row[0] else 0), "reporte POS"
+            platos, fuente = self._platos_mes_reporte_pos(int(mes), int(anio)), "reporte POS"
         if not platos:
             platos = self.config_float("platos_dia_default", 198) * self.config_float("dias_mes", 30)
             fuente = "promedio configurado"
@@ -287,3 +315,23 @@ class CosteoController:
         return {"gastos": gastos, "total_gastos": total_gastos, "planilla": planilla,
                 "total": total, "platos": float(platos), "fuente_platos": fuente,
                 "por_plato": total / platos if platos else 0.0}
+
+    def _platos_mes_reporte_pos(self, mes, anio):
+        """Platos del mes estimados con los reportes del POS cuyo período se cruza con el mes:
+        promedio diario del reporte (cantidad / días del período) × días del mes que cubre.
+        Varios reportes sobre el mismo mes se promedian. 0 si ninguno lo cubre."""
+        ini_mes = datetime.date(anio, mes, 1)
+        fin_mes = datetime.date(anio, mes, calendar.monthrange(anio, mes)[1])
+        estimados = []
+        for desde, hasta, cantidad in self.db.fetch_all(
+            "SELECT r.fecha_inicio_periodo, r.fecha_fin_periodo, SUM(d.cantidad) FROM reportes_ventas r "
+            "JOIN detalle_reportes_ventas d ON d.reporte_id = r.id GROUP BY r.id"):
+            d0, d1 = _parse_fecha(desde), _parse_fecha(hasta)
+            if not d0 or not d1 or d1 < d0 or not cantidad:
+                continue
+            cruce = (min(d1, fin_mes) - max(d0, ini_mes)).days + 1
+            if cruce <= 0:
+                continue
+            por_dia = float(cantidad) / ((d1 - d0).days + 1)
+            estimados.append(por_dia * ((fin_mes - ini_mes).days + 1))
+        return sum(estimados) / len(estimados) if estimados else 0
