@@ -492,6 +492,21 @@ class ControlPresupuestoDialog(QDialog):
 
         self.tree.expandAll()
 
+        dif_global = gran_total_presupuestado - gran_total_ejecutado
+        color_saldo = "red" if dif_global < 0 else "blue"
+        texto_saldo = (
+            f"-${abs(dif_global):,.2f} (Alerta de Exceso)"
+            if dif_global < 0
+            else f"${dif_global:,.2f} (Dentro de Margen)"
+        )
+
+        html_res = f"""
+            <b>Total Original Presupuestado:</b> ${gran_total_presupuestado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; 
+            <b>Total Real Ejecutado:</b> ${gran_total_ejecutado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp;
+            <b>Saldo Global:</b> <span style='color:{color_saldo}; font-weight:bold;'>{texto_saldo}</span>
+        """
+        self.lbl_resumen.setText(html_res)
+
     def _fila_saldo(self, item, columna, dif):
         if dif < 0:
             item.setText(columna, f"-${abs(dif):,.2f} (Excedido)")
@@ -564,21 +579,6 @@ class ControlPresupuestoDialog(QDialog):
         cat_item.setText(2, f"${total_ejec:,.2f}")
         self._fila_saldo(cat_item, 3, total_pres - total_ejec)
         return total_pres, total_ejec
-
-        dif_global = gran_total_presupuestado - gran_total_ejecutado
-        color_saldo = "red" if dif_global < 0 else "blue"
-        texto_saldo = (
-            f"-${abs(dif_global):,.2f} (Alerta de Exceso)"
-            if dif_global < 0
-            else f"${dif_global:,.2f} (Dentro de Margen)"
-        )
-
-        html_res = f"""
-            <b>Total Original Presupuestado:</b> ${gran_total_presupuestado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; 
-            <b>Total Real Ejecutado:</b> ${gran_total_ejecutado:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp;
-            <b>Saldo Global:</b> <span style='color:{color_saldo}; font-weight:bold;'>{texto_saldo}</span>
-        """
-        self.lbl_resumen.setText(html_res)
 
 
 class EditarGeneralDialog(QDialog):
