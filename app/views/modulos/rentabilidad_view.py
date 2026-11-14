@@ -360,6 +360,9 @@ class RentabilidadView(QWidget):
                           p.get("costo_teorico"), None, None, "detail"))
             filas.append(("   Merma / Desviación", pyl["merma"],
                           p.get("merma"), None, None, "merma"))
+            if pyl.get("costo_teorico_con_extras") is not None:
+                filas.append(("   Ref.: teórico con extras del plato", pyl["costo_teorico_con_extras"],
+                              p.get("costo_teorico_con_extras"), None, None, "referencia"))
         else:
             filas.append(("   Costo Teórico (Recetas)", None, None, None, None, "sin_dato"))
 
@@ -421,6 +424,12 @@ class RentabilidadView(QWidget):
             # merma positiva = costo real por encima del teórico → alerta
             color = _RED_NEG if (monto is not None and monto > 0) else _GREEN
             it_monto.setForeground(QColor(color))
+        elif estilo == "referencia":
+            for it in items:
+                it.setForeground(QColor(_GRAY))
+            it_concepto.setToolTip(
+                "Como en Costo de Platos: suma acompañamientos y bebida de cada plato. Si la caja también los "
+                "registra como líneas propias, aquí se cuentan dos veces; por eso la merma usa el teórico sin extras.")
         elif estilo == "sin_dato":
             for it in items:
                 it.setForeground(QColor("#aaaaaa"))

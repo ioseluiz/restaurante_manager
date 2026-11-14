@@ -433,7 +433,7 @@ class TabPresentaciones(QWidget):
 
         # --- TABLA ---
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(
             [
                 "ID",
@@ -443,6 +443,7 @@ class TabPresentaciones(QWidget):
                 "Contenido",
                 "Unidad",
                 "Costo Calc.",
+                "Preferida",
             ]
         )
 
@@ -465,7 +466,8 @@ class TabPresentaciones(QWidget):
     def cargar_datos(self):
         self.table.setSortingEnabled(False)
         query = """
-            SELECT p.id, i.nombre, p.nombre, p.precio_compra, p.cantidad_contenido, u.abreviatura, p.costo_unitario_calculado
+            SELECT p.id, i.nombre, p.nombre, p.precio_compra, p.cantidad_contenido, u.abreviatura, p.costo_unitario_calculado,
+                   COALESCE(p.es_preferida, 0)
             FROM presentaciones_compra p
             JOIN insumos i ON p.insumo_id = i.id
             JOIN unidades_medida u ON i.unidad_base_id = u.id
@@ -482,6 +484,9 @@ class TabPresentaciones(QWidget):
             self.table.setItem(r, 4, NumericItem(str(row[4])))
             self.table.setItem(r, 5, QTableWidgetItem(row[5]))
             self.table.setItem(r, 6, NumericItem(f"${row[6]:.4f}"))
+            item_pref = QTableWidgetItem("★" if row[7] else "")
+            item_pref.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(r, 7, item_pref)
 
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().resizeSection(1, 150)
@@ -581,6 +586,13 @@ class PresentacionDialog(QDialog):
         form.addRow("Nombre Empaque:", self.txt_nombre)
         form.addRow("Precio Compra:", self.spin_precio)
         layout.addLayout(form)
+
+        self.chk_preferida = QCheckBox("Presentación preferida (la usan Costo de Platos y Presupuestos)")
+        self.chk_preferida.setToolTip(
+            "Si el insumo tiene varias presentaciones, esta fija su precio para costear platos y "
+            "calcular presupuestos. Sin ninguna marcada se usa la primera creada."
+        )
+        layout.addWidget(self.chk_preferida)
 
         self.chk_detalle = QCheckBox("Es un empaque compuesto (Ej: Caja con botellas)")
         self.chk_detalle.toggled.connect(self.toggle_detalle)
@@ -709,7 +721,7 @@ class PresentacionDialog(QDialog):
 
     def cargar_datos_edicion(self):
         # Cargar tabla principal de presentación
-        query = "SELECT insumo_id, nombre, precio_compra, cantidad_contenido FROM presentaciones_compra WHERE id=?"
+        query = "SELECT insumo_id, nombre, precio_compra, cantidad_contenido, COALESCE(es_preferida, 0) FROM presentaciones_compra WHERE id=?"
         rows = self.db.fetch_all(query, (self.presentacion_id,))
         if rows:
             row = rows[0]
@@ -726,6 +738,7 @@ class PresentacionDialog(QDialog):
             self.spin_precio.setValue(row[2])
             self._precio_original = row[2]  # guardar para detectar cambio
             self.spin_total.setValue(row[3])
+            self.chk_preferida.setChecked(bool(row[4]))
 
             # Verificar si tiene composición (empaque compuesto)
             comp_query = "SELECT nombre_empaque_interno, cantidad_interna, peso_o_volumen_unitario FROM composicion_empaque WHERE presentacion_id=?"
@@ -814,6 +827,17 @@ class PresentacionDialog(QDialog):
                        (presentacion_id, precio_compra, costo_unitario_calculado, fecha_registro, es_precio_actual)
                        VALUES (?,?,?,?,1)""",
                     (pid, precio, costo_u, hoy),
+                )
+
+            # Una sola presentación preferida por insumo
+            if self.chk_preferida.isChecked():
+                self.db.execute_query(
+                    "UPDATE presentaciones_compra SET es_preferida = (id = ?) WHERE insumo_id = ?",
+                    (pid, ins_id),
+                )
+            else:
+                self.db.execute_query(
+                    "UPDATE presentaciones_compra SET es_preferida = 0 WHERE id = ?", (pid,)
                 )
 
             # Insertar composición si aplica

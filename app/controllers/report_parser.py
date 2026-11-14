@@ -132,11 +132,19 @@ class ReportParser:
                             idx = 12 + offset
                             if idx < len(cells) and cells[idx].strip():
                                 prom_raw = cells[idx]
-                                # Buscar el estimado en la siguiente celda no vacía
-                                for j in range(idx + 1, min(idx + 4, len(cells))):
-                                    if cells[j].strip():
-                                        estim_raw = cells[j]
-                                        break
+                                # El estimado va 7 columnas después del promedio (columna 19 del
+                                # reporte); entre ambos puede venir el total en la medida del
+                                # producto (p. ej. gramos de papitas). Respaldo: la siguiente
+                                # celda con valor antes de los montos.
+                                if idx + 7 < len(cells) and cells[idx + 7].strip():
+                                    estim_raw = cells[idx + 7]
+                                else:
+                                    for j in range(idx + 1, len(cells)):
+                                        if "B/" in cells[j]:
+                                            break
+                                        if cells[j].strip():
+                                            estim_raw = cells[j]
+                                            break
                                 break
 
                     total_venta_raw = "0"

@@ -31,7 +31,7 @@ El menú lateral da acceso a los siguientes módulos:
 *   **Planilla:** empleados, períodos de pago con horas y recargos, vales, resumen con reglas de Panamá (seguro social, seguro educativo, riesgo profesional, ISR) y provisiones laborales. Su costo completo es el que usan los presupuestos y el costo de platos.
 
 ### 🔐 Seguridad, configuración y ayuda
-*   **Usuarios:** roles `admin`, `gerente` y `empleado`. Solo el rol administrador ve la gestión de usuarios y la configuración de la base de datos.
+*   **Usuarios:** roles `admin` (todo), `gerente` (todo menos usuarios y configuración de la base de datos) y `empleado` (solo la operación diaria: sin Panel, Presupuestos, Consolidados, Rentabilidad, Costo de Platos, Análisis de Precios, Planilla ni Sucursales). Contraseñas cifradas con sal (PBKDF2).
 *   **Configurar BD** (administrador): cambiar la base de datos en uso y crear copias de respaldo.
 *   **Ayuda en pantalla:** menú **Ayuda** (o **F1**) con la guía de cada módulo.
 
@@ -99,6 +99,10 @@ python main.py
 *   **Usuario:** `admin`
 *   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
 
+## 🩺 Solución de problemas
+
+**El programa no abre por la base de datos.** La ubicación de la base se guarda en `~/.restaurante_manager/config.json`. Si apunta a un archivo inválido, el programa lo detecta, explica el motivo y permite elegir otra base o usar la predeterminada. Un caso típico es seleccionar un archivo `._nombre.db`: son residuos de macOS, no bases de datos. Detalles en la ayuda (F1 → Primeros pasos). Para corregirlo a mano, edite o borre `config.json`.
+
 ## 🏷️ Versiones
 
 La versión aparece en el título de la ventana, en la barra de estado y en **Ayuda → Acerca de**. Vive en `app/version.py`; el CI la reemplaza con la del tag al compilar. Un tag con sufijo (`v1.3.0-beta.1`) publica el instalador como **pre-release** y uno sin sufijo (`v1.3.0`) como release oficial. Detalles en `docs/versiones.md`.
@@ -109,6 +113,11 @@ La versión aparece en el título de la ventana, en la barra de estado y en **Ay
 pip install pytest
 python -m pytest tests
 ```
+
+Ejecútelas con el Python del entorno virtual (el que tiene PyQt5); sin PyQt5, las pruebas de los diálogos se omiten.
+`tests/e2e/` recorre el flujo completo (compra → inventario → ventas → costeo → presupuesto → rentabilidad) sobre un
+escenario con resultados calculados a mano. Las marcadas `xfail` son hallazgos pendientes (`docs/revision_hallazgos.md`).
+Para probar a mano en la app: `python scripts/crear_bd_prueba.py C:/temp/prueba_e2e.db` y seguir `docs/pruebas_manual_ui.md`.
 
 ## 🛠️ Tecnologías Utilizadas
 *   **Lenguaje:** Python 3
@@ -123,6 +132,7 @@ python -m pytest tests
 *   **Ayuda en pantalla:** menú **Ayuda** o tecla **F1** (contenido en `assets/ayuda/`).
 *   **Manual de usuario (PDF):** `docs/Manual_de_Usuario_ItalosManager.pdf`, generado desde la ayuda en pantalla con `python generar_manual.py`.
 *   **Guías técnicas:** carpeta `docs/` (ventas, inventario, presupuestos, consolidados, costo de platos, mantenimiento de la ayuda y versiones).
+*   **Cálculos y revisión:** `docs/calculos.md` (cada fórmula con un ejemplo resuelto), `docs/revision_hallazgos.md` (hallazgos de la revisión end-to-end y conciliación con los Excel del cliente) y `docs/pruebas_manual_ui.md` (checklist manual).
 
 ---
 Desarrollado para optimizar la eficiencia operativa de **Italos Manager**.

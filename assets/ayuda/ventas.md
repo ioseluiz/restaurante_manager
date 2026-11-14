@@ -33,7 +33,7 @@ Lista los reportes guardados (período, total, % sugerido, fecha de carga). Al s
 1. Elija la **fecha**.
 2. Escriba la cantidad vendida de cada plato del menú (los que no vendió quedan en 0).
 3. Pulse **Guardar Cantidades**. El día queda en **BORRADOR**.
-4. Pulse **Actualizar Inventario (Kardex)** para **descontar del stock los insumos** consumidos: el sistema usa la receta de cada plato (con recetas por tanda y sub-recetas) × las unidades vendidas y registra un movimiento `VENTA` por insumo en el Kardex. El día queda **INVENTARIO ACTUALIZADO** y bloqueado.
+4. Pulse **Actualizar Inventario (Kardex)** para **descontar del stock los insumos** consumidos: el sistema usa la receta de cada plato (con recetas por tanda y sub-recetas) × las unidades vendidas, más los empaques según el *% de platos para llevar* de [Costo de Platos](ayuda:costo_platos), y registra un movimiento `VENTA` por insumo en el Kardex. El día queda **INVENTARIO ACTUALIZADO** y bloqueado.
 
 Al terminar, el sistema avisa qué **platos no tenían receta** (no descuentan nada) y qué **insumos quedaron en negativo**.
 

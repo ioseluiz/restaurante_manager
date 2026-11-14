@@ -22,6 +22,7 @@ from app.utils.button_icons import auto_icon_buttons
 from app.utils import ayuda
 from app.version import etiqueta_version
 from app.views.ayuda_dialog import AyudaDialog
+from app.controllers.auth_controller import puede_ver
 
 # --- IMPORTACIÓN DE VISTAS ---
 from app.views.modulos.insumos_crud import InsumosCRUD
@@ -369,13 +370,16 @@ class MainWindow(QMainWindow):
         )
         sidebar_layout.addWidget(self.btn_sucursales)
 
-        # Rol check
-        user_rol = ""
-        user_data = self.auth.current_user
-        if isinstance(user_data, (list, tuple)) and len(user_data) > 2:
-            user_rol = str(user_data[2]).lower()
+        # Permisos por rol: se ocultan los módulos que el rol no puede ver
+        for modulo, btn in (
+            ("dashboard", self.btn_inicio), ("presupuestos", self.btn_presupuestos),
+            ("consolidados", self.btn_consolidados), ("rentabilidad", self.btn_rentabilidad),
+            ("costo_platos", self.btn_costo_platos), ("grafico_precios", self.btn_grafico_precios),
+            ("planilla", self.btn_planilla), ("sucursales", self.btn_sucursales),
+        ):
+            btn.setVisible(puede_ver(self.auth.rol, modulo))
 
-        if user_rol in ["admin", "administrador"]:
+        if self.auth.rol == "admin":
             self.btn_usuarios = self.create_nav_button(
                 "Gestión de Usuarios", "assets/icons/nav_usuarios.svg", self.show_usuarios
             )
@@ -425,8 +429,12 @@ class MainWindow(QMainWindow):
         self.stacked_widget = QStackedWidget()
         main_layout.addWidget(self.stacked_widget)
 
-        self.btn_inicio.setChecked(True)
-        self.show_dashboard()
+        if puede_ver(self.auth.rol, "dashboard"):
+            self.btn_inicio.setChecked(True)
+            self.show_dashboard()
+        else:
+            self.btn_ventas.setChecked(True)
+            self.show_ventas()
 
     def toggle_sidebar(self):
         self.sidebar_collapsed = not self.sidebar_collapsed
@@ -514,7 +522,13 @@ class MainWindow(QMainWindow):
                 self, "Seleccionar o Crear Base de Datos", "", "SQLite Files (*.db)"
             )
             if path:
-                self.db.switch_database(path)
+                try:
+                    self.db.switch_database(path)
+                except ValueError as e:
+                    QMessageBox.warning(
+                        self, "No se cambió la base de datos",
+                        f"{e}\n\nSe sigue usando la base de datos anterior.")
+                    return
                 self.actualizar_info_bd()
                 QMessageBox.information(self, "Éxito", f"Conectado exitosamente a:\n{path}")
                 self.modules = {}
@@ -535,6 +549,8 @@ class MainWindow(QMainWindow):
                     QMessageBox.critical(self, "Error", f"No se pudo crear el respaldo: {info}")
 
     def load_module(self, name, widget_class, title, needs_db=False):
+        if not puede_ver(self.auth.rol, name):
+            return
         if name not in self.modules:
             instance = widget_class(self.db) if needs_db else widget_class()
             auto_icon_buttons(instance)
