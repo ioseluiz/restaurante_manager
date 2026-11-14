@@ -8,7 +8,7 @@ De ese modo el ejecutable siempre muestra la versión de su tag. Al trabajar des
 ve el valor de este archivo: actualícelo cuando prepare una versión nueva (ver docs/versiones.md).
 """
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 
 def etiqueta_version(version=None):
