@@ -154,11 +154,11 @@ class DashboardView(QWidget):
         kpi_row.setSpacing(14)
 
         self.card_inventario = _make_card("Valor del Inventario", _RED, "stock actual × costo")
-        self.card_tomas      = _make_card("Tomas de Inventario", _ORANGE, "sesiones cerradas")
         self.card_ayer       = _make_card("Ventas Día Anterior", _GREEN, "diario de ventas")
         self.card_mes        = _make_card("Ventas del Mes", _BLUE, "mes en curso")
+        self.card_utilidad   = _make_card("Utilidad del Mes", _ORANGE, "ventas − costo − gastos")
 
-        for c in (self.card_inventario, self.card_tomas, self.card_ayer, self.card_mes):
+        for c in (self.card_inventario, self.card_ayer, self.card_mes, self.card_utilidad):
             kpi_row.addWidget(c)
         root.addLayout(kpi_row)
 
@@ -356,15 +356,19 @@ class DashboardView(QWidget):
         valor_inv = cur.fetchone()[0] or 0.0
         self.card_inventario.lbl_value.setText(f"$ {valor_inv:,.2f}")
 
-        # --- Tomas de inventario cerradas ---
+        # --- Utilidad del mes en curso (Estado de Resultados) ---
         try:
-            cur.execute(
-                "SELECT COUNT(*) FROM conteos_inventario WHERE estado = 'CERRADO'"
+            from app.controllers.rentabilidad_controller import RentabilidadController
+            pyl = RentabilidadController(self.db).pyl_mensual(hoy.year, hoy.month)
+            utilidad = pyl["utilidad_neta"]
+            self.card_utilidad.lbl_value.setText(f"$ {utilidad:,.2f}")
+            color = _GREEN if utilidad >= 0 else _RED
+            self.card_utilidad.lbl_value.setStyleSheet(
+                f"color: {color}; font-size: 22px; font-weight: bold;"
             )
-            tomas = cur.fetchone()[0] or 0
+            self.card_utilidad.lbl_sub.setText(f"margen {pyl['margen_neto']:.1f}% sobre ventas")
         except Exception:
-            tomas = 0
-        self.card_tomas.lbl_value.setText(str(tomas))
+            self.card_utilidad.lbl_value.setText("—")
 
         # --- Ventas día anterior ---
         cur.execute(

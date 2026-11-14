@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
     QFileDialog
 )
 from PyQt5.QtCore import Qt, QDate
+from app.utils.diario_ventas_calc import total_ventas_diario
 from PyQt5.QtGui import QColor
 import csv
 
@@ -113,8 +114,10 @@ class DiarioVentasDialog(QDialog):
         form.addRow("Vale:", self.vale_input)
         form.addRow(self.lbl_vale_desc, self.vale_descripcion_input)
         form.addRow("No. Facturas:", self.no_facturas_input)
-        form.addRow("Sobrante Caja:", self.sobrante_input)
-        form.addRow("Faltante Caja:", self.faltante_input)
+        self.sobrante_input.setToolTip("Dinero que sobró al cuadrar la caja. SUMA al TOTAL VENTAS.")
+        self.faltante_input.setToolTip("Dinero que faltó al cuadrar la caja (escríbalo como monto positivo). RESTA del TOTAL VENTAS.")
+        form.addRow("Sobrante Caja (+):", self.sobrante_input)
+        form.addRow("Faltante Caja (−):", self.faltante_input)
         form.addRow("Depósitos:", self.depositos_input)
 
         if self.data:
@@ -167,14 +170,15 @@ class DiarioVentasDialog(QDialog):
         self.lbl_vale_desc.setVisible(has_vale)
 
     def calcular_total_ventas(self):
-        total = (self.yappy_input.value() +
-                 self.pedidos_ya_input.value() +
-                 self.clave_input.value() +
-                 self.visa_mastercard_input.value() +
-                 self.efectivo_input.value() +
-                 self.vale_input.value() +
-                 self.sobrante_input.value() +
-                 self.faltante_input.value())
+        total = total_ventas_diario(
+            yappy=self.yappy_input.value(),
+            pedidos_ya=self.pedidos_ya_input.value(),
+            clave=self.clave_input.value(),
+            visa_mastercard=self.visa_mastercard_input.value(),
+            efectivo=self.efectivo_input.value(),
+            vale=self.vale_input.value(),
+            sobrante=self.sobrante_input.value(),
+            faltante=self.faltante_input.value())
         self.total_ventas_input.setValue(total)
 
     def guardar_registro(self):

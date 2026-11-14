@@ -22,6 +22,8 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 import csv
 
+from app.utils.gastos_fijos import poblar_combo, valor_combo
+
 
 class NumericItem(QTableWidgetItem):
     """Permite ordenar columnas numéricas correctamente."""
@@ -306,11 +308,15 @@ class TransaccionDialog(QDialog):
         self.monto_input.setMaximum(999999999.99)
         self.monto_input.setDecimals(2)
 
+        self.tipo_gasto_input = QComboBox()
+        poblar_combo(self.db, self.tipo_gasto_input)
+
         form.addRow("Fecha:", self.fecha_input)
         form.addRow("Tipo:", self.tipo_input)
         form.addRow("Comercio:", self.comercio_input)
         form.addRow("Descripción:", self.descripcion_input)
         form.addRow("Monto:", self.monto_input)
+        form.addRow("Tipo de Gasto:", self.tipo_gasto_input)
 
         if self.data:
             self.fecha_input.setDate(
@@ -320,6 +326,7 @@ class TransaccionDialog(QDialog):
             self.comercio_input.setText(self.data.get("comercio", ""))
             self.descripcion_input.setPlainText(self.data.get("descripcion", ""))
             self.monto_input.setValue(float(self.data.get("monto", 0.0)))
+            poblar_combo(self.db, self.tipo_gasto_input, self.data.get("tipo_gasto"))
 
         layout.addLayout(form)
 
@@ -357,6 +364,7 @@ class TransaccionDialog(QDialog):
         comercio = self.comercio_input.text().strip()
         descripcion = self.descripcion_input.toPlainText().strip()
         monto = self.monto_input.value()
+        tipo_gasto = valor_combo(self.tipo_gasto_input)
 
         if monto <= 0:
             QMessageBox.warning(self, "Aviso", "El monto debe ser mayor a cero.")
@@ -364,20 +372,20 @@ class TransaccionDialog(QDialog):
 
         if self.data:
             query = """
-                UPDATE transacciones_tarjeta 
-                SET fecha=?, comercio=?, descripcion=?, tipo_transaccion=?, monto=?
+                UPDATE transacciones_tarjeta
+                SET fecha=?, comercio=?, descripcion=?, tipo_transaccion=?, monto=?, tipo_gasto=?
                 WHERE id=?
             """
             self.db.cursor.execute(
-                query, (fecha, comercio, descripcion, tipo, monto, self.data["id"])
+                query, (fecha, comercio, descripcion, tipo, monto, tipo_gasto, self.data["id"])
             )
         else:
             query = """
-                INSERT INTO transacciones_tarjeta (tarjeta_id, fecha, comercio, descripcion, tipo_transaccion, monto)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO transacciones_tarjeta (tarjeta_id, fecha, comercio, descripcion, tipo_transaccion, monto, tipo_gasto)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """
             self.db.cursor.execute(
-                query, (self.tarjeta_id, fecha, comercio, descripcion, tipo, monto)
+                query, (self.tarjeta_id, fecha, comercio, descripcion, tipo, monto, tipo_gasto)
             )
 
         self.db.conn.commit()
@@ -393,6 +401,7 @@ class TransaccionDialog(QDialog):
             self.comercio_input.clear()
             self.descripcion_input.clear()
             self.monto_input.setValue(0.0)
+            self.tipo_gasto_input.setCurrentIndex(0)
             if self.tipo_input.currentText() == "COMPRA":
                 self.comercio_input.setFocus()
             else:
@@ -696,13 +705,18 @@ class TarjetasCreditoView(QWidget):
                 self, "Aviso", "Seleccione una transacción para editar."
             )
 
+        reg_id = self.table_transacciones.item(row, 0).text()
+        tg_row = self.db.fetch_one(
+            "SELECT tipo_gasto FROM transacciones_tarjeta WHERE id = ?", (reg_id,)
+        )
         data = {
-            "id": self.table_transacciones.item(row, 0).text(),
+            "id": reg_id,
             "fecha": self.table_transacciones.item(row, 1).text(),
             "tipo_transaccion": self.table_transacciones.item(row, 2).text(),
             "comercio": self.table_transacciones.item(row, 3).text(),
             "descripcion": self.table_transacciones.item(row, 4).text(),
             "monto": self.table_transacciones.item(row, 5).text(),
+            "tipo_gasto": tg_row[0] if tg_row else None,
         }
 
         dlg = TransaccionDialog(

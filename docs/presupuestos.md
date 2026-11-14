@@ -182,7 +182,10 @@ Ejemplo: si el % promedio es 12%, el Factor = 1.12
 Para cada producto en los reportes seleccionados:
 
 1. Se agrupa por código de producto y día de la semana.
-2. Se promedia la cantidad vendida por día entre los reportes:
+2. Se toma el **promedio por día que trae el reporte** (columna **Prom/Med** del
+   CSV del POS, no la cantidad total) y se promedia entre los reportes
+   seleccionados, dividiendo por el número de reportes elegidos (un reporte donde
+   el producto no aparece cuenta como cero):
    ```
    Promedio_lunes = (lunes_reporte1 + lunes_reporte2 + ...) / cantidad_reportes
    ```
@@ -322,7 +325,7 @@ cantidad y monto manual.
 
 ### 7.4 Eliminar una línea del presupuesto
 
-Botón **"X"** junto a cualquier insumo.
+Botón **"Borrar"** junto a cualquier insumo.
 
 Elimina esa línea del presupuesto y recalcula el total. Útil si un insumo
 no se va a comprar ese mes (hay existencia suficiente) o si fue incluido
@@ -365,7 +368,7 @@ correspondiente.
 
 Al registrar una compra en el módulo **Compras y Proveedores**:
 1. Completar los datos de la compra normalmente (proveedor, fecha, productos).
-2. En el campo **"Presupuesto asociado"**, seleccionar el presupuesto del mes
+2. En el campo **"Vincular a Presupuesto"**, seleccionar el presupuesto del mes
    correspondiente.
 3. Guardar la compra.
 
@@ -397,8 +400,8 @@ La vista muestra un árbol comparativo por categoría e insumo:
 | Columna | Qué muestra |
 |---|---|
 | Monto Presupuestado | Monto estimado al generar el presupuesto |
-| Monto Ejecutado | Suma real de lo que se gastó en compras vinculadas a ese presupuesto |
-| Saldo | Diferencia: azul = dentro del margen, rojo = excedido |
+| Monto Ejecutado (Real) | Suma real de lo que se gastó en compras vinculadas a ese presupuesto |
+| Saldo (Diferencia) | Diferencia: azul = dentro del margen, rojo = excedido |
 
 Al pie de la pantalla aparece el **resumen global**:
 - Total original presupuestado
@@ -415,6 +418,32 @@ Al pie de la pantalla aparece el **resumen global**:
   sub-estimado para ese insumo.
 - **Ejecutado = $0 con presupuesto > $0:** ese insumo aún no se ha comprado en
   este período o las compras no fueron vinculadas al presupuesto.
+
+### Control de Planilla y Gastos Fijos
+
+Además de las compras, el Control Presupuestal incluye dos categorías más al
+final del árbol, cada una comparando presupuestado vs. ejecutado real:
+
+- **PLANILLA:** el ejecutado se calcula **automáticamente** a partir de los
+  períodos de pago (horas reales) cuya fecha de inicio cae en el mes/año del
+  presupuesto, con el **costo laboral completo** (el mismo del Resumen de
+  Planilla y del bloque de planilla del presupuesto; ver 12.5). No requiere
+  captura adicional.
+- **GASTOS FIJOS:** el ejecutado se toma de los egresos registrados en
+  **Consolidados** (cheques, tarjeta tipo COMPRA, Yappy y efectivo) del mes que
+  hayan sido **etiquetados con un "Tipo de Gasto"**. Se compara concepto por
+  concepto (Alquiler presupuestado vs. Alquiler real, etc.).
+
+> Para que un egreso cuente en el Control de gastos, al registrarlo en
+> Consolidados hay que elegir su **"Tipo de Gasto"** de la lista (la misma del
+> presupuesto). En cheques, tarjeta y Yappy se etiqueta el pago completo; en
+> **Pagos en Efectivo** se etiqueta **por línea del desglose**, así un pago
+> mixto solo aporta al gasto fijo la parte etiquetada. Los egresos sin tipo de
+> gasto no se cuentan aquí (siguen sumando como egreso general del negocio en el
+> Resumen de Consolidados).
+
+El **resumen global** al pie ya incluye planilla y gastos fijos en los totales
+presupuestado y ejecutado.
 
 ---
 
@@ -496,3 +525,160 @@ cocina, mayor debe ser este porcentaje.
 No. El cálculo automático requiere al menos un reporte de ventas cargado. Si
 no hay reportes, la alternativa es agregar todos los insumos manualmente uno
 por uno usando **"Agregar Insumo Manual Extra"**.
+
+---
+
+## 12. Bloque de Planilla del Presupuesto
+
+Además del bloque de **compras** (todo lo anterior), cada presupuesto tiene un
+bloque de **planilla** independiente. Sirve para presupuestar el costo de
+nómina del mes junto con las compras, sin mezclar ambos cálculos.
+
+### 12.1 Cómo se relacionan los dos bloques
+
+```
+PRESUPUESTO N°X
+├── Bloque COMPRAS   → categorías de insumos (CARNES, VIVERES, …)
+└── Bloque PLANILLA  → costo de nómina planificado del mes
+
+Total General = Total Compras + Total Planilla
+```
+
+- El bloque de **compras** y el **Control Presupuestal** funcionan exactamente
+  igual que antes; la planilla **no** afecta esos cálculos.
+- La planilla se suma solo al **Total General** que se muestra en el encabezado
+  del presupuesto y en la lista principal (columnas *Compras*, *Planilla*,
+  *Total General*).
+
+### 12.2 Dónde se ve
+
+- **Como categoría en el árbol de compras:** al abrir *Ver / Editar Insumos*,
+  aparece una categoría **"PLANILLA (PLANIFICADA)"** junto a las categorías de
+  insumos, con el monto de la planilla del mes y cada empleado como sub-fila.
+- **Pestaña "Planilla":** un editor detallado con el desglose por empleado
+  (salario bruto, deducciones del colaborador, costo patronal, provisiones y
+  costo total).
+
+Ambas vistas leen la misma información: editar en una se refleja en la otra y
+en el Total General.
+
+### 12.3 Basarse en la planilla de meses anteriores
+
+Botón **"Copiar planilla de período…"**. Permite tomar como base las horas ya
+registradas en el módulo de Planilla:
+
+1. Marcar **uno o varios** períodos de pago.
+2. Indicar un **multiplicador** (por defecto **2**).
+3. Al aplicar, por cada empleado se **suman las horas de los períodos marcados**
+   y se **multiplican por el factor**.
+
+| Escenario | Cómo hacerlo |
+|---|---|
+| Una quincena → mes | Marcar **1 período**, multiplicador **×2** |
+| Sumar 2 quincenas reales | Marcar **2 períodos**, multiplicador **×1** |
+| Un mes ya cargado completo | Marcar **1 período**, multiplicador **×1** |
+
+La opción **"Reemplazar la planilla actual"** borra la planilla existente del
+presupuesto antes de copiar (para no duplicar). Al desmarcarla, los empleados
+copiados se agregan a los que ya había.
+
+> Copiar es una **fotografía editable**: se copian las horas del período pero no
+> se altera el período de nómina original. Luego cada empleado se puede ajustar.
+
+### 12.4 Editar y ajustar la planilla
+
+- **Editar** (por empleado): cambiar salario/hora y las horas (regulares,
+  festivos, domingos, extra diurnas, extra nocturnas). El costo se recalcula.
+- **+ Agregar empleado manual:** añadir una fila que no proviene de un período
+  (nombre, puesto, sucursal, salario y horas).
+- **Borrar:** quitar un empleado del presupuesto.
+
+Cualquier cambio recalcula el **Total Planilla** y el **Total General** al
+instante.
+
+### 12.5 Cómo se calcula el costo
+
+Por cada empleado, el costo que entra al presupuesto es el **costo laboral
+completo** (el mismo que calcula el *Resumen de Planilla*):
+
+```
+Salario bruto         = Σ (horas_tipo × salario_hora × recargo_tipo)
+Costo patronal        = Salario bruto × (Seguro Social + Seguro Educativo + Riesgos Profesionales, del empleador)
+Provisiones           = Salario bruto × (Décimo tercer mes + Vacaciones + Prima de antigüedad)
+Costo total           = Salario bruto + Costo patronal + Provisiones      ← suma al presupuesto
+```
+
+- La **prima de antigüedad** solo se provisiona a empleados con contrato
+  **INDEFINIDO**; el décimo tercer mes y las vacaciones aplican a todos.
+- Los recargos por tipo de hora y todos los porcentajes se toman de la
+  configuración del módulo de **Planilla**.
+- Las deducciones del colaborador (su Seguro Social, Seguro Educativo e ISR) se
+  muestran como referencia pero **no** se suman al costo, porque forman parte del
+  bruto que el restaurante paga.
+- En la tabla del bloque, **Costo Patronal** incluye el riesgo profesional y
+  **Provisiones** es una columna aparte, de modo que
+  *Salario Bruto + Costo Patronal + Provisiones = Costo Total*.
+
+El **ejecutado de planilla** del Control Presupuestal y los indirectos de Costo de
+Platos usan exactamente el mismo cálculo, así que planilla, presupuesto y costo de
+platos siempre coinciden.
+
+> **Filas creadas antes de este cambio:** las filas del bloque de planilla que ya
+> estaban guardadas conservan su costo anterior (sin riesgo profesional ni
+> provisiones). Se actualizan al **Editar** la fila o al volver a **copiar la
+> planilla de un período**.
+
+### 12.6 Incluir planilla al crear el presupuesto
+
+En **"Nuevo Presupuesto"** hay una casilla **"Incluir planilla base"**. Al
+marcarla, después de generar el presupuesto se abre directamente el diálogo de
+*Copiar planilla de período…* para dejar la planilla lista desde el inicio.
+
+---
+
+## 13. Bloque de Gastos Fijos
+
+El tercer bloque del presupuesto son los **gastos fijos** mensuales que no son
+compras de insumos ni nómina: alquiler, luz, agua, internet, seguros, etc.
+
+```
+Total General = Total Compras + Total Planilla + Total Gastos Fijos
+```
+
+Al igual que la planilla, es un bloque **independiente**: no afecta el cálculo
+de compras ni el Control Presupuestal, solo suma al Total General.
+
+### 13.1 Dónde se ve
+
+Al abrir *Ver / Editar Insumos*, aparece la categoría **"GASTOS FIJOS"** en el
+árbol del presupuesto (junto a las categorías de insumos y a "PLANILLA"), con el
+monto total de gastos del mes y cada gasto como sub-fila. También se refleja en
+el encabezado y en la columna *Gastos* de la lista principal.
+
+### 13.2 Agregar un gasto
+
+Botón **"+ Gasto"** en la fila de la categoría. En el diálogo:
+
+- **Concepto:** se puede **elegir del historial** (un catálogo de conceptos
+  reutilizables: Alquiler, Luz, Agua, Internet/Teléfono, Gas, Seguros, etc., más
+  cualquier concepto usado antes) o **escribir uno nuevo**. Al elegir un concepto
+  ya usado, se sugiere automáticamente su último monto.
+- **Monto mensual:** el valor presupuestado para ese gasto.
+
+Todo concepto nuevo que se escriba queda guardado en el catálogo para reutilizarlo
+en los próximos presupuestos.
+
+### 13.3 Usar gastos del historial (copiar del presupuesto anterior)
+
+Botón **"Copiar del anterior"** en la fila de la categoría. Copia **todos** los
+gastos fijos del presupuesto más reciente anterior, reemplazando los gastos
+actuales de este presupuesto. Es la forma rápida de partir de la base del mes
+pasado y luego ajustar montos.
+
+### 13.4 Editar y eliminar
+
+- **Editar:** cambiar el concepto o el monto de un gasto.
+- **Borrar:** quitar el gasto del presupuesto.
+
+Cualquier cambio recalcula el **Total Gastos Fijos** y el **Total General** al
+instante.

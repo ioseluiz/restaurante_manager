@@ -25,9 +25,6 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements-build.txt
 
-      - name: Compilar ejecutable con PyInstaller
-        run: pyinstaller main.spec
-
       - name: Determinar version
         id: version
         shell: pwsh
@@ -40,6 +37,12 @@ jobs:
           }
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Version determinada: $version"
+
+      - name: Estampar la version dentro de la aplicacion
+        run: python scripts/estampar_version.py "${{ steps.version.outputs.VERSION }}"
+
+      - name: Compilar ejecutable con PyInstaller
+        run: pyinstaller main.spec
 
       - name: Instalar Inno Setup
         run: choco install innosetup --yes --no-progress
@@ -57,12 +60,14 @@ jobs:
           path: installer_output/ItalosManager_Setup.exe
           retention-days: 30
 
-      - name: Publicar Release oficial (en tag)
+      - name: Publicar Release (en tag; pre-release si la version lleva sufijo)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: installer_output/ItalosManager_Setup.exe
           generate_release_notes: true
+          # v1.3.0-beta.1, v1.3.0-rc.1... -> pre-release; v1.3.0 -> release oficial
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
 
       - name: Actualizar pre-release latest-dev (en push a main)
         if: github.ref == 'refs/heads/main'

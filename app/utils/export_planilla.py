@@ -45,17 +45,17 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
     ws.freeze_panes = "A7"
 
     # --- Header block (rows 1-4) ---
-    ws.merge_cells("A1:S1")
+    ws.merge_cells("A1:X1")
     ws["A1"] = "REPORTE DE PLANILLA"
     ws["A1"].font = Font(bold=True, size=16, color=RED_HEX)
     ws["A1"].alignment = Alignment(horizontal="center")
 
-    ws.merge_cells("A2:S2")
+    ws.merge_cells("A2:X2")
     ws["A2"] = f"Período: {meta.get('periodo_nombre','')}"
     ws["A2"].font = Font(bold=True, size=12)
     ws["A2"].alignment = Alignment(horizontal="center")
 
-    ws.merge_cells("A3:S3")
+    ws.merge_cells("A3:X3")
     ws["A3"] = (f"Fechas: {meta.get('fecha_inicio','')} — {meta.get('fecha_fin','')}  |  "
                 f"Sucursal: {meta.get('sucursal','Todas')}  |  "
                 f"Generado: {meta.get('generado', str(date.today()))}")
@@ -65,7 +65,7 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
     ws["A4"] = ""  # spacer
 
     # --- Recargos info (row 5) ---
-    ws.merge_cells("A5:S5")
+    ws.merge_cells("A5:X5")
     rec_txt = "Recargos aplicados: " + "  |  ".join(
         f"{n}: ×{r}" for _, n, r in recargos_cfg)
     ws["A5"] = rec_txt
@@ -77,16 +77,17 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
         "Empleado", "Sucursal", "Sal/Hora",
         "H. Regulares", "H. Festivos", "H. Domingos", "H. Extra Diurnas", "H. Extra Nocturnas", "Total Horas",
         "Salario Bruto",
-        "SS Colaborador", "SE Colaborador",
+        "SS Colaborador", "SE Colaborador", "ISR",
         "Ded. Otras", "Ded. Vales", "Total Deducciones",
         "Salario Neto",
-        "SS Empleador", "SE Empleador", "Gasto Total Empl.",
+        "SS Empleador", "SE Empleador", "Riesgos Prof.",
+        "Prov. XIII", "Prov. Vac.", "Prov. Prima", "Costo Total Empl.",
     ]
-    # columns: A=1..S=19
-    MONEY_COLS  = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19}  # 1-based
+    # columns: A=1..X=24
+    MONEY_COLS  = set(range(10, 25))  # 1-based: Salario Bruto .. Costo Total
     HOURS_COLS  = {4, 5, 6, 7, 8, 9}
-    NETO_COL    = 16
-    GASTO_COLS  = {17, 18, 19}
+    NETO_COL    = 17
+    GASTO_COLS  = {18, 19, 20, 21, 22, 23, 24}
 
     for ci, hdr in enumerate(COL_HEADERS, 1):
         cell = ws.cell(row=6, column=ci, value=hdr)
@@ -110,10 +111,12 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
             row["nombre"], row["sucursal"], float(row.get("sal_hora", 0) or 0),
             h_reg, h_fest, h_dom, h_exd, h_exn, total_h,
             row["bruto"],
-            row["ss_c"], row["se_c"],
+            row["ss_c"], row["se_c"], row.get("isr", 0),
             row["ded_otras"], row["ded_vales"], row["total_ded"],
             row["neto"],
-            row["ss_e"], row["se_e"], row["gasto"],
+            row["ss_e"], row["se_e"], row.get("riesgos", 0),
+            row.get("prov_decimo", 0), row.get("prov_vac", 0), row.get("prov_prima", 0),
+            row.get("costo_total", 0),
         ]
 
         for ci, val in enumerate(vals, 1):
@@ -168,7 +171,7 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
             c.border = border
 
         # money totals
-        for ci in range(10, 20):
+        for ci in range(10, 25):
             col_letter = get_column_letter(ci)
             c = ws.cell(row=tr, column=ci,
                         value=f"=SUM({col_letter}7:{col_letter}{tr-1})")
@@ -187,7 +190,8 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
 
     # --- Column widths ---
     widths = [28, 16, 10, 12, 12, 12, 14, 15, 11,
-              14, 14, 13, 12, 11, 16, 14, 14, 13, 16]
+              14, 14, 13, 10, 12, 11, 16, 14, 14, 13, 13,
+              11, 11, 11, 16]
     for ci, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(ci)].width = w
 
@@ -349,48 +353,55 @@ def export_pdf(meta, recargos_cfg, ded_cfg, rows, filepath):
 
     # ── Section B: Cálculos financieros ──────────────────────────────────────
     hdr_b = ["Empleado", "Sucursal",
-             "Bruto", "SS Colab.", "SE Colab.",
+             "Bruto", "SS Colab.", "SE Colab.", "ISR",
              "Ded. Otras", "Ded. Vales", "Total Ded.",
-             "Neto", "SS Empl.", "SE Empl.", "Gasto Total"]
+             "Neto", "SS Empl.", "SE Empl.", "Provisiones", "Costo Total"]
     data_b = [hdr_b]
     totals = {k: 0.0 for k in
-              ("bruto","ss_c","se_c","ded_otras","ded_vales","total_ded","neto","ss_e","se_e","gasto")}
+              ("bruto","ss_c","se_c","isr","ded_otras","ded_vales","total_ded",
+               "neto","ss_e","se_e","provisiones","costo_total")}
 
     for row in rows:
+        provisiones = (float(row.get("prov_decimo", 0) or 0)
+                       + float(row.get("prov_vac", 0) or 0)
+                       + float(row.get("prov_prima", 0) or 0))
+        row_vals = dict(row); row_vals["provisiones"] = provisiones
         for k in totals:
-            totals[k] += float(row.get(k, 0) or 0)
+            totals[k] += float(row_vals.get(k, 0) or 0)
         data_b.append([
             row["nombre"], row["sucursal"],
             fmt_m(row["bruto"]),
-            fmt_m(row["ss_c"]), fmt_m(row["se_c"]),
+            fmt_m(row["ss_c"]), fmt_m(row["se_c"]), fmt_m(row.get("isr", 0)),
             fmt_m(row["ded_otras"]), fmt_m(row["ded_vales"]), fmt_m(row["total_ded"]),
             fmt_m(row["neto"]),
-            fmt_m(row["ss_e"]), fmt_m(row["se_e"]), fmt_m(row["gasto"]),
+            fmt_m(row["ss_e"]), fmt_m(row["se_e"]),
+            fmt_m(provisiones), fmt_m(row.get("costo_total", 0)),
         ])
 
     if rows:
         data_b.append([
             "TOTALES", "",
             fmt_m(totals["bruto"]),
-            fmt_m(totals["ss_c"]), fmt_m(totals["se_c"]),
+            fmt_m(totals["ss_c"]), fmt_m(totals["se_c"]), fmt_m(totals["isr"]),
             fmt_m(totals["ded_otras"]), fmt_m(totals["ded_vales"]), fmt_m(totals["total_ded"]),
             fmt_m(totals["neto"]),
-            fmt_m(totals["ss_e"]), fmt_m(totals["se_e"]), fmt_m(totals["gasto"]),
+            fmt_m(totals["ss_e"]), fmt_m(totals["se_e"]),
+            fmt_m(totals["provisiones"]), fmt_m(totals["costo_total"]),
         ])
 
-    col_w_b = [2.1*inch, 1.0*inch,
-               0.82*inch, 0.82*inch, 0.82*inch,
-               0.82*inch, 0.82*inch, 0.82*inch,
-               0.9*inch,
-               0.82*inch, 0.82*inch, 0.9*inch]
+    col_w_b = [1.70*inch, 0.80*inch,
+               0.68*inch, 0.60*inch, 0.60*inch, 0.55*inch,
+               0.60*inch, 0.60*inch, 0.68*inch,
+               0.72*inch,
+               0.60*inch, 0.60*inch, 0.66*inch, 0.78*inch]
 
-    neto_col  = 8   # 0-based in data_b
-    gasto_cols = (9, 10, 11)
+    neto_col  = 9   # 0-based in data_b
+    gasto_cols = (10, 11, 12, 13)
     tot_row   = len(data_b) - 1
 
     ts_b = _base_table_style(RED, WHITE, GRAY, LGRAY, len(rows))
     # right-align money cols
-    for ci in range(2, 12):
+    for ci in range(2, 14):
         ts_b.add("ALIGN", (ci, 0), (ci, -1), "RIGHT")
     # Neto column — green bg
     ts_b.add("BACKGROUND", (neto_col, 1), (neto_col, tot_row - 1), BG_G)

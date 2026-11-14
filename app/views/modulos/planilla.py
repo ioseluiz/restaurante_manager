@@ -10,6 +10,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont
 
+from app.utils.calculo_planilla import (
+    cargar_config, cargar_isr_tramos, calcular_costo_completo,
+)
+
 _RED   = "#a20f22"
 _DARK  = "#2c3e50"
 _GREEN = "#2e7d32"
@@ -59,7 +63,12 @@ class EmpleadoDialog(QDialog):
 
         self.nombre_input   = QLineEdit()
         self.apellido_input = QLineEdit()
+        self.cedula_input   = QLineEdit()
         self.puesto_input   = QLineEdit()
+
+        self.contrato_combo = QComboBox()
+        self.contrato_combo.addItem("Indefinido", "INDEFINIDO")
+        self.contrato_combo.addItem("Definido",   "DEFINIDO")
 
         self.sucursal_combo = QComboBox()
         self.sucursal_combo.addItem("— Sin sucursal —", None)
@@ -78,15 +87,30 @@ class EmpleadoDialog(QDialog):
         self.fecha_input.setDate(QDate.currentDate())
         self.fecha_input.setDisplayFormat("dd/MM/yyyy")
 
+        self.baja_check = QCheckBox("Dar de baja en la fecha:")
+        self.baja_input = QDateEdit()
+        self.baja_input.setCalendarPopup(True)
+        self.baja_input.setDate(QDate.currentDate())
+        self.baja_input.setDisplayFormat("dd/MM/yyyy")
+        self.baja_input.setEnabled(False)
+        self.baja_check.toggled.connect(self.baja_input.setEnabled)
+        baja_row = QHBoxLayout()
+        baja_row.addWidget(self.baja_check)
+        baja_row.addWidget(self.baja_input)
+        baja_row.addStretch()
+
         self.activo_check = QCheckBox("Empleado activo")
         self.activo_check.setChecked(True)
 
-        form.addRow("Nombre *:",        self.nombre_input)
+        form.addRow("Nombre *:",         self.nombre_input)
         form.addRow("Apellido *:",       self.apellido_input)
+        form.addRow("Cédula:",           self.cedula_input)
         form.addRow("Puesto:",           self.puesto_input)
+        form.addRow("Tipo de Contrato:", self.contrato_combo)
         form.addRow("Sucursal:",         self.sucursal_combo)
         form.addRow("Salario por Hora:", self.salario_spin)
         form.addRow("Fecha de Ingreso:", self.fecha_input)
+        form.addRow("Baja:",             baja_row)
         form.addRow("",                  self.activo_check)
         layout.addLayout(form)
 
@@ -97,17 +121,23 @@ class EmpleadoDialog(QDialog):
 
     def _cargar(self):
         row = self.db.fetch_one(
-            "SELECT nombre, apellido, puesto, sucursal_id, salario_hora, activo, fecha_ingreso FROM empleados WHERE id=?",
+            "SELECT nombre, apellido, cedula, puesto, sucursal_id, salario_hora, "
+            "tipo_contrato, activo, fecha_ingreso, fecha_baja FROM empleados WHERE id=?",
             (self.empleado_id,),
         )
         if not row:
             return
-        nombre, apellido, puesto, sucursal_id, salario, activo, fecha = row
+        (nombre, apellido, cedula, puesto, sucursal_id, salario,
+         tipo_contrato, activo, fecha, fecha_baja) = row
         self.nombre_input.setText(nombre or "")
         self.apellido_input.setText(apellido or "")
+        self.cedula_input.setText(cedula or "")
         self.puesto_input.setText(puesto or "")
         self.salario_spin.setValue(float(salario or 0))
         self.activo_check.setChecked(bool(activo))
+        idx = self.contrato_combo.findData((tipo_contrato or "INDEFINIDO").upper())
+        if idx >= 0:
+            self.contrato_combo.setCurrentIndex(idx)
         for i in range(self.sucursal_combo.count()):
             if self.sucursal_combo.itemData(i) == sucursal_id:
                 self.sucursal_combo.setCurrentIndex(i)
@@ -118,6 +148,13 @@ class EmpleadoDialog(QDialog):
                 self.fecha_input.setDate(QDate(int(y), int(m), int(d)))
             except Exception:
                 pass
+        if fecha_baja:
+            try:
+                y, m, d = str(fecha_baja).split("-")
+                self.baja_input.setDate(QDate(int(y), int(m), int(d)))
+                self.baja_check.setChecked(True)
+            except Exception:
+                pass
 
     def _guardar(self):
         nombre   = self.nombre_input.text().strip()
@@ -125,20 +162,27 @@ class EmpleadoDialog(QDialog):
         if not nombre or not apellido:
             QMessageBox.warning(self, "Aviso", "Nombre y apellido son obligatorios.")
             return
+        cedula      = self.cedula_input.text().strip()
         puesto      = self.puesto_input.text().strip()
+        tipo_contr  = self.contrato_combo.currentData()
         sucursal_id = self.sucursal_combo.currentData()
         salario     = self.salario_spin.value()
         activo      = 1 if self.activo_check.isChecked() else 0
         fecha       = self.fecha_input.date().toString("yyyy-MM-dd")
+        fecha_baja  = self.baja_input.date().toString("yyyy-MM-dd") if self.baja_check.isChecked() else None
         if self.empleado_id:
             self.db.execute_query(
-                "UPDATE empleados SET nombre=?, apellido=?, puesto=?, sucursal_id=?, salario_hora=?, activo=?, fecha_ingreso=? WHERE id=?",
-                (nombre, apellido, puesto, sucursal_id, salario, activo, fecha, self.empleado_id),
+                "UPDATE empleados SET nombre=?, apellido=?, cedula=?, puesto=?, tipo_contrato=?, "
+                "sucursal_id=?, salario_hora=?, activo=?, fecha_ingreso=?, fecha_baja=? WHERE id=?",
+                (nombre, apellido, cedula, puesto, tipo_contr, sucursal_id, salario,
+                 activo, fecha, fecha_baja, self.empleado_id),
             )
         else:
             self.db.execute_query(
-                "INSERT INTO empleados (nombre, apellido, puesto, sucursal_id, salario_hora, activo, fecha_ingreso) VALUES (?,?,?,?,?,?,?)",
-                (nombre, apellido, puesto, sucursal_id, salario, activo, fecha),
+                "INSERT INTO empleados (nombre, apellido, cedula, puesto, tipo_contrato, "
+                "sucursal_id, salario_hora, activo, fecha_ingreso, fecha_baja) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (nombre, apellido, cedula, puesto, tipo_contr, sucursal_id, salario,
+                 activo, fecha, fecha_baja),
             )
         self.accept()
 
@@ -177,16 +221,17 @@ class TabEmpleados(QWidget):
         layout.addLayout(toolbar)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
-            "ID", "Nombre", "Apellido", "Puesto",
+            "ID", "Nombre", "Apellido", "Cédula", "Puesto", "Contrato",
             "Sucursal", "Salario/Hora", "Fecha Ingreso", "Estado",
         ])
         hdr = self.table.horizontalHeader()
         for c, m in [(0, QHeaderView.ResizeToContents), (1, QHeaderView.ResizeToContents),
-                     (2, QHeaderView.ResizeToContents), (3, QHeaderView.Stretch),
-                     (4, QHeaderView.ResizeToContents), (5, QHeaderView.ResizeToContents),
-                     (6, QHeaderView.ResizeToContents), (7, QHeaderView.ResizeToContents)]:
+                     (2, QHeaderView.ResizeToContents), (3, QHeaderView.ResizeToContents),
+                     (4, QHeaderView.Stretch),          (5, QHeaderView.ResizeToContents),
+                     (6, QHeaderView.ResizeToContents), (7, QHeaderView.ResizeToContents),
+                     (8, QHeaderView.ResizeToContents), (9, QHeaderView.ResizeToContents)]:
             hdr.setSectionResizeMode(c, m)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -209,7 +254,8 @@ class TabEmpleados(QWidget):
 
     def _cargar_tabla(self):
         suc = self.cmb_sucursal.currentData()
-        sql = """SELECT e.id, e.nombre, e.apellido, e.puesto,
+        sql = """SELECT e.id, e.nombre, e.apellido, COALESCE(e.cedula,''), e.puesto,
+                        COALESCE(e.tipo_contrato,'INDEFINIDO'),
                         COALESCE(s.nombre,'—'), e.salario_hora,
                         COALESCE(e.fecha_ingreso,''), e.activo
                  FROM empleados e LEFT JOIN sucursales s ON s.id=e.sucursal_id
@@ -218,15 +264,18 @@ class TabEmpleados(QWidget):
             sql.format(where="WHERE e.sucursal_id=?" if suc else ""),
             (suc,) if suc else (),
         )
+        _contrato_label = {"INDEFINIDO": "Indefinido", "DEFINIDO": "Definido"}
         self.table.setRowCount(len(rows))
-        for r, (eid, n, ap, p, s, sal, fe, act) in enumerate(rows):
+        for r, (eid, n, ap, ced, p, tc, s, sal, fe, act) in enumerate(rows):
             self.table.setItem(r, 0, QTableWidgetItem(str(eid)))
             self.table.setItem(r, 1, QTableWidgetItem(n or ""))
             self.table.setItem(r, 2, QTableWidgetItem(ap or ""))
-            self.table.setItem(r, 3, QTableWidgetItem(p or ""))
-            self.table.setItem(r, 4, QTableWidgetItem(str(s)))
-            self.table.setItem(r, 5, QTableWidgetItem(_money(sal)))
-            self.table.setItem(r, 6, QTableWidgetItem(str(fe)))
+            self.table.setItem(r, 3, QTableWidgetItem(ced or ""))
+            self.table.setItem(r, 4, QTableWidgetItem(p or ""))
+            self.table.setItem(r, 5, QTableWidgetItem(_contrato_label.get((tc or "").upper(), tc or "")))
+            self.table.setItem(r, 6, QTableWidgetItem(str(s)))
+            self.table.setItem(r, 7, QTableWidgetItem(_money(sal)))
+            self.table.setItem(r, 8, QTableWidgetItem(str(fe)))
             ei = QTableWidgetItem("Activo" if act else "Inactivo")
             if act:
                 ei.setForeground(QColor(_GREEN)); ei.setBackground(QColor(_BG_GREEN))
@@ -234,7 +283,7 @@ class TabEmpleados(QWidget):
             else:
                 ei.setForeground(QColor("#9e9e9e"))
             ei.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(r, 7, ei)
+            self.table.setItem(r, 9, ei)
 
     def cargar_datos(self):
         self._cargar_sucursales(); self._cargar_tabla()
@@ -1292,19 +1341,21 @@ class TabResumen(QWidget):
         layout.addLayout(fb)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(12)
+        self.table.setColumnCount(17)
         self.table.setHorizontalHeaderLabels([
             "Empleado", "Sucursal",
             "Salario Bruto",
-            "SS Colaborador", "SE Colaborador",
+            "SS Colab.", "SE Colab.", "ISR",
             "Ded. Bancarias", "Ded. Vales",
             "Total Deducciones", "Salario Neto",
-            "SS Empleador", "SE Empleador", "Gasto Total Empl.",
+            "SS Empleador", "SE Empleador", "Riesgos Prof.",
+            "Prov. XIII", "Prov. Vac.", "Prov. Prima",
+            "Costo Total Empl.",
         ])
         hdr = self.table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        for c in range(2, 12):
+        for c in range(2, 17):
             hdr.setSectionResizeMode(c, QHeaderView.ResizeToContents)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -1332,6 +1383,13 @@ class TabResumen(QWidget):
     def cargar_datos(self):
         self._cargar_combos()
 
+    # Columnas monetarias del resumen, en orden (clave del dict de resultado)
+    _COLS = [
+        "bruto", "ss_c", "se_c", "isr", "ded_otras", "ded_vales",
+        "total_ded", "neto", "ss_e", "se_e", "riesgos",
+        "prov_decimo", "prov_vac", "prov_prima", "costo_total",
+    ]
+
     def _calcular(self):
         pid = self.cmb_periodo.currentData()
         if not pid:
@@ -1340,24 +1398,36 @@ class TabResumen(QWidget):
 
         recargos_rows = self.db.fetch_all(
             "SELECT tipo_hora, nombre_display, recargo FROM planilla_config_recargos", ())
-        recargos = {t: r for t, _, r in recargos_rows}
-
         ded_rows = self.db.fetch_all(
             "SELECT concepto, nombre_display, porcentaje, aplica_a FROM planilla_config_deducciones", ())
-        pcts = {c: p for c, _, p, _ in ded_rows}
-        pct_ss_c = pcts.get("seguro_social_colaborador",    9.75)  / 100
-        pct_ss_e = pcts.get("seguro_social_empleador",     12.25) / 100
-        pct_se_c = pcts.get("seguro_educativo_colaborador",  1.25) / 100
-        pct_se_e = pcts.get("seguro_educativo_empleador",    1.50) / 100
+
+        # Fuente única de cálculo (recargos, %s de deducción/provisión) e ISR
+        recargos, pcts = cargar_config(self.db)
+        tramos_isr = cargar_isr_tramos(self.db)
 
         periodo_row = self.db.fetch_one(
             "SELECT nombre, fecha_inicio, fecha_fin FROM periodos_pago WHERE id=?", (pid,))
         suc_nombre = self.cmb_sucursal.currentText() if suc else "Todas"
 
+        # Anualización del ISR según la duración del período de pago
+        from datetime import date as _date
+        factor_anual = 24.0
+        fecha_gen = str(_date.today())
+        try:
+            d0 = _date.fromisoformat(str(periodo_row[1]))
+            d1 = _date.fromisoformat(str(periodo_row[2]))
+            dias = (d1 - d0).days + 1
+            if dias > 0:
+                factor_anual = 365.0 / dias
+            fecha_gen = str(periodo_row[2])
+        except Exception:
+            pass
+
         where = "AND e.sucursal_id=?" if suc else ""
         params = [pid] + ([suc] if suc else [])
         horas_rows = self.db.fetch_all(
             f"""SELECT e.id, e.nombre||' '||e.apellido, COALESCE(s.nombre,'—'), e.salario_hora,
+                       COALESCE(e.tipo_contrato,'INDEFINIDO'),
                        h.horas_regulares, h.horas_festivos, h.horas_domingos,
                        h.horas_extra_diurnas, h.horas_extra_nocturnas
                 FROM horas_empleado h
@@ -1369,41 +1439,74 @@ class TabResumen(QWidget):
 
         resultados = []
         export_rows = []
-        for (eid, nombre, sucursal, sal_hora,
+        for (eid, nombre, sucursal, sal_hora, tipo_contrato,
              h_reg, h_fest, h_dom, h_exd, h_exn) in horas_rows:
-            sal = float(sal_hora or 0)
-            bruto = (
-                float(h_reg  or 0) * sal * recargos.get("regulares",       1.00) +
-                float(h_fest or 0) * sal * recargos.get("festivos",         2.50) +
-                float(h_dom  or 0) * sal * recargos.get("domingos",         1.50) +
-                float(h_exd  or 0) * sal * recargos.get("extra_diurnas",    1.25) +
-                float(h_exn  or 0) * sal * recargos.get("extra_nocturnas",  1.50)
-            )
-            ss_c = bruto * pct_ss_c
-            se_c = bruto * pct_se_c
+            horas = {
+                "horas_regulares":       h_reg,
+                "horas_festivos":        h_fest,
+                "horas_domingos":        h_dom,
+                "horas_extra_diurnas":   h_exd,
+                "horas_extra_nocturnas": h_exn,
+            }
+            c = calcular_costo_completo(
+                sal_hora, horas, recargos, pcts,
+                tipo_contrato=tipo_contrato, tramos_isr=tramos_isr,
+                factor_anual=factor_anual)
+
+            bruto = c["salario_bruto"]
+            ss_c  = bruto * (pcts.get("seguro_social_colaborador", 9.75) / 100)
+            se_c  = bruto * (pcts.get("seguro_educativo_colaborador", 1.25) / 100)
+            isr   = c["isr"]
             ded_otras = float(self.db.fetch_one(
                 "SELECT COALESCE(SUM(monto),0) FROM planilla_deducciones_otras WHERE empleado_id=? AND periodo_id=?",
                 (eid, pid))[0])
             ded_vales = float(self.db.fetch_one(
                 "SELECT COALESCE(SUM(monto),0) FROM vale_pagos WHERE periodo_id=? AND vale_id IN (SELECT id FROM vales_empleados WHERE empleado_id=?)",
                 (pid, eid))[0])
-            total_ded = ss_c + se_c + ded_otras + ded_vales
+            total_ded = ss_c + se_c + isr + ded_otras + ded_vales
             neto      = bruto - total_ded
-            ss_e      = bruto * pct_ss_e
-            se_e      = bruto * pct_se_e
-            resultados.append((nombre, sucursal, bruto, ss_c, se_c,
-                                ded_otras, ded_vales, total_ded, neto, ss_e, se_e, ss_e + se_e))
+            ss_e = bruto * (pcts.get("seguro_social_empleador", 12.25) / 100)
+            se_e = bruto * (pcts.get("seguro_educativo_empleador", 1.50) / 100)
+
+            fila = {
+                "nombre": nombre, "sucursal": sucursal,
+                "bruto": bruto, "ss_c": ss_c, "se_c": se_c, "isr": isr,
+                "ded_otras": ded_otras, "ded_vales": ded_vales,
+                "total_ded": total_ded, "neto": neto,
+                "ss_e": ss_e, "se_e": se_e, "riesgos": c["riesgos_prof"],
+                "prov_decimo": c["provision_decimo"], "prov_vac": c["provision_vacaciones"],
+                "prov_prima": c["provision_prima"], "costo_total": c["costo_total_completo"],
+            }
+            resultados.append(fila)
             export_rows.append({
-                "nombre": nombre, "sucursal": sucursal, "sal_hora": sal,
+                "nombre": nombre, "sucursal": sucursal, "sal_hora": float(sal_hora or 0),
                 "h_reg": h_reg, "h_fest": h_fest, "h_dom": h_dom,
                 "h_exd": h_exd, "h_exn": h_exn,
-                "bruto": bruto, "ss_c": ss_c, "se_c": se_c,
+                "bruto": bruto, "ss_c": ss_c, "se_c": se_c, "isr": isr,
                 "ded_otras": ded_otras, "ded_vales": ded_vales,
                 "total_ded": total_ded, "neto": neto,
                 "ss_e": ss_e, "se_e": se_e, "gasto": ss_e + se_e,
+                "riesgos": c["riesgos_prof"], "prov_decimo": c["provision_decimo"],
+                "prov_vac": c["provision_vacaciones"], "prov_prima": c["provision_prima"],
+                "costo_total": c["costo_total_completo"],
             })
 
-        from datetime import date as _date
+            # Devengo de provisiones (pasivo laboral). Idempotente por
+            # empleado+período: se reemplaza al recalcular.
+            self.db.execute_query(
+                "DELETE FROM provisiones_laborales WHERE periodo_id=? AND empleado_id=?",
+                (pid, eid))
+            for tipo, monto in [
+                ("DECIMO",           c["provision_decimo"]),
+                ("VACACIONES",       c["provision_vacaciones"]),
+                ("PRIMA_ANTIGUEDAD", c["provision_prima"]),
+            ]:
+                if monto and monto > 0:
+                    self.db.execute_query(
+                        "INSERT INTO provisiones_laborales (empleado_id, periodo_id, tipo, monto, fecha) "
+                        "VALUES (?,?,?,?,?)",
+                        (eid, pid, tipo, monto, fecha_gen))
+
         self._last_result = export_rows
         self._last_meta = {
             "periodo_nombre": periodo_row[0] if periodo_row else "",
@@ -1419,20 +1522,29 @@ class TabResumen(QWidget):
 
     def _poblar(self, resultados):
         self.table.setRowCount(len(resultados) + (1 if resultados else 0))
-        totales = [0.0] * 10
+        ncol = len(self._COLS)
+        totales = [0.0] * ncol
+        col_neto  = 2 + self._COLS.index("neto")
+        col_costo = 2 + self._COLS.index("costo_total")
+        cols_empl = {2 + self._COLS.index(k) for k in
+                     ("ss_e", "se_e", "riesgos", "prov_decimo", "prov_vac", "prov_prima")}
 
-        for r, (nombre, suc, bruto, ss_c, se_c, do, dv, td, neto, ss_e, se_e, gasto) in enumerate(resultados):
-            vals = [bruto, ss_c, se_c, do, dv, td, neto, ss_e, se_e, gasto]
-            for i, v in enumerate(vals): totales[i] += v
-            self.table.setItem(r, 0, QTableWidgetItem(nombre))
-            self.table.setItem(r, 1, QTableWidgetItem(suc))
-            for c, v in enumerate(vals, 2):
+        for r, fila in enumerate(resultados):
+            self.table.setItem(r, 0, QTableWidgetItem(fila["nombre"]))
+            self.table.setItem(r, 1, QTableWidgetItem(fila["sucursal"]))
+            for i, key in enumerate(self._COLS):
+                v = fila.get(key, 0.0)
+                totales[i] += v
+                c = i + 2
                 it = QTableWidgetItem(_money(v))
                 it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                if c == 8:   # Neto
+                if c == col_neto:
                     it.setBackground(QColor(_BG_GREEN)); it.setForeground(QColor(_GREEN))
                     f = it.font(); f.setBold(True); it.setFont(f)
-                elif c in (9, 10, 11):  # Gasto empleador
+                elif c == col_costo:
+                    it.setBackground(QColor(_BG_YELLOW)); it.setForeground(QColor("#e65100"))
+                    f = it.font(); f.setBold(True); it.setFont(f)
+                elif c in cols_empl:
                     it.setBackground(QColor(_BG_YELLOW)); it.setForeground(QColor("#e65100"))
                 self.table.setItem(r, c, it)
 
@@ -1440,11 +1552,14 @@ class TabResumen(QWidget):
             tr = len(resultados)
             self.table.setItem(tr, 0, _bold_item("TOTALES", bg=_BG_GRAY))
             self.table.setItem(tr, 1, _bold_item("", bg=_BG_GRAY))
-            for c, v in enumerate(totales, 2):
+            for i, v in enumerate(totales):
+                c = i + 2
                 it = _bold_item(_money(v), bg=_BG_GRAY)
                 it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                if c == 8:   it.setForeground(QColor(_GREEN))
-                elif c in (9, 10, 11): it.setForeground(QColor("#e65100"))
+                if c == col_neto:
+                    it.setForeground(QColor(_GREEN))
+                elif c == col_costo or c in cols_empl:
+                    it.setForeground(QColor("#e65100"))
                 self.table.setItem(tr, c, it)
 
     def _get_export_data(self):
@@ -1548,6 +1663,10 @@ class TabConfiguracion(QWidget):
             ("seguro_social_empleador",      "Seguro Social — Empleador (gasto, %):"),
             ("seguro_educativo_colaborador", "Seguro Educativo — Colaborador (%):"),
             ("seguro_educativo_empleador",   "Seguro Educativo — Empleador (gasto, %):"),
+            ("riesgos_profesionales_empleador", "Riesgos Profesionales — Empleador (gasto, %):"),
+            ("provision_decimo",             "Provisión Décimo Tercer Mes / XIII (%):"),
+            ("provision_vacaciones",         "Provisión Vacaciones (%):"),
+            ("provision_prima_antiguedad",   "Provisión Prima de Antigüedad — solo Indefinido (%):"),
         ]
         for concepto, label in configs:
             spin = QDoubleSpinBox()
@@ -1556,6 +1675,27 @@ class TabConfiguracion(QWidget):
             self._ded_spins[concepto] = spin
             form_b.addRow(label, spin)
         layout.addLayout(form_b)
+
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.HLine); sep2.setStyleSheet("color:#e0e0e0;")
+        layout.addWidget(sep2)
+
+        # ── Sección C: Tramos de ISR ─────────────────────────────────────────
+        lbl_c = QLabel("Tabla de ISR (Impuesto sobre la Renta)")
+        lbl_c.setStyleSheet(f"font-size:13px; font-weight:bold; color:{_DARK};")
+        layout.addWidget(lbl_c)
+        lbl_c2 = QLabel("Tramos anuales de renta gravable. Tasa e impuesto fijo por tramo. "
+                        "Deje «Hasta» vacío en el último tramo (sin límite superior).")
+        lbl_c2.setStyleSheet("color:#666; font-size:11px;")
+        layout.addWidget(lbl_c2)
+
+        self.tbl_isr = QTableWidget()
+        self.tbl_isr.setColumnCount(4)
+        self.tbl_isr.setHorizontalHeaderLabels(
+            ["Desde ($)", "Hasta ($)", "Tasa (%)", "Impuesto Fijo ($)"])
+        for cc in range(4):
+            self.tbl_isr.horizontalHeader().setSectionResizeMode(cc, QHeaderView.Stretch)
+        self.tbl_isr.setMaximumHeight(160)
+        layout.addWidget(self.tbl_isr)
 
         btn_save = QPushButton("Guardar Configuración")
         btn_save.setProperty("class", "btn-success")
@@ -1579,6 +1719,16 @@ class TabConfiguracion(QWidget):
             if row:
                 spin.setValue(float(row[0]))
 
+        isr_rows = self.db.fetch_all(
+            "SELECT id, desde, hasta, tasa, cuota_fija FROM planilla_isr_tramos ORDER BY orden, desde", ())
+        self._isr_ids = [row[0] for row in isr_rows]
+        self.tbl_isr.setRowCount(len(isr_rows))
+        for r, (rid, desde, hasta, tasa, cuota) in enumerate(isr_rows):
+            self.tbl_isr.setItem(r, 0, QTableWidgetItem(f"{float(desde or 0):.2f}"))
+            self.tbl_isr.setItem(r, 1, QTableWidgetItem("" if hasta is None else f"{float(hasta):.2f}"))
+            self.tbl_isr.setItem(r, 2, QTableWidgetItem(f"{float(tasa or 0) * 100:.2f}"))
+            self.tbl_isr.setItem(r, 3, QTableWidgetItem(f"{float(cuota or 0):.2f}"))
+
     def _guardar(self):
         tipos = self.db.fetch_all(
             "SELECT tipo_hora FROM planilla_config_recargos ORDER BY id", ())
@@ -1597,7 +1747,220 @@ class TabConfiguracion(QWidget):
             self.db.execute_query(
                 "UPDATE planilla_config_deducciones SET porcentaje=? WHERE concepto=?",
                 (spin.value(), concepto))
+
+        # Guardar tramos de ISR (tasa se ingresa en %, se almacena en fracción)
+        for r, rid in enumerate(getattr(self, "_isr_ids", [])):
+            try:
+                desde = float((self.tbl_isr.item(r, 0) or QTableWidgetItem("0")).text() or 0)
+                hasta_txt = (self.tbl_isr.item(r, 1) or QTableWidgetItem("")).text().strip()
+                hasta = float(hasta_txt) if hasta_txt else None
+                tasa  = float((self.tbl_isr.item(r, 2) or QTableWidgetItem("0")).text() or 0) / 100
+                cuota = float((self.tbl_isr.item(r, 3) or QTableWidgetItem("0")).text() or 0)
+            except ValueError:
+                return QMessageBox.warning(self, "Error",
+                    f"Tramo ISR fila {r+1}: valores numéricos inválidos.")
+            self.db.execute_query(
+                "UPDATE planilla_isr_tramos SET desde=?, hasta=?, tasa=?, cuota_fija=? WHERE id=?",
+                (desde, hasta, tasa, cuota, rid))
         QMessageBox.information(self, "Éxito", "Configuración guardada correctamente.")
+
+
+# =============================================================================
+# PROVISIONES LABORALES — dialog de pago
+# =============================================================================
+_PROV_TIPOS = [
+    ("DECIMO",           "Décimo (XIII)"),
+    ("VACACIONES",       "Vacaciones"),
+    ("PRIMA_ANTIGUEDAD", "Prima de Antigüedad"),
+]
+_PROV_LABEL = dict(_PROV_TIPOS)
+
+
+class PagoProvisionDialog(QDialog):
+    def __init__(self, db, empleado_id=None, tipo=None, saldo=None, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Registrar Pago de Provisión")
+        self.setMinimumWidth(420)
+        self._build_ui(empleado_id, tipo, saldo)
+
+    def _build_ui(self, empleado_id, tipo, saldo):
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        self.emp_combo = QComboBox()
+        for eid, nom in self.db.fetch_all(
+            "SELECT id, nombre||' '||apellido FROM empleados ORDER BY apellido, nombre", ()):
+            self.emp_combo.addItem(nom, eid)
+        if empleado_id is not None:
+            i = self.emp_combo.findData(empleado_id)
+            if i >= 0:
+                self.emp_combo.setCurrentIndex(i)
+
+        self.tipo_combo = QComboBox()
+        for tval, tlabel in _PROV_TIPOS:
+            self.tipo_combo.addItem(tlabel, tval)
+        if tipo:
+            i = self.tipo_combo.findData(tipo)
+            if i >= 0:
+                self.tipo_combo.setCurrentIndex(i)
+
+        self.fecha_input = QDateEdit()
+        self.fecha_input.setCalendarPopup(True)
+        self.fecha_input.setDate(QDate.currentDate())
+        self.fecha_input.setDisplayFormat("dd/MM/yyyy")
+
+        self.monto_spin = QDoubleSpinBox()
+        self.monto_spin.setRange(0, 9_999_999); self.monto_spin.setDecimals(2)
+        self.monto_spin.setPrefix("$ ")
+        if saldo and saldo > 0:
+            self.monto_spin.setValue(round(float(saldo), 2))
+
+        self.desc_input = QLineEdit()
+
+        form.addRow("Empleado:",    self.emp_combo)
+        form.addRow("Provisión:",   self.tipo_combo)
+        form.addRow("Fecha:",       self.fecha_input)
+        form.addRow("Monto:",       self.monto_spin)
+        form.addRow("Descripción:", self.desc_input)
+        layout.addLayout(form)
+
+        if saldo is not None:
+            lbl = QLabel(f"Saldo acumulado disponible: {_money(saldo)}")
+            lbl.setStyleSheet("color:#666; font-size:11px;")
+            layout.addWidget(lbl)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        btns.accepted.connect(self._guardar)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def _guardar(self):
+        eid = self.emp_combo.currentData()
+        if eid is None:
+            return QMessageBox.warning(self, "Aviso", "Seleccione un empleado.")
+        monto = self.monto_spin.value()
+        if monto <= 0:
+            return QMessageBox.warning(self, "Aviso", "El monto debe ser mayor que cero.")
+        self.db.execute_query(
+            "INSERT INTO pagos_provisiones (empleado_id, tipo, fecha, monto, descripcion) "
+            "VALUES (?,?,?,?,?)",
+            (eid, self.tipo_combo.currentData(),
+             self.fecha_input.date().toString("yyyy-MM-dd"),
+             monto, self.desc_input.text().strip()))
+        self.accept()
+
+
+# =============================================================================
+# PROVISIONES LABORALES — tab (pasivo acumulado por empleado)
+# =============================================================================
+class TabProvisiones(QWidget):
+    def __init__(self, db):
+        super().__init__()
+        self.db = db
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 8, 0, 0)
+
+        info = QLabel("Provisiones laborales acumuladas (pasivo). El devengo se genera "
+                      "al calcular la planilla de cada período; aquí se registran los pagos "
+                      "reales (Décimo, Vacaciones, Prima de Antigüedad).")
+        info.setStyleSheet("color:#666; font-size:11px;")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Sucursal:"))
+        self.cmb_sucursal = QComboBox(); self.cmb_sucursal.setMinimumWidth(190)
+        self.cmb_sucursal.currentIndexChanged.connect(self._cargar_tabla)
+        toolbar.addWidget(self.cmb_sucursal)
+        toolbar.addStretch()
+        btn_pago = QPushButton("+ Registrar Pago")
+        btn_pago.setProperty("class", "btn-success")
+        btn_pago.clicked.connect(self._registrar_pago)
+        toolbar.addWidget(btn_pago)
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(
+            ["EmpID", "Empleado", "Provisión", "Provisionado", "Pagado", "Saldo"])
+        hdr = self.table.horizontalHeader()
+        hdr.setSectionResizeMode(1, QHeaderView.Stretch)
+        for c in (0, 2, 3, 4, 5):
+            hdr.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setAlternatingRowColors(True)
+        self.table.hideColumn(0)
+        layout.addWidget(self.table)
+
+    def _cargar_sucursales(self):
+        current = self.cmb_sucursal.currentData()
+        self.cmb_sucursal.blockSignals(True)
+        self.cmb_sucursal.clear()
+        self.cmb_sucursal.addItem("— Todas las sucursales —", None)
+        for sid, sname in self.db.fetch_all("SELECT id, nombre FROM sucursales ORDER BY nombre", ()):
+            self.cmb_sucursal.addItem(sname, sid)
+        if current is not None:
+            i = self.cmb_sucursal.findData(current)
+            if i >= 0:
+                self.cmb_sucursal.setCurrentIndex(i)
+        self.cmb_sucursal.blockSignals(False)
+
+    def _cargar_tabla(self):
+        suc = self.cmb_sucursal.currentData()
+        where = "WHERE e.sucursal_id=?" if suc else ""
+        rows = self.db.fetch_all(
+            f"""SELECT e.id, e.nombre||' '||e.apellido, x.tipo,
+                       SUM(x.prov) AS provisionado, SUM(x.pag) AS pagado
+                FROM (
+                    SELECT empleado_id, tipo, monto AS prov, 0 AS pag FROM provisiones_laborales
+                    UNION ALL
+                    SELECT empleado_id, tipo, 0, monto FROM pagos_provisiones
+                ) x
+                JOIN empleados e ON e.id = x.empleado_id
+                {where}
+                GROUP BY e.id, x.tipo
+                HAVING SUM(x.prov) <> 0 OR SUM(x.pag) <> 0
+                ORDER BY e.apellido, e.nombre, x.tipo""",
+            (suc,) if suc else ())
+        self.table.setRowCount(len(rows))
+        for r, (eid, nombre, tipo, prov, pag) in enumerate(rows):
+            prov = float(prov or 0); pag = float(pag or 0); saldo = prov - pag
+            self.table.setItem(r, 0, QTableWidgetItem(str(eid)))
+            self.table.setItem(r, 1, QTableWidgetItem(nombre))
+            titem = QTableWidgetItem(_PROV_LABEL.get(tipo, tipo))
+            titem.setData(Qt.UserRole, tipo)
+            self.table.setItem(r, 2, titem)
+            for c, v in [(3, prov), (4, pag), (5, saldo)]:
+                it = QTableWidgetItem(_money(v))
+                it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                if c == 5 and saldo > 0.005:
+                    it.setForeground(QColor(_RED))
+                    f = it.font(); f.setBold(True); it.setFont(f)
+                self.table.setItem(r, c, it)
+
+    def cargar_datos(self):
+        self._cargar_sucursales(); self._cargar_tabla()
+
+    def _registrar_pago(self):
+        row = self.table.currentRow()
+        eid = tipo = saldo = None
+        if row >= 0:
+            eid = int(self.table.item(row, 0).text())
+            tipo = self.table.item(row, 2).data(Qt.UserRole)
+            try:
+                prov = float(self.table.item(row, 3).text().replace("$", "").replace(",", ""))
+                pag  = float(self.table.item(row, 4).text().replace("$", "").replace(",", ""))
+                saldo = prov - pag
+            except Exception:
+                saldo = None
+        if PagoProvisionDialog(self.db, eid, tipo, saldo, parent=self).exec_():
+            self._cargar_tabla()
 
 
 # =============================================================================
@@ -1623,12 +1986,14 @@ class PlanillaView(QWidget):
         self.tab_periodos   = TabPeriodos(self.db)
         self.tab_vales      = TabVales(self.db)
         self.tab_resumen    = TabResumen(self.db)
+        self.tab_provisiones = TabProvisiones(self.db)
         self.tab_config     = TabConfiguracion(self.db)
 
         self.tabs.addTab(self.tab_empleados, "Empleados")
         self.tabs.addTab(self.tab_periodos,  "Períodos de Pago")
         self.tabs.addTab(self.tab_vales,     "Vales")
         self.tabs.addTab(self.tab_resumen,   "Resumen de Planilla")
+        self.tabs.addTab(self.tab_provisiones, "Provisiones")
         self.tabs.addTab(self.tab_config,    "Configuración")
         root.addWidget(self.tabs)
 
@@ -1637,4 +2002,5 @@ class PlanillaView(QWidget):
         self.tab_periodos.cargar_datos()
         self.tab_vales.cargar_datos()
         self.tab_resumen.cargar_datos()
+        self.tab_provisiones.cargar_datos()
         self.tab_config.cargar_datos()

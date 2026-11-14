@@ -22,6 +22,8 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 import csv
 
+from app.utils.gastos_fijos import poblar_combo, valor_combo
+
 class NumericItem(QTableWidgetItem):
     def __lt__(self, other):
         try:
@@ -80,7 +82,7 @@ class PagoEfectivoDialog(QDialog):
         form_layout.addRow("Proveedor:", self.proveedor_input)
         form_layout.addRow("Descripción:", self.descripcion_input)
         form_layout.addRow("TOTAL DEL PAGO:", self.total_input)
-        
+
         main_layout.addLayout(form_layout)
         
         # Desglose section
@@ -91,30 +93,36 @@ class PagoEfectivoDialog(QDialog):
         add_layout = QHBoxLayout()
         self.combo_categorias = QComboBox()
         self.combo_categorias.addItems(list(self.etiquetas_db.keys()))
-        
+
         self.monto_cat_input = QDoubleSpinBox()
         self.monto_cat_input.setMaximum(999999999.99)
         self.monto_cat_input.setDecimals(2)
-        
+
+        self.combo_tipo_gasto = QComboBox()
+        poblar_combo(self.db, self.combo_tipo_gasto)
+
         btn_add_cat = QPushButton("Agregar")
         btn_add_cat.setProperty("class", "btn-primary")
         btn_add_cat.clicked.connect(self.agregar_categoria)
-        
+
         add_layout.addWidget(QLabel("Categoría:"))
         add_layout.addWidget(self.combo_categorias)
         add_layout.addWidget(QLabel("Monto:"))
         add_layout.addWidget(self.monto_cat_input)
+        add_layout.addWidget(QLabel("Tipo de Gasto:"))
+        add_layout.addWidget(self.combo_tipo_gasto)
         add_layout.addWidget(btn_add_cat)
-        
+
         main_layout.addLayout(add_layout)
-        
+
         # Table for added categories
         self.table_desglose = QTableWidget()
-        self.table_desglose.setColumnCount(3)
-        self.table_desglose.setHorizontalHeaderLabels(["Categoría", "Monto", "Acción"])
+        self.table_desglose.setColumnCount(4)
+        self.table_desglose.setHorizontalHeaderLabels(["Categoría", "Monto", "Tipo de Gasto", "Acción"])
         self.table_desglose.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table_desglose.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table_desglose.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table_desglose.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table_desglose.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table_desglose.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table_desglose.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_desglose.setMaximumHeight(150)
@@ -156,61 +164,76 @@ class PagoEfectivoDialog(QDialog):
             self.total_input.blockSignals(True)
             self.total_input.setValue(float(self.data.get("total", 0.0)))
             self.total_input.blockSignals(False)
-            
-            for cat_label, db_col in self.etiquetas_db.items():
-                val = float(self.data.get(db_col, 0.0))
-                if val > 0:
-                    self.insertar_fila_desglose(cat_label, val)
-                    
+
+            # Desglose: preferir las líneas guardadas (con tipo de gasto por línea);
+            # si el registro es antiguo sin detalle, reconstruir desde las columnas fijas.
+            lineas = self.db.fetch_all(
+                "SELECT categoria, monto, tipo_gasto FROM detalle_pagos_efectivo "
+                "WHERE pago_efectivo_id=? ORDER BY id",
+                (self.data.get("id"),),
+            )
+            if lineas:
+                for categoria, monto, tipo_gasto in lineas:
+                    self.insertar_fila_desglose(categoria, float(monto or 0), tipo_gasto)
+            else:
+                for cat_label, db_col in self.etiquetas_db.items():
+                    val = float(self.data.get(db_col, 0.0))
+                    if val > 0:
+                        self.insertar_fila_desglose(cat_label, val)
+
         self.actualizar_suma()
 
     def agregar_categoria(self):
         cat = self.combo_categorias.currentText()
         monto = self.monto_cat_input.value()
-        
+        tipo_gasto = valor_combo(self.combo_tipo_gasto)
+
         if monto <= 0:
             QMessageBox.warning(self, "Aviso", "El monto debe ser mayor a cero.")
             return
-            
-        # Check if category already exists
+
+        tg_txt = tipo_gasto or ""
+        # Fusionar solo si coinciden categoría Y tipo de gasto
         for row in range(self.table_desglose.rowCount()):
-            if self.table_desglose.item(row, 0).text() == cat:
+            if (self.table_desglose.item(row, 0).text() == cat
+                    and self.table_desglose.item(row, 2).text() == tg_txt):
                 current_monto = float(self.table_desglose.item(row, 1).text())
                 nuevo_monto = current_monto + monto
                 self.table_desglose.setItem(row, 1, NumericItem(f"{nuevo_monto:.2f}"))
                 self.monto_cat_input.setValue(0.0)
                 self.actualizar_suma()
                 return
-                
-        self.insertar_fila_desglose(cat, monto)
+
+        self.insertar_fila_desglose(cat, monto, tipo_gasto)
         self.monto_cat_input.setValue(0.0)
         self.actualizar_suma()
-        
-    def insertar_fila_desglose(self, cat, monto):
+
+    def insertar_fila_desglose(self, cat, monto, tipo_gasto=None):
         row = self.table_desglose.rowCount()
         self.table_desglose.insertRow(row)
-        
+
         self.table_desglose.setItem(row, 0, QTableWidgetItem(cat))
         self.table_desglose.setItem(row, 1, NumericItem(f"{monto:.2f}"))
-        
+        self.table_desglose.setItem(row, 2, QTableWidgetItem(tipo_gasto or ""))
+
         btn_eliminar = QPushButton("X")
         btn_eliminar.setProperty("class", "btn-danger")
         btn_eliminar.setCursor(Qt.PointingHandCursor)
         btn_eliminar.setFixedSize(25, 25)
         btn_eliminar.clicked.connect(self.eliminar_fila)
-        
+
         widget = QWidget()
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(btn_eliminar, alignment=Qt.AlignCenter)
-        self.table_desglose.setCellWidget(row, 2, widget)
+        self.table_desglose.setCellWidget(row, 3, widget)
 
     def eliminar_fila(self):
         button = self.sender()
         if button:
             widget = button.parent()
             for r in range(self.table_desglose.rowCount()):
-                if self.table_desglose.cellWidget(r, 2) == widget:
+                if self.table_desglose.cellWidget(r, 3) == widget:
                     self.table_desglose.removeRow(r)
                     self.actualizar_suma()
                     break
@@ -248,20 +271,25 @@ class PagoEfectivoDialog(QDialog):
             QMessageBox.warning(self, "Error de Validación", f"La suma de las categorías desglosadas ({suma:.2f}) no coincide con el total ingresado ({total:.2f}).")
             return False
 
+        # Columnas fijas agregadas por categoría (compatibilidad con Resumen) y
+        # líneas de desglose con su tipo de gasto por línea (tabla hija).
         v = {col: 0.0 for col in self.etiquetas_db.values()}
-        
+        lineas = []
         for row in range(self.table_desglose.rowCount()):
             cat_label = self.table_desglose.item(row, 0).text()
             monto = float(self.table_desglose.item(row, 1).text())
+            tg_item = self.table_desglose.item(row, 2)
+            tipo_gasto = tg_item.text().strip() if tg_item else ""
             db_col = self.etiquetas_db[cat_label]
-            v[db_col] = monto
+            v[db_col] += monto
+            lineas.append((cat_label, monto, tipo_gasto or None))
 
         if self.data:
             query = """
-                UPDATE pagos_efectivo 
-                SET fecha=?, proveedor=?, descripcion=?, total=?, 
-                    costo_viveres=?, costo_carnes=?, desayunos=?, otros=?, planilla=?, 
-                    gastos_propietarios=?, honorarios=?, reparaciones_mantenimiento=?, 
+                UPDATE pagos_efectivo
+                SET fecha=?, proveedor=?, descripcion=?, total=?,
+                    costo_viveres=?, costo_carnes=?, desayunos=?, otros=?, planilla=?,
+                    gastos_propietarios=?, honorarios=?, reparaciones_mantenimiento=?,
                     atencion_empleados=?, combustible=?, medicamentos=?
                 WHERE id=?
             """
@@ -273,12 +301,16 @@ class PagoEfectivoDialog(QDialog):
                 self.data["id"]
             )
             self.db.cursor.execute(query, params)
+            pago_id = self.data["id"]
+            self.db.cursor.execute(
+                "DELETE FROM detalle_pagos_efectivo WHERE pago_efectivo_id=?", (pago_id,)
+            )
         else:
             query = """
                 INSERT INTO pagos_efectivo (
-                    fecha, proveedor, descripcion, total, 
-                    costo_viveres, costo_carnes, desayunos, otros, planilla, 
-                    gastos_propietarios, honorarios, reparaciones_mantenimiento, 
+                    fecha, proveedor, descripcion, total,
+                    costo_viveres, costo_carnes, desayunos, otros, planilla,
+                    gastos_propietarios, honorarios, reparaciones_mantenimiento,
                     atencion_empleados, combustible, medicamentos
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
@@ -289,7 +321,14 @@ class PagoEfectivoDialog(QDialog):
                 v["atencion_empleados"], v["combustible"], v["medicamentos"]
             )
             self.db.cursor.execute(query, params)
-            
+            pago_id = self.db.cursor.lastrowid
+
+        for cat_label, monto, tipo_gasto in lineas:
+            self.db.cursor.execute(
+                "INSERT INTO detalle_pagos_efectivo (pago_efectivo_id, categoria, monto, tipo_gasto) VALUES (?,?,?,?)",
+                (pago_id, cat_label, monto, tipo_gasto),
+            )
+
         self.db.conn.commit()
         return True
 
@@ -302,6 +341,7 @@ class PagoEfectivoDialog(QDialog):
             self.proveedor_input.clear()
             self.descripcion_input.clear()
             self.total_input.setValue(0.0)
+            self.combo_tipo_gasto.setCurrentIndex(0)
             self.table_desglose.setRowCount(0)
             self.actualizar_suma()
             self.proveedor_input.setFocus()

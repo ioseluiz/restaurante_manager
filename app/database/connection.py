@@ -302,6 +302,62 @@ class DatabaseManager:
             );
         """)
 
+        # Bloque de planilla del presupuesto: snapshot editable por empleado.
+        # Es independiente del bloque de compras (detalle_presupuestos); solo
+        # se suma al total general y NO participa del Control Presupuestal.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_presupuesto_planilla (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id        INTEGER NOT NULL,
+                empleado_id           INTEGER,
+                empleado_nombre       TEXT,
+                puesto                TEXT,
+                sucursal_nombre       TEXT,
+                salario_hora          REAL DEFAULT 0.0,
+                horas_regulares       REAL DEFAULT 0.0,
+                horas_festivos        REAL DEFAULT 0.0,
+                horas_domingos        REAL DEFAULT 0.0,
+                horas_extra_diurnas   REAL DEFAULT 0.0,
+                horas_extra_nocturnas REAL DEFAULT 0.0,
+                salario_bruto         REAL DEFAULT 0.0,
+                deducciones_colab     REAL DEFAULT 0.0,
+                costo_patronal        REAL DEFAULT 0.0,
+                costo_total           REAL DEFAULT 0.0,
+                observacion           TEXT,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Bloque de gastos fijos del presupuesto (alquiler, luz, agua, otros).
+        # Independiente de compras y planilla; solo suma al total general.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_presupuesto_gastos (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                presupuesto_id INTEGER NOT NULL,
+                concepto       TEXT NOT NULL,
+                monto          REAL DEFAULT 0.0,
+                observacion    TEXT,
+                FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Catálogo/historial de conceptos de gasto fijo reutilizables.
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS gastos_fijos_catalogo (
+                id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                concepto TEXT NOT NULL UNIQUE
+            );
+        """)
+        for _concepto in [
+            "Alquiler", "Luz (electricidad)", "Agua", "Internet / Teléfono",
+            "Gas", "Seguros", "Contabilidad / Honorarios", "Publicidad",
+            "Mantenimiento", "Otros",
+        ]:
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO gastos_fijos_catalogo (concepto) VALUES (?)",
+                (_concepto,),
+            )
+
         self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS chequera (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -356,6 +412,19 @@ class DatabaseManager:
                 atencion_empleados REAL DEFAULT 0.0,
                 combustible REAL DEFAULT 0.0,
                 medicamentos REAL DEFAULT 0.0
+            );
+        """)
+
+        # Desglose por línea de un pago en efectivo, con tipo de gasto opcional
+        # por línea (para vincular gastos fijos mezclados en un mismo pago).
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS detalle_pagos_efectivo (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                pago_efectivo_id INTEGER NOT NULL,
+                categoria        TEXT,
+                monto            REAL DEFAULT 0.0,
+                tipo_gasto       TEXT,
+                FOREIGN KEY (pago_efectivo_id) REFERENCES pagos_efectivo(id) ON DELETE CASCADE
             );
         """)
 
@@ -460,11 +529,14 @@ class DatabaseManager:
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 nombre        TEXT NOT NULL,
                 apellido      TEXT NOT NULL,
+                cedula        TEXT,
                 puesto        TEXT,
                 sucursal_id   INTEGER,
                 salario_hora  REAL DEFAULT 0.0,
+                tipo_contrato TEXT DEFAULT 'INDEFINIDO',
                 activo        INTEGER DEFAULT 1,
                 fecha_ingreso DATE,
+                fecha_baja    DATE,
                 FOREIGN KEY (sucursal_id) REFERENCES sucursales(id)
             );
         """)
@@ -559,6 +631,20 @@ class DatabaseManager:
         """)
 
         self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS codigos_barras (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo          TEXT NOT NULL UNIQUE,
+                insumo_id       INTEGER NOT NULL,
+                presentacion_id INTEGER,
+                tipo            TEXT DEFAULT 'INTERNO',
+                descripcion     TEXT,
+                fecha_registro  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (insumo_id)       REFERENCES insumos(id) ON DELETE CASCADE,
+                FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE SET NULL
+            );
+        """)
+
+        self.cursor.execute("""
             CREATE TABLE IF NOT EXISTS detalle_conteo_inventario (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 conteo_id INTEGER NOT NULL,
@@ -573,6 +659,47 @@ class DatabaseManager:
                 motivo_ajuste TEXT,
                 FOREIGN KEY (conteo_id) REFERENCES conteos_inventario(id) ON DELETE CASCADE,
                 FOREIGN KEY (insumo_id) REFERENCES insumos(id)
+            );
+        """)
+
+        # Tramos de ISR (tabla progresiva DGE/DGI, configurable)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS planilla_isr_tramos (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                desde      REAL NOT NULL DEFAULT 0.0,
+                hasta      REAL,
+                tasa       REAL NOT NULL DEFAULT 0.0,
+                cuota_fija REAL NOT NULL DEFAULT 0.0,
+                orden      INTEGER NOT NULL DEFAULT 0
+            );
+        """)
+
+        # Provisiones laborales devengadas por período (XIII, vacaciones, prima)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS provisiones_laborales (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                periodo_id  INTEGER,
+                tipo        TEXT NOT NULL,
+                monto       REAL NOT NULL DEFAULT 0.0,
+                fecha       DATE,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE
+            );
+        """)
+
+        # Pagos reales de las provisiones (pago de XIII, vacaciones tomadas, etc.)
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pagos_provisiones (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL,
+                tipo        TEXT NOT NULL,
+                fecha       DATE NOT NULL,
+                monto       REAL NOT NULL DEFAULT 0.0,
+                descripcion TEXT,
+                periodo_id  INTEGER,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE SET NULL
             );
         """)
 
@@ -628,6 +755,106 @@ class DatabaseManager:
             self.cursor.execute(
                 "ALTER TABLE diario_ventas ADD COLUMN efectivo REAL DEFAULT 0.0"
             )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: bloque de planilla en presupuestos (instalaciones existentes) ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE presupuestos ADD COLUMN monto_planilla REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_presupuesto_planilla (
+                    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    presupuesto_id        INTEGER NOT NULL,
+                    empleado_id           INTEGER,
+                    empleado_nombre       TEXT,
+                    puesto                TEXT,
+                    sucursal_nombre       TEXT,
+                    salario_hora          REAL DEFAULT 0.0,
+                    horas_regulares       REAL DEFAULT 0.0,
+                    horas_festivos        REAL DEFAULT 0.0,
+                    horas_domingos        REAL DEFAULT 0.0,
+                    horas_extra_diurnas   REAL DEFAULT 0.0,
+                    horas_extra_nocturnas REAL DEFAULT 0.0,
+                    salario_bruto         REAL DEFAULT 0.0,
+                    deducciones_colab     REAL DEFAULT 0.0,
+                    costo_patronal        REAL DEFAULT 0.0,
+                    costo_total           REAL DEFAULT 0.0,
+                    observacion           TEXT,
+                    FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+                )
+            """)
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: bloque de gastos fijos en presupuestos (instalaciones existentes) ---
+        try:
+            self.cursor.execute(
+                "ALTER TABLE presupuestos ADD COLUMN monto_gastos REAL DEFAULT 0.0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_presupuesto_gastos (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    presupuesto_id INTEGER NOT NULL,
+                    concepto       TEXT NOT NULL,
+                    monto          REAL DEFAULT 0.0,
+                    observacion    TEXT,
+                    FOREIGN KEY (presupuesto_id) REFERENCES presupuestos(id) ON DELETE CASCADE
+                )
+            """)
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS gastos_fijos_catalogo (
+                    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+                    concepto TEXT NOT NULL UNIQUE
+                )
+            """)
+            for _concepto in [
+                "Alquiler", "Luz (electricidad)", "Agua", "Internet / Teléfono",
+                "Gas", "Seguros", "Contabilidad / Honorarios", "Publicidad",
+                "Mantenimiento", "Otros",
+            ]:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO gastos_fijos_catalogo (concepto) VALUES (?)",
+                    (_concepto,),
+                )
+        except sqlite3.OperationalError:
+            pass
+
+        # --- NUEVO: etiqueta "tipo de gasto" en los egresos de consolidados,
+        #            para vincular lo ejecutado con los gastos fijos del presupuesto.
+        for _tabla in ["chequera", "transacciones_tarjeta",
+                       "transacciones_yappy", "pagos_efectivo"]:
+            try:
+                self.cursor.execute(
+                    f"ALTER TABLE {_tabla} ADD COLUMN tipo_gasto TEXT"
+                )
+            except sqlite3.OperationalError:
+                pass
+
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS detalle_pagos_efectivo (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pago_efectivo_id INTEGER NOT NULL,
+                    categoria        TEXT,
+                    monto            REAL DEFAULT 0.0,
+                    tipo_gasto       TEXT,
+                    FOREIGN KEY (pago_efectivo_id) REFERENCES pagos_efectivo(id) ON DELETE CASCADE
+                )
+            """)
         except sqlite3.OperationalError:
             pass
 
@@ -803,7 +1030,240 @@ class DatabaseManager:
         except Exception:
             pass
 
+        # Códigos de barras / QR (inventario escaneable) — instalaciones existentes
+        try:
+            self.cursor.execute("""
+                CREATE TABLE IF NOT EXISTS codigos_barras (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    codigo          TEXT NOT NULL UNIQUE,
+                    insumo_id       INTEGER NOT NULL,
+                    presentacion_id INTEGER,
+                    tipo            TEXT DEFAULT 'INTERNO',
+                    descripcion     TEXT,
+                    fecha_registro  DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (insumo_id)       REFERENCES insumos(id) ON DELETE CASCADE,
+                    FOREIGN KEY (presentacion_id) REFERENCES presentaciones_compra(id) ON DELETE SET NULL
+                )
+            """)
+        except Exception:
+            pass
+
+        # Backfill de costo por unidad base (valoración de inventario):
+        # los insumos con costo 0 se inicializan con el promedio del costo unitario
+        # calculado de sus presentaciones. Idempotente: solo toca los que están en 0,
+        # así no sobrescribe el promedio ponderado (WAC) que se mantiene al recibir.
+        try:
+            self.cursor.execute("""
+                UPDATE insumos
+                SET costo_unitario = (
+                    SELECT AVG(pc.costo_unitario_calculado)
+                    FROM presentaciones_compra pc
+                    WHERE pc.insumo_id = insumos.id
+                      AND pc.costo_unitario_calculado > 0
+                )
+                WHERE COALESCE(costo_unitario, 0) = 0
+                  AND EXISTS (
+                    SELECT 1 FROM presentaciones_compra pc
+                    WHERE pc.insumo_id = insumos.id
+                      AND pc.costo_unitario_calculado > 0
+                  )
+            """)
+        except Exception:
+            pass
+
+        # ---------------------------------------------------------------
+        # Nómina completa (Panamá): tipo de contrato, provisiones e ISR
+        # ---------------------------------------------------------------
+        # Nuevas columnas de empleado (instalaciones existentes)
+        for col_def in [
+            "ALTER TABLE empleados ADD COLUMN cedula        TEXT",
+            "ALTER TABLE empleados ADD COLUMN tipo_contrato TEXT DEFAULT 'INDEFINIDO'",
+            "ALTER TABLE empleados ADD COLUMN fecha_baja    DATE",
+        ]:
+            try:
+                self.cursor.execute(col_def)
+            except Exception:
+                pass
+
+        # Tablas de provisiones e ISR (instalaciones existentes)
+        for ddl in [
+            """CREATE TABLE IF NOT EXISTS planilla_isr_tramos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                desde REAL NOT NULL DEFAULT 0.0, hasta REAL,
+                tasa REAL NOT NULL DEFAULT 0.0, cuota_fija REAL NOT NULL DEFAULT 0.0,
+                orden INTEGER NOT NULL DEFAULT 0)""",
+            """CREATE TABLE IF NOT EXISTS provisiones_laborales (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, periodo_id INTEGER,
+                tipo TEXT NOT NULL, monto REAL NOT NULL DEFAULT 0.0, fecha DATE,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE CASCADE)""",
+            """CREATE TABLE IF NOT EXISTS pagos_provisiones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                empleado_id INTEGER NOT NULL, tipo TEXT NOT NULL,
+                fecha DATE NOT NULL, monto REAL NOT NULL DEFAULT 0.0,
+                descripcion TEXT, periodo_id INTEGER,
+                FOREIGN KEY (empleado_id) REFERENCES empleados(id) ON DELETE CASCADE,
+                FOREIGN KEY (periodo_id)  REFERENCES periodos_pago(id) ON DELETE SET NULL)""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass
+
+        # Seed de aportes patronales y provisiones (Panamá). Configurables desde
+        # la pestaña Configuración de Planilla. INSERT OR IGNORE respeta cambios.
+        # aplica_a: 'empleador' = carga patronal sobre el bruto;
+        #           'provision' = provisión laboral acumulable (pasivo).
+        for concepto, nombre, pct, aplica_a in [
+            ("riesgos_profesionales_empleador", "Riesgos Profesionales (Empleador)", 2.10, "empleador"),
+            ("provision_decimo",               "Provisión Décimo Tercer Mes (XIII)", 8.33, "provision"),
+            ("provision_vacaciones",           "Provisión Vacaciones",               8.33, "provision"),
+            ("provision_prima_antiguedad",     "Provisión Prima de Antigüedad",      1.92, "provision"),
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO planilla_config_deducciones (concepto, nombre_display, porcentaje, aplica_a) VALUES (?,?,?,?)",
+                    (concepto, nombre, pct, aplica_a),
+                )
+            except Exception:
+                pass
+
+        # Seed de tramos ISR (tabla progresiva DGI personas naturales).
+        # Solo si la tabla está vacía, para respetar personalizaciones.
+        try:
+            vacia = self.cursor.execute(
+                "SELECT COUNT(*) FROM planilla_isr_tramos"
+            ).fetchone()[0]
+            if not vacia:
+                for desde, hasta, tasa, cuota, orden in [
+                    (0.0,      11000.0,  0.00,     0.00, 1),
+                    (11000.0,  50000.0,  0.15,     0.00, 2),
+                    (50000.0,  None,     0.25,  5850.00, 3),
+                ]:
+                    self.cursor.execute(
+                        "INSERT INTO planilla_isr_tramos (desde, hasta, tasa, cuota_fija, orden) VALUES (?,?,?,?,?)",
+                        (desde, hasta, tasa, cuota, orden),
+                    )
+        except Exception:
+            pass
+
+        self._migrate_costeo_platos()
+
+        # Presupuesto: la planilla del presupuesto usa el costo laboral completo (con provisiones).
+        try:
+            self.cursor.execute(
+                "ALTER TABLE detalle_presupuesto_planilla ADD COLUMN provisiones REAL DEFAULT 0.0"
+            )
+        except Exception:
+            pass  # la columna ya existe
+
+        # Abastecimiento interno: los traslados se anulan (no se borran) y quedan con su fecha de anulación.
+        try:
+            self.cursor.execute("ALTER TABLE abastecimiento_interno ADD COLUMN anulado_en DATETIME")
+        except Exception:
+            pass  # la columna ya existe
+
         self.conn.commit()
+
+    def _migrate_costeo_platos(self):
+        """Esquema del módulo Costo de platos (idempotente).
+
+        rendimiento NULL en menu_items => la receta es por porción (comportamiento
+        histórico). Con rendimiento => cantidad_necesaria es por tanda.
+        """
+        for ddl in [
+            "ALTER TABLE menu_items ADD COLUMN categoria_costeo TEXT",
+            "ALTER TABLE menu_items ADD COLUMN es_componente INTEGER DEFAULT 0",
+            "ALTER TABLE menu_items ADD COLUMN rendimiento REAL",
+            "ALTER TABLE menu_items ADD COLUMN unidad_rendimiento_id INTEGER REFERENCES unidades_medida(id)",
+            "ALTER TABLE menu_items ADD COLUMN porcion_servida REAL",
+            "ALTER TABLE menu_items ADD COLUMN unidad_porcion_id INTEGER REFERENCES unidades_medida(id)",
+            "ALTER TABLE recetas ADD COLUMN unidad_id INTEGER REFERENCES unidades_medida(id)",
+            """CREATE TABLE IF NOT EXISTS receta_componentes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                menu_item_id INTEGER NOT NULL,
+                componente_id INTEGER NOT NULL,
+                cantidad REAL NOT NULL DEFAULT 0.0,
+                unidad_id INTEGER,
+                FOREIGN KEY (menu_item_id)  REFERENCES menu_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (componente_id) REFERENCES menu_items(id),
+                FOREIGN KEY (unidad_id)     REFERENCES unidades_medida(id),
+                UNIQUE (menu_item_id, componente_id))""",
+            """CREATE TABLE IF NOT EXISTS plato_extras (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                menu_item_id INTEGER NOT NULL,
+                componente_id INTEGER NOT NULL,
+                cantidad_porciones REAL NOT NULL DEFAULT 1.0,
+                tipo TEXT NOT NULL DEFAULT 'ACOMPANAMIENTO'
+                    CHECK (tipo IN ('ACOMPANAMIENTO','BEBIDA','EMPAQUE')),
+                canal TEXT NOT NULL DEFAULT 'AMBOS'
+                    CHECK (canal IN ('LOCAL','LLEVAR','AMBOS')),
+                FOREIGN KEY (menu_item_id)  REFERENCES menu_items(id) ON DELETE CASCADE,
+                FOREIGN KEY (componente_id) REFERENCES menu_items(id))""",
+            """CREATE TABLE IF NOT EXISTS costeo_config (
+                clave TEXT PRIMARY KEY,
+                valor TEXT NOT NULL)""",
+        ]:
+            try:
+                self.cursor.execute(ddl)
+            except Exception:
+                pass  # columna/tabla ya existe
+
+        for clave, valor in [
+            ("dias_mes", "30"),
+            ("platos_dia_default", "198"),
+            ("pct_ganancia_local", "30"),
+            ("pct_ganancia_pedidosya", "50"),
+            ("base_indirectos", "REAL"),          # REAL | PRESUPUESTO
+            ("fuente_costo_insumo", "VIGENTE"),   # VIGENTE | PROMEDIO
+        ]:
+            try:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO costeo_config (clave, valor) VALUES (?,?)",
+                    (clave, valor),
+                )
+            except Exception:
+                pass
+
+        try:
+            self._crear_vista_recetas_explotadas()
+        except Exception:
+            pass
+
+        # Conversiones estándar entre unidades que ya existan (por abreviatura).
+        # factor: cantidad_origen * factor = cantidad_destino
+        try:
+            ids = {}
+            for uid, abrev in self.cursor.execute(
+                "SELECT id, abreviatura FROM unidades_medida"
+            ).fetchall():
+                ids.setdefault(str(abrev).strip().lower(), uid)
+            pares = [
+                ("kg", "g", 1000.0), ("lb", "g", 453.592), ("oz", "g", 28.3495),
+                ("lb", "kg", 0.453592),
+                ("l", "ml", 1000.0), ("lt", "ml", 1000.0), ("gal", "ml", 3785.41),
+                ("gal", "l", 3.78541),
+            ]
+            for o, d, f in pares:
+                if o in ids and d in ids:
+                    for a, b, fac in ((ids[o], ids[d], f), (ids[d], ids[o], 1.0 / f)):
+                        existe = self.cursor.execute(
+                            "SELECT 1 FROM conversiones_unidades WHERE unidad_origen_id=? AND unidad_destino_id=?",
+                            (a, b),
+                        ).fetchone()
+                        if not existe:
+                            self.cursor.execute(
+                                "INSERT INTO conversiones_unidades (unidad_origen_id, unidad_destino_id, factor_conversion) VALUES (?,?,?)",
+                                (a, b, fac),
+                            )
+        except Exception:
+            pass
+
+    def _crear_vista_recetas_explotadas(self):
+        from app.database.costeo_sql import NOMBRE_VISTA_RECETAS, SQL_VISTA_RECETAS_EXPLOTADAS
+        self.cursor.execute(f"DROP VIEW IF EXISTS {NOMBRE_VISTA_RECETAS}")
+        self.cursor.execute(SQL_VISTA_RECETAS_EXPLOTADAS)
 
     def create_default_admin(self):
         try:

@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -28,6 +29,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from app.controllers.codigos_controller import CodigosController
 from app.reports.conteo_excel import generar_excel_conteo
 
 
@@ -318,6 +320,8 @@ class ConteoActivoDialog(QDialog):
         super().__init__(parent)
         self.db = db
         self.conteo_id = conteo_id
+        self.codigos_ctrl = CodigosController(db)
+        self._fila_por_insumo = {}
         self.setWindowTitle(f"Conteo Activo #{conteo_id}")
         self.setMinimumSize(960, 600)
         self._build_ui()
@@ -351,6 +355,19 @@ class ConteoActivoDialog(QDialog):
         lbl_hint.setWordWrap(True)
         lbl_hint.setStyleSheet("color:#666666; font-size:11px;")
         t1_layout.addWidget(lbl_hint)
+
+        # ── Barra de escaneo (lector QR/código de barras USB) ─────────────────
+        scan_row = QHBoxLayout()
+        lbl_scan = QLabel("📷 Escanear:")
+        lbl_scan.setStyleSheet("font-weight:bold; color:#a20f22;")
+        self.txt_scan = QLineEdit()
+        self.txt_scan.setPlaceholderText(
+            "Coloque el cursor aquí y escanee el código del producto…"
+        )
+        self.txt_scan.returnPressed.connect(self._on_scan)
+        scan_row.addWidget(lbl_scan)
+        scan_row.addWidget(self.txt_scan, 1)
+        t1_layout.addLayout(scan_row)
 
         self.tbl_ingreso = QTableWidget()
         self.tbl_ingreso.setColumnCount(7)
@@ -434,10 +451,12 @@ class ConteoActivoDialog(QDialog):
         )
 
         self.tbl_ingreso.setRowCount(len(filas))
+        self._fila_por_insumo = {}
         for r, fila in enumerate(filas):
             det_id, cat, insumo_id, unidad, teorico, contada = fila
             nombre_row = self.db.fetch_one("SELECT nombre FROM insumos WHERE id = ?", (insumo_id,))
             nombre = nombre_row[0] if nombre_row else str(insumo_id)
+            self._fila_por_insumo[insumo_id] = r
 
             self.tbl_ingreso.setItem(r, 0, QTableWidgetItem(str(det_id)))
 
@@ -456,13 +475,17 @@ class ConteoActivoDialog(QDialog):
 
             cmb = QComboBox()
             cmb.addItem(unidad or "unidad", 1.0)
+            # presentacion_id de la unidad base = None (rol UserRole+1)
+            cmb.setItemData(0, None, Qt.UserRole + 1)
             presentaciones = self.db.fetch_all(
-                "SELECT nombre, cantidad_contenido FROM presentaciones_compra WHERE insumo_id = ? ORDER BY nombre",
+                "SELECT id, nombre, cantidad_contenido FROM presentaciones_compra WHERE insumo_id = ? ORDER BY nombre",
                 (insumo_id,),
             )
             for p in presentaciones:
-                factor = float(p[1]) if p[1] else 1.0
-                cmb.addItem(f"{p[0]}  (×{factor:g})", factor)
+                p_id = p[0]
+                factor = float(p[2]) if p[2] else 1.0
+                cmb.addItem(f"{p[1]}  (×{factor:g})", factor)
+                cmb.setItemData(cmb.count() - 1, p_id, Qt.UserRole + 1)
             self.tbl_ingreso.setCellWidget(r, 4, cmb)
 
             spin = QDoubleSpinBox()
@@ -498,6 +521,58 @@ class ConteoActivoDialog(QDialog):
         factor = cmb.currentData() or 1.0
         equiv  = round(spin.value() * factor, 4)
         lbl.setText(f"= {equiv:.4f} {unidad}")
+
+    def _on_scan(self):
+        """Resuelve el código escaneado, ubica la fila y suma la cantidad pesada."""
+        codigo = self.txt_scan.text().strip()
+        self.txt_scan.clear()
+        if not codigo:
+            return
+
+        info = self.codigos_ctrl.resolver_codigo(codigo)
+        if not info:
+            QMessageBox.warning(
+                self, "Código no registrado",
+                f"El código '{codigo}' no está asignado a ningún insumo.\n\n"
+                "Regístrelo en el módulo «Etiquetas / Códigos».",
+            )
+            self.txt_scan.setFocus()
+            return
+
+        insumo_id = info["insumo_id"]
+        if insumo_id not in self._fila_por_insumo:
+            QMessageBox.information(
+                self, "Fuera de esta sesión",
+                f"'{info['nombre']}' no forma parte de las categorías de este conteo.",
+            )
+            self.txt_scan.setFocus()
+            return
+
+        r = self._fila_por_insumo[insumo_id]
+        self.tbl_ingreso.selectRow(r)
+        self.tbl_ingreso.scrollToItem(self.tbl_ingreso.item(r, 2))
+
+        cmb  = self.tbl_ingreso.cellWidget(r, 4)
+        spin = self.tbl_ingreso.cellWidget(r, 5)
+
+        # Si el código apunta a una presentación, seleccionarla en el combo
+        if cmb and info.get("presentacion_id"):
+            for i in range(cmb.count()):
+                if cmb.itemData(i, Qt.UserRole + 1) == info["presentacion_id"]:
+                    cmb.setCurrentIndex(i)
+                    break
+
+        unidad_txt = cmb.currentText() if cmb else "unidad"
+        valor, ok = QInputDialog.getDouble(
+            self,
+            "Cantidad contada",
+            f"{info['nombre']}\nIngrese la cantidad pesada/contada en «{unidad_txt}»:",
+            0.0, 0.0, 9999999.0, 4,
+        )
+        if ok and spin:
+            spin.setValue(spin.value() + valor)
+
+        self.txt_scan.setFocus()
 
     def _cargar_revision(self):
         filas = self.db.fetch_all(
