@@ -14,7 +14,7 @@ Responde: **¿cuánto cuesta producir cada plato y a qué precio debería vender
 
 - **Ingredientes:** receta × costo de cada insumo. Una receta puede ser **por porción** o **por tanda** (ver abajo).
 - **Acompañamientos, bebida y empaque:** los que asocie a cada plato; el empaque solo cuenta en el canal *Llevar*.
-- **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla usada es el **costo laboral completo** (igual que el Resumen de Planilla: incluye aportes patronales, riesgo profesional y provisiones).
+- **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla usada es el **costo laboral completo** (igual que el Resumen de Planilla: incluye aportes patronales, riesgo profesional y provisiones). Los platos vendidos salen de las ventas diarias; si no hay, del reporte del POS que cubra el mes (su promedio diario × días del mes); si tampoco, de *platos por día × días del mes* (Parámetros).
 - **Precio sugerido** = costo ÷ (1 − % de ganancia). Hay un % para *Local* y otro para *Llevar / PedidosYa*.
 
 ## Costo por plato

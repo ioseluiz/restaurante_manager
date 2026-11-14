@@ -30,7 +30,9 @@ configurable en Parámetros. Un insumo sin costo genera una alerta ⚠.
 **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla es el
 **costo laboral completo** (bruto + Seguro Social/Educativo y riesgo profesional patronales + provisiones), igual que el
 Resumen de Planilla y el bloque de planilla del Presupuesto. Platos vendidos: ventas
-diarias → reporte del POS → *platos por día × días del mes* (Parámetros). Los gastos salen de los consolidados
+diarias → reporte del POS → *platos por día × días del mes* (Parámetros). Del reporte del POS se usa el promedio
+diario de su período (cantidad ÷ días) × días del mes, con los reportes cuyo período se cruza con el mes (si hay
+varios, se promedian). Los gastos salen de los consolidados
 (`tipo_gasto`) o del presupuesto, según la opción.
 
 **Precio sugerido** = costo total ÷ (1 − % de ganancia). Canal *Local* y *Llevar / PedidosYa* tienen % distintos.
