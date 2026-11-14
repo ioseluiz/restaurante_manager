@@ -26,6 +26,9 @@ Registra lo que se le compra a los proveedores. **Al recibir una compra sube el 
 
 Solo lo recibido suma al inventario y actualiza el costo del insumo. Puede ver el resultado en [Inventario](ayuda:inventario).
 
+- La recepción se aplica **completa o nada**: si ocurre un error, ningún insumo cambia y la compra sigue pendiente para reintentar.
+- Si el insumo tenía stock **cero o negativo** (se vendió antes de recibir la compra), su nuevo costo es el **de esta compra**: no hay stock real con el que promediar.
+
 ## Editar o corregir
 
 - **Ver Detalle** muestra las líneas de una compra.

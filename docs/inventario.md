@@ -72,7 +72,12 @@ recibirla:
 3. El **Kardex** registra un movimiento de tipo `COMPRA` por cada línea recibida
    y suma las unidades (cantidad × contenido de la presentación) al stock.
 4. El **costo unitario** del insumo se recalcula como **costo promedio
-   ponderado** (stock anterior × costo anterior + entrada × costo de entrada).
+   ponderado** (stock anterior × costo anterior + entrada × costo de entrada) ÷
+   stock nuevo. Si el stock anterior era cero o negativo, el costo pasa a ser
+   el de la entrada (`costo_promedio_ponderado` en `kardex_controller.py`).
+5. Todo se aplica en **una sola transacción**
+   (`KardexController.recibir_compra`): si falla una línea, no queda nada
+   aplicado y la compra sigue PENDIENTE.
 
 > **Resultado:** `stock_actual` sube y `costo_unitario` se actualiza; queda
 > registro con stock anterior, stock nuevo y referencia a la compra.
