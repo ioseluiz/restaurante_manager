@@ -28,6 +28,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QColor, QFont
 
+from app.database.costeo_sql import SQL_ORDEN_PRESENTACION
 from app.utils.calculo_planilla import calcular_costo_empleado
 
 DIALOG_STYLES = """
@@ -1038,7 +1039,7 @@ class CrearPresupuestoDialog(QDialog):
                 factor_val = data["factor"]
                 pct_val = data["pct_usado"]
 
-                query_pres = "SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY id ASC LIMIT 1"
+                query_pres = f"SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY {SQL_ORDEN_PRESENTACION} LIMIT 1"
                 pres = self.db.fetch_one(query_pres, (ins_id,))
 
                 cant_compra_exacta = 0.0
@@ -1858,7 +1859,7 @@ class VerPresupuestoDialog(QDialog):
                 factor_val = data["factor"]
                 pct_val = data["pct_usado"]
 
-                query_pres = "SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY id ASC LIMIT 1"
+                query_pres = f"SELECT cantidad_contenido, precio_compra, nombre FROM presentaciones_compra WHERE insumo_id = ? ORDER BY {SQL_ORDEN_PRESENTACION} LIMIT 1"
                 pres = self.db.fetch_one(query_pres, (ins_id,))
 
                 cant_compra_exacta = 0.0

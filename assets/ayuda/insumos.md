@@ -26,6 +26,8 @@ Cargue primero las **[Unidades de Medida](ayuda:unidades)**.
    - **Empaque compuesto** (ej. una caja con botellas): marque *Es un empaque compuesto* y complete **Unidad Interna** (de los Tipos de Empaque), **Cantidad** y **Peso/Vol Unitario**; el total se calcula solo.
 4. **Guardar Definición**. El sistema calcula el **costo por unidad base** (precio ÷ contenido).
 
+Si un insumo tiene **varias presentaciones** (ej. saco de 10 kg y de 25 kg), marque en la que realmente compra **Presentación preferida**: su precio es el que usan [Costo de Platos](ayuda:costo_platos) y [Presupuestos](ayuda:presupuestos). Solo puede haber una por insumo (la columna *Preferida* muestra ★); si no marca ninguna, se usa la primera que se creó.
+
 **Historial de Precios** muestra los precios anteriores; **+ Registrar Nuevo Precio** anota un cambio de precio conservando el historial. Ese historial alimenta el [Análisis de Precios](ayuda:grafico_precios).
 
 ## Códigos de barras y QR

@@ -24,7 +24,8 @@ histórico). Con rendimiento `R` y porción servida `P`, las cantidades son **po
 «no se vende». Su costo por unidad = costo de su tanda ÷ su rendimiento; un plato los usa indicando cuántas unidades
 (g, ml…). Se admite anidar (máx. 6 niveles); los ciclos se detectan y se avisan.
 
-**Costo del insumo.** Por defecto, el precio vigente de la presentación de compra (respaldo: costo promedio ponderado);
+**Costo del insumo.** Por defecto, el precio vigente de la presentación de compra **preferida** (o la primera creada si
+no hay ninguna marcada; respaldo: costo promedio ponderado);
 configurable en Parámetros. Un insumo sin costo genera una alerta ⚠.
 
 **Indirectos por plato** = (gastos fijos del mes + planilla del mes) ÷ platos vendidos del mes. La planilla es el

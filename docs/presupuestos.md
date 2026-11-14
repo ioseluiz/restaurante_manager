@@ -216,7 +216,8 @@ los platos se suman para obtener el requerimiento total de ese insumo.
 ### 5.4 Conversión a unidad de compra y costo
 
 Una vez calculado el requerimiento total en unidad base, el sistema convierte
-a unidades de compra usando la presentación de compra principal del insumo:
+a unidades de compra usando la presentación de compra **preferida** del insumo (casilla en el Catálogo de
+Insumos; si no hay ninguna marcada, la primera creada):
 
 ```
 Unidades_a_comprar_exactas = Total_base_requerido / Cantidad_contenido_presentación

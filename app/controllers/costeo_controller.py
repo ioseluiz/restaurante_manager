@@ -19,7 +19,7 @@ _UNIDADES_ESTANDAR = {
 import calendar
 import datetime
 
-from app.database.costeo_sql import SQL_FACTOR_PORCION  # noqa: F401  (reexport)
+from app.database.costeo_sql import SQL_FACTOR_PORCION, SQL_ORDEN_PRESENTACION  # noqa: F401  (reexport)
 
 CANALES = ("LOCAL", "LLEVAR")
 TIPOS_EXTRA = ("ACOMPANAMIENTO", "BEBIDA", "EMPAQUE")
@@ -115,7 +115,7 @@ class CosteoController:
             return self._cache_costo_insumo[insumo_id]
         pres = self.db.fetch_one(
             "SELECT costo_unitario_calculado FROM presentaciones_compra "
-            "WHERE insumo_id = ? AND costo_unitario_calculado > 0 ORDER BY id LIMIT 1",
+            f"WHERE insumo_id = ? AND costo_unitario_calculado > 0 ORDER BY {SQL_ORDEN_PRESENTACION} LIMIT 1",
             (insumo_id,))
         wac = self.db.fetch_one("SELECT costo_unitario FROM insumos WHERE id = ?", (insumo_id,))
         c_pres = float(pres[0]) if pres and pres[0] else 0.0

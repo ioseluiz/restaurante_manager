@@ -1185,6 +1185,12 @@ class DatabaseManager:
         except Exception:
             pass  # la columna ya existe
 
+        # Presentación preferida por insumo (la que usan Costo de Platos y Presupuestos).
+        try:
+            self.cursor.execute("ALTER TABLE presentaciones_compra ADD COLUMN es_preferida INTEGER DEFAULT 0")
+        except Exception:
+            pass  # la columna ya existe
+
         self.conn.commit()
 
     def _migrate_costeo_platos(self):
