@@ -514,7 +514,13 @@ class MainWindow(QMainWindow):
                 self, "Seleccionar o Crear Base de Datos", "", "SQLite Files (*.db)"
             )
             if path:
-                self.db.switch_database(path)
+                try:
+                    self.db.switch_database(path)
+                except ValueError as e:
+                    QMessageBox.warning(
+                        self, "No se cambió la base de datos",
+                        f"{e}\n\nSe sigue usando la base de datos anterior.")
+                    return
                 self.actualizar_info_bd()
                 QMessageBox.information(self, "Éxito", f"Conectado exitosamente a:\n{path}")
                 self.modules = {}

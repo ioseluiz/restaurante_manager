@@ -99,6 +99,10 @@ python main.py
 *   **Usuario:** `admin`
 *   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
 
+## 🩺 Solución de problemas
+
+**El programa no abre por la base de datos.** La ubicación de la base se guarda en `~/.restaurante_manager/config.json`. Si apunta a un archivo inválido, el programa lo detecta, explica el motivo y permite elegir otra base o usar la predeterminada. Un caso típico es seleccionar un archivo `._nombre.db`: son residuos de macOS, no bases de datos. Detalles en la ayuda (F1 → Primeros pasos). Para corregirlo a mano, edite o borre `config.json`.
+
 ## 🏷️ Versiones
 
 La versión aparece en el título de la ventana, en la barra de estado y en **Ayuda → Acerca de**. Vive en `app/version.py`; el CI la reemplaza con la del tag al compilar. Un tag con sufijo (`v1.3.0-beta.1`) publica el instalador como **pre-release** y uno sin sufijo (`v1.3.0`) como release oficial. Detalles en `docs/versiones.md`.

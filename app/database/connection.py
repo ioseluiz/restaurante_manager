@@ -27,13 +27,33 @@ class DatabaseManager:
         self._migrate_tables()
 
     def switch_database(self, new_path):
-        """Cierra la conexión actual y abre una nueva en la ruta especificada."""
-        self.conn.close()
-        self.db_path = new_path
-        from app.database.config import save_db_path
+        """Cambia a otra base de datos de forma segura.
 
+        Valida la ruta ANTES de tocar nada y solo guarda la nueva ruta en la configuración cuando la base
+        abre correctamente. Si falla, se conserva la conexión anterior y se lanza ValueError con el motivo
+        (así una selección equivocada no deja el programa sin poder arrancar).
+        """
+        from app.database.config import save_db_path, validar_base_datos
+
+        ok, motivo = validar_base_datos(new_path)
+        if not ok:
+            raise ValueError(motivo)
+
+        ruta_anterior, conn_anterior = self.db_path, self.conn
+        try:
+            self.db_path = new_path
+            self.connect()
+        except Exception as e:
+            try:
+                self.conn.close()  # la conexión nueva, a medio abrir
+            except Exception:
+                pass
+            self.db_path, self.conn = ruta_anterior, conn_anterior
+            self.cursor = conn_anterior.cursor()
+            raise ValueError(f"No se pudo abrir la base de datos seleccionada: {e}") from e
+
+        conn_anterior.close()
         save_db_path(new_path)
-        self.connect()
 
     def create_backup(self, dest_folder):
         """Crea una copia de seguridad del archivo actual."""

@@ -4,7 +4,7 @@ import os
 import ctypes
 from PyQt5.QtWidgets import QApplication, QDialog
 from PyQt5.QtGui import QIcon
-from app.database.connection import DatabaseManager
+from app.views.db_recovery import abrir_base_de_datos
 from app.controllers.auth_controller import AuthController
 from app.views.login_window import LoginWindow
 from app.views.main_window import MainWindow
@@ -37,7 +37,9 @@ def main():
     app.installEventFilter(_btn_icon_filter)
 
     # 1 Backend setup
-    db = DatabaseManager()
+    db = abrir_base_de_datos()
+    if db is None:  # el usuario eligió salir
+        sys.exit(0)
     auth = AuthController(db)
 
     # 2. Flujo de Login con bucle para permitir Cerrar Sesión
