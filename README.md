@@ -58,7 +58,17 @@ restaurante_manager/
 └── requirements.txt       # Dependencias
 ```
 
-## 🚀 Instalación y Configuración
+## 📥 Instalar la aplicación (usuarios)
+
+Los instaladores están en la página de **Releases** del repositorio (la versión de desarrollo, en `latest-dev`):
+
+*   **Windows:** `ItalosManager_Setup.exe` → ejecutarlo y seguir el asistente.
+*   **macOS (Apple Silicon, M1 o posterior; macOS 11 o superior):** `ItalosManager_mac_arm64.dmg` → abrirlo y arrastrar **Italos Manager** a **Aplicaciones**.
+    *   **Primera apertura:** la app todavía **no está firmada por Apple**, así que macOS la bloquea la primera vez. Abra *Aplicaciones*, haga **clic derecho (o Control + clic) sobre Italos Manager → Abrir** y confirme con **Abrir**. Si macOS solo ofrece «Trasladar a la papelera», vaya a **Ajustes del Sistema → Privacidad y seguridad** y pulse **Abrir igualmente** junto al aviso de Italos Manager. Solo hace falta la primera vez.
+    *   Alternativa desde Terminal: `xattr -dr com.apple.quarantine "/Applications/Italos Manager.app"`.
+    *   La base y la configuración quedan en `~/.restaurante_manager` (carpeta oculta de su usuario), igual que en Windows.
+
+## 🚀 Instalación y Configuración (desarrollo)
 
 ### 1. Prerrequisitos
 *   **Python 3.10 o superior** (el instalador se compila con 3.11).
@@ -99,6 +109,14 @@ python main.py
 **Credenciales por defecto:**
 *   **Usuario:** `admin`
 *   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
+
+## 📦 Compilar los instaladores
+
+*   **Windows:** `pyinstaller main.spec` y luego Inno Setup con `installer.iss` (lo hace el CI).
+*   **macOS (en una Mac con Apple Silicon):** `pip install -r requirements-build.txt` y `./compilar_mac.sh` → `dist/Italos Manager.app` e `installer_output/ItalosManager_mac_arm64.dmg`.
+*   Ambos usan el mismo `main.spec`. El ícono de macOS (`assets/icons/app.icns`) se genera desde `app.ico` con `python scripts/generar_icns.py`.
+*   `python main.py --smoke` (o el ejecutable con `--smoke`) abre todos los módulos sobre una base temporal y termina con código 0 si todo carga: el CI lo usa para comprobar el ejecutable empaquetado.
+*   Lo propio de cada sistema operativo (abrir archivos, recursos, apariencia) está en `app/utils/plataforma.py`.
 
 ## 🩺 Solución de problemas
 

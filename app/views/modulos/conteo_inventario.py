@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 
 from PyQt5.QtCore import Qt, QDate
@@ -32,6 +31,7 @@ from PyQt5.QtWidgets import (
 from app.controllers.codigos_controller import CodigosController
 from app.reports.conteo_excel import generar_excel_conteo
 from app.controllers.restaurante_controller import RestauranteController
+from app.utils.plataforma import abrir_archivo
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -72,12 +72,7 @@ def _registrar_ajuste_kardex(db, insumo_id, diferencia, conteo_id, motivo):
 
 def _open_file(path):
     try:
-        if sys.platform == "win32":
-            os.startfile(path)
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", path])
-        else:
-            subprocess.Popen(["xdg-open", path])
+        abrir_archivo(path)
     except Exception:
         pass
 

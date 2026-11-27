@@ -1,6 +1,5 @@
 # [FILE: app/views/modulos/etiquetas_view.py]
 import os
-import subprocess
 import sys
 from datetime import date
 
@@ -24,16 +23,12 @@ from PyQt5.QtWidgets import (
 
 from app.controllers.codigos_controller import CodigosController
 from app.reports.etiquetas_pdf import generar_pdf_etiquetas
+from app.utils.plataforma import abrir_archivo
 
 
 def _open_file(path):
     try:
-        if sys.platform == "win32":
-            os.startfile(path)
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", path])
-        else:
-            subprocess.Popen(["xdg-open", path])
+        abrir_archivo(path)
     except Exception:
         pass
 

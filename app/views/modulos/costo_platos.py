@@ -1088,7 +1088,7 @@ class ImportarExcelDialog(QDialog):
 
         self.txt_reporte = QTextEdit()
         self.txt_reporte.setReadOnly(True)
-        self.txt_reporte.setStyleSheet("font-family: Consolas, monospace;")
+        self.txt_reporte.setStyleSheet("font-family: Consolas, Menlo, monospace;")
         lay.addWidget(self.txt_reporte, 1)
         b_cerrar = QPushButton("Cerrar")
         b_cerrar.clicked.connect(self.accept)

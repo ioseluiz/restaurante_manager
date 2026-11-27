@@ -2,7 +2,7 @@
 %“Œ‹ž ReportLab Generated PDF document (opensource)
 1 0 obj
 <<
-/F1 2 0 R /F2+0 139 0 R /F3+0 143 0 R /F4 22 0 R /F5+0 147 0 R
+/F1 2 0 R /F2+0 139 0 R /F3+0 143 0 R /F4 5 0 R /F5+0 147 0 R
 >>
 endobj
 2 0 obj
@@ -32,57 +32,17 @@ endobj
 endobj
 5 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 133 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 325.3123 273.9543 383.4163 285.3543 ] /Subtype /Link /Type /Annot
+/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F4 /Subtype /Type1 /Type /Font
 >>
 endobj
 6 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 130 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 212.9543 199.8979 224.3543 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 133 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 325.3123 103.9543 383.4163 115.3543 ] /Subtype /Link /Type /Annot
 >>
 endobj
 7 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 133 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 196.9543 149.1369 208.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-8 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 134 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 282.6504 182.9543 329.3155 194.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-9 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 62 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 166.9543 203.1311 178.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-10 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 79 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 150.9543 120.456 162.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-11 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 73 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 134.9543 133.4721 146.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-12 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 41 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 118.9543 137.9809 130.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-13 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 55 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 102.9543 195.3242 114.3543 ] /Subtype /Link /Type /Annot
->>
-endobj
-14 0 obj
-<<
-/Border [ 0 0 0 ] /Contents () /Dest [ 34 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 86.95433 128.198 98.35433 ] /Subtype /Link /Type /Annot
->>
-endobj
-15 0 obj
-<<
-/Annots [ 5 0 R 6 0 R 7 0 R 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R ] /Contents 153 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 150 0 R /Resources <<
+/Annots [ 6 0 R ] /Contents 153 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 150 0 R /Resources <<
 /Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
 >> /Rotate 0 
   /Trans <<
@@ -90,44 +50,85 @@ endobj
 >> /Type /Page
 >>
 endobj
+8 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 130 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 735.4583 199.8979 746.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+9 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 133 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 719.4583 149.1369 730.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+10 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 134 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 282.6504 705.4583 329.3155 716.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+11 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 62 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 689.4583 203.1311 700.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+12 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 79 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 673.4583 120.456 684.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+13 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 73 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 657.4583 133.4721 668.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+14 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 41 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 641.4583 137.9809 652.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
+15 0 obj
+<<
+/Border [ 0 0 0 ] /Contents () /Dest [ 55 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 625.4583 195.3242 636.8583 ] /Subtype /Link /Type /Annot
+>>
+endobj
 16 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 97 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 756.4583 162.1809 767.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 34 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 609.4583 128.198 620.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 17 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 123 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 168.2204 756.4583 207.7929 767.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 97 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 91.03291 579.4583 162.1809 590.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 18 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 89 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 219.4545 756.4583 292.3466 767.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 123 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 168.2204 579.4583 207.7929 590.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 19 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 104 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 138.9718 740.4583 207.0258 751.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 89 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 219.4545 579.4583 292.3466 590.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 20 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 105 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 213.0653 740.4583 296.4965 751.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 104 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 138.9718 563.4583 207.0258 574.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 21 0 obj
 <<
-/Border [ 0 0 0 ] /Contents () /Dest [ 121 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 308.1581 740.4583 408.7802 751.8583 ] /Subtype /Link /Type /Annot
+/Border [ 0 0 0 ] /Contents () /Dest [ 105 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 213.0653 563.4583 296.4965 574.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 22 0 obj
 <<
-/BaseFont /Courier /Encoding /WinAnsiEncoding /Name /F4 /Subtype /Type1 /Type /Font
+/Border [ 0 0 0 ] /Contents () /Dest [ 121 0 R /XYZ 70.69291 759.8583 0 ] /Rect [ 308.1581 563.4583 408.7802 574.8583 ] /Subtype /Link /Type /Annot
 >>
 endobj
 23 0 obj
 <<
-/Annots [ 16 0 R 17 0 R 18 0 R 19 0 R 20 0 R 21 0 R ] /Contents 154 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 150 0 R /Resources <<
+/Annots [ 8 0 R 9 0 R 10 0 R 11 0 R 12 0 R 13 0 R 14 0 R 15 0 R 16 0 R 17 0 R 
+  18 0 R 19 0 R 20 0 R 21 0 R 22 0 R ] /Contents 154 0 R /MediaBox [ 0 0 595.2756 841.8898 ] /Parent 150 0 R /Resources <<
 /Font 1 0 R /ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
 >> /Rotate 0 
   /Trans <<
@@ -1157,13 +1158,13 @@ endobj
 endobj
 149 0 obj
 <<
-/Author (Italos Manager) /CreationDate (D:20261127064412-05'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20261127064412-05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
+/Author (Italos Manager) /CreationDate (D:20261127070316-05'00') /Creator (\(unspecified\)) /Keywords () /ModDate (D:20261127070316-05'00') /Producer (ReportLab PDF Library - \(opensource\)) 
   /Subject (Sistema de Gesti\363n de Restaurante) /Title (Manual de Usuario \204 Italos Manager) /Trapped /False
 >>
 endobj
 150 0 obj
 <<
-/Count 30 /Kids [ 3 0 R 4 0 R 15 0 R 23 0 R 26 0 R 34 0 R 38 0 R 41 0 R 46 0 R 52 0 R 
+/Count 30 /Kids [ 3 0 R 4 0 R 7 0 R 23 0 R 26 0 R 34 0 R 38 0 R 41 0 R 46 0 R 52 0 R 
   55 0 R 62 0 R 63 0 R 66 0 R 73 0 R 79 0 R 89 0 R 91 0 R 97 0 R 98 0 R 
   104 0 R 105 0 R 116 0 R 121 0 R 123 0 R 126 0 R 130 0 R 133 0 R 134 0 R 135 0 R ] /Type /Pages
 >>
@@ -1184,17 +1185,17 @@ Gb!<O>E@5o&:i[8/*:gPa^fdWrHMEF!jNC)(7t6=V_obKFdAg(na@@-AN+G:=X<=sUeT?3;L<">ccna(
 endobj
 153 0 obj
 <<
-/Filter [ /ASCII85Decode /FlateDecode ] /Length 2709
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 2525
 >>
 stream
-Gau`UgNM>[&q0LUi)+At*eG2bFImf+P-1sQX?)3m^?>_E&X=du$:$)-YO<N_2d<"EVf>J<.OQDH@.rs?Z\R\e`?/t]PCg(>hQd*ni/E$LmN(>='<o*8m.oJVLC7bZLL(rS`snfb_b]^LInX]48es%MAaIC+X^]n=Q:oMTLc\HJ7uYJ`'R6=lP[s63\A6hnK86ZED`;$LrR4CeoL!Fui#)HS/rRt7YU5oNnOf%*aB:"Gn%')\X4Z-K4n`YCnk(]C'jIXig"h!upB-u?M;#9gEErFd&)!FZE.j;4,6nfd_at4OqN2F\hJ2g<B5]Gn+HB\kAkj2]fZa^/LPIVVbP=I$W/8>X$k^GiisZX=0=$g7U_SL.La*^0Hu;iuABB"h6m28:]m.BFQ_QO[qma?R#B>-/T3EGU[ok/I5?d8.&p\HUQ0/`U4pZ*[cRoUB+gjPn+#^1&=jnR(pu@gUGs-Mc9mK"]RZ0d&@9ErTj)fdkOHoop78)<,Md)G];BaXRU%.rHQ!uDU,0;7enm7t'lKe0,+jiPlnB?Q5oS-qalu.,f<"=r8Bt:4&0(Ln*0jT.X?<]PDFe@Pe]0&^h1M:O7IIH$G67=>7BVANPn45k&UeP1'cQ'(u!%-=pd,8mc1ttPJE=TtY9\1!]aeYM5d:'MD">>t=e4kt$Em^Sl!(@QchhNPBMA9,7bIY8K_#+bdjm"gifJ9[-5,:j_l=/">/$m4n.e'2#d=Wti,4U7\L3q1`7ZFE%Q+;J%,M:\)7^>'B_(n<cm"(dJAcs+Es)5\3[E@0`lpTX1@RqRB%AjI(ZU)ObK9*61ZUBuK)PkY%8rR7a6U="K,5d7H"S%#HSqEm^ISVe]'QH<rdAG;>eOiO<D)FNS@]IH3I+"[,P^nGKJ4aL<rjk]FB@Ok7=l?@RU-sb:?<Ofr,g=XgesA2N$KGjkq;0``eNH!HIO!kMS4Jp4SDWe_\@A'KXCsj@ASQ)qq7TaRV"uIC(IiXDMss=e-GJ1>9iUPG/JWD>o$HUC@4tLCmHSqh(<%UV"b;kkOsgCe#b@oNgbn>Lh.MeU,!,'59=p$Y-?Q8A[-BSS0>p>mYH4Us&hEr-esF]b<i35J6jMU:BM4]q-$PWS-#;EK<40h6N]A(]ND!m=Rn!psUV\0l08EZ@Eb@J_'l^SqNC7TuAX%4t)((!CMF*bSZs_Yt*5:uOWgMfM55/.&Thd=(335=]6LL>,>*F$Vp.T#';Hm"1?NapE:i2IG`;/Er.rVH40AUQ@&6<CEaE7sLQ_,BNR$o9u)e+>W,EZNh?rPUAO-XTi,&![>SV.AO[VrR*%RNL$OV160%IG,0+Ep`P:^^\,o>,C_:._7IMUH06/p;BFdqBADJs=eUD%p5AlDU62$J(P[]V,doLnAn'rT$"WbZu?<pCZ6dkE0=f>jpTfCm-`AW->fI,0I&e.,pX(WbNrmpZe`ih9`@:1*tcDl^Ic5qO1GaLeh.SAu*:P2[=]aDIj0DaJ:)c<EY`#OQU7QU?!s?AMO;JFHUiIibOmm_E'2.ag!*iGh0Ek9ju%l3?9gCj0Rk&RF7l'I#guI7n,EDCmgAAl"ek]*@81_O^?I&ZlkKDAFk<sX(k(&]WHuWL15L>N=pfbl\DVHmEj$jV,CIAM3.=IW!\%$A>g(JP1$;Fn")Xn^C7!(@']GG6>cKTg).d3Q8M7/[)c*%ekJp182m>M]<(Ht(<U@=+@><^gSYU(A&i%')1>-"WZ[I'3K9)3<SS;)*`A0C@].ND[OW7DW-?WmH*sco_D>"rd">hfE!@D35!:ZK0,'PE+_O@NajfmOe$p=_m::+l%+*=>4qIGC,tm"_c"'DtK7ST$B0-b!4F8_TjV%*\Xo1_#MCSH'd8&CNckf=/87WaD'W3`c,$C+qFjp5Ugrko03/Vk`6+gm"+G1@lSfj6'rK/8H[]5o=SLZ`e&o)!Q^,^ruejePY#8PbNa/h6TK2HN*RSif$NbV8W*\J++03X[23ZkLhPR<hR0?gG$0Ds+P3U4VcigHh5`7ML4X'(aun$4N6a1B"Qn>3aS!p5.gO-c@s[L#Z=s)#AagKK=CCr60a3oC)Wqs'WM!DE]3JUEO^@&TSQms/7;%9r"4@g7-b;@%ue"NO=%78GD])/e0gmamNbgc7Bn4+9HW/o@k>>df*:pCsik`:?tbc.ZQ#dcd-:YLqb-5Mo_N,0*InYZZbZr5e&E#Fi_e8(4u<0+)V!R-r(GL!16lO!E(6M9eQX+03?CHhGt`Hfti$o7$[F09#r"DEEI1U="(roecV$a!?s+4p8!"I<jAVqg9Y&>(^o\g)7<=V``uZ^AC^IpDX,8a*F.#p1pXs@SY/!E:Yq*]JAsCoG&[5ScmWqAYP)-!U(>r/LH:k:>$G2\4C]&isI#e^)k)J#m#EbVtN-,@2,gQ65BP'MkMRs]eXK:aE2uiac'W\ekTC:Ea63SmHmI,kCMbk]X*t->53cD]oe/Q`@RIG?VZ8;^%,FrKmb[`i-ZdmI,]?-Er]?,AJps%Qj!apDD*<)^*G2]ZI7(?T+S+^RA./I]%Pa+9\3;82\dVY>Z*MJdd;srUsb;.ci"YCHhE'Mh,T/WESQKOGoYS$/N5>sbWE,SQtH.#Sk><Y6t6sS]>oK0Z5A"$"-9%ZJcA$obbA5:0%nrVkRL;fk$aQb[`H[^5=!g68eIhQQ:nF;bc`YWRIa#mCYW2UCUk`-9_/kTD,fK@bd*.V!9,n&Er~>endstream
+Gb!#\gN)%<&q/A5oHTVL=BnG5H1EG*C9-])-.Zs?=Hsd+6Q.QW!tPAlp=Jct_3L`[_RhFIV(,B[AbpTHoU0^?`iil9j.,?%&+m>4%QQ.)m)ecLT,q=fh8@cu.r4MUDWI!m#@ZiUg[Y&oo\lgC?u<"j2f`RFfiGUh4620W'o#RV:1T'm)n;[im=2X_gA&W[YiKoGfC&/%g'YIm7WZ)urFf,?r4ncfa6JX4)Ndl@l!IF8FK0"igFiH"(7D0.GJul5CO15$%mR;M<nR5ZL:d6($g@=liPNX7bC7P,i+Yr;(Ks,gDT6H0]tL`L.($[DXMBm)bmHE@:Lb6-oDJ#V'8)2[6B34@%iiHiZB/68$:.XI,82=d22NGY:al_SJh,U+.qa2lM.:;@p8l>rU.][tOW!>D(4s3@6GK4U-Q[22QP8H]!12teP95a[r<`M2<OL)?D+4q_Cf<9:5Yl=JnbK1>1^ON4EYtssch@_0&E%ALWV4p.?Dk?`W-'O=I"%eV4N`;4;i\:G$C!pVXnt9c)P@P0R?4%h?lcD*#G/Hj!$gj4@sXo2]W4?:p\*FVeQl/cp&1r8dTDV$Z,?:_ZS@5s.r$Q-.2I.Sk:9,fWU?>+ooXdXofb3Wh#klEOsKtPPbhB^#U#>]m"uS72\NWZ<DbUkhTA6YeJ02FU]!A5WRR05>Sa_nEK]qB<3A1+V\1?T2O.&]1F.+NFZ(1Kij]BOY^c>A$E';:jiiJVK#CD[\hK878\</[V[nc_3^prLi("iN5@H,L3,lTM^pg_skXRZI2^q)h&?%f(TU-uMjr&OL7?YZRWRk\G;FVODF>+7?$ms7Aj,[,$B"2$-9eZ:-fmKZRZhYU.RL60soR*B;N__m/Xt`$\2eX0_5[bO.,q>ek=s]gt*b)P$EG<$70HlO]ZoAm6Af)?=lNQM[U3Z6RmXLk4rnRbIRfMV_/9PcDIQXBFF$6/%]E*Del+,Kk5>#3U=T;(_KcsbY,2<6YM+]p-0pDoT915mU*L]T'oGXjgXc=34Omc2s!*Dg+M'g#ji/*o=>r,9`FrjL]6jF+*BT6\B6K_ZGe6m+)&j,Vi[@ECNXS>P,YCEFV89dRb%^(Ft$]"p;9;QDq%Ffr0]+!V"Jq;1RAYueZ12qRgSEB53(e`cS<19cdh\$>1Ylg<>b'@``%+&`!Bp!31F;S-*`eC?8bOn$=gQ9CHDK+U:2[Vml1S2$!kI-kJW2@uJ;5Bff<sGWbBT\4rme@`FDTo<OYJLi&c#-AD)S.R`"'-O%Nb)dP!AmPBP$h[ql5#F4fRQB*U2!:,'s-0#eIahB$,T,&,X4/HDr_/2P?!HG!6Xb"_$N+J;-Ij0_`aD9CK4CP&q9nGl=4BB>_;7NSY-=uf/,A;L;q$TH>>auQ5qtD1AgPQg'7Pt+uQBEe2H]U24[j7RJ8=jISsk!=W<T?\@>'-e3@j/Vf#1$pNCC`YD9;!7Ci1Dc%1gA=EJn!]:E!"Tc$O-,.BTbiY;%_1RKS>a/$p'TU7BQaXt67*F#nnMEQ6fa;eNe>`0pfgOLR`d.a8mmG*WJBD_K19h\'32`]PHAnn>P:oAKD4J[^XR0ta$7$b.&6RGCTR\=u0(deL:O%(&,!hD8d\lNWUTMq[#=Y,EVEP<VI!829YI+bM9\c3%3hMjojqZ_jR5[8Wn%4X]j7JtK@(B'Ea_=4r`WWc;R$_l>54]_@$L\DU$=Vr]a`dDNjIMVLU1$?XeNJ2dSEFF\dR9sC7.N)shAR5G-kLR/9FI<6Cme2Yu/G'Y4:DiX1pC?"QHmbS,B[=&AU,1-ShcYI'o5\D.T6Tc_`lBmpDFW$uVlA^GNb&$\@4"T9L!#g6T2TLO8Qr#R@>*(E08#EoUk[^hq`!"I2`k>&$5DIf_%h9Pejuj9PE+SN;?BWDjumsM-D/.ujcuZfi8AIfmEb].!>6.T6NWbNjNIl0']9]Q][Sm,3p_k$`%n4,T@OY6?M-$P>nBX5S\+lNW)dWXQrjH?2D_TO#raH4G?qu,'^kM]#_AoK0u:(H!9aIQqc)a[2bGrfa-UA*aVSSbJ^=GRV?$0TEGlik=gtTgl#aZ!92b/,c&)=97T;ei<*#>kE$Bd,Hd?Rf:Lc8>DIOHiJ]'EcUFVHmVmbbIZh^aB*o^c-Ue0_mcFd.7<VmP@mb5d=oV'D0X(=f([JM9q4!0$S'XLM@fM15l!?U\FH*'a\e5Y^oU2*`dcYYf]i5+sH&*^gYYsF*rE!iG;Oe>?oqj[+@BstIbO/ZJO=\nPA(TV9]9MLePH9<suL++^B7C2X"0Nslq2h.47%Ef[d$.-s=KE/_'(6(`4e)CArbdf8H#'?f5[qBG/cYc3!d4PHU1CoRc,X$&"c/AY_rZ'o+89j_c&KON;dLtmuTDAiM=AMe6k1#T1")fO`mEnpTm.ArO$sbMIPaaiYmm!WUR:.JOW,okb0&L_`hXrqTFCe7^juf<uX;8=Ji%Z.jR'`Bk]a9+m!o&R_%U&01R]6;@DV8p7N$5P3qo*6L-YXR3CT[o80p<UM?j]Gh51Pm>ocH5gHiF~>endstream
 endobj
 154 0 obj
 <<
-/Filter [ /ASCII85Decode /FlateDecode ] /Length 2142
+/Filter [ /ASCII85Decode /FlateDecode ] /Length 2756
 >>
 stream
-Gb!#\?$"aY&:F5U^n[F2%)56B:Pn,-SOq9eG2>'>JOrspLEmRa<9sP[mXZQNgEK"3P-jqA/5%7-[sP`2TZ:=8HM03H)1-YNT"judkHi?Ik(QRO0&Nu+bG-^\:)lZN)D]?mP/PCJ0;'Daf1-R6@OFqLe76\OFcn`X=I=>.P,&EU;C;eLaCe\\lXr^i)o&lh4*eH_A&#c?G+p+rVBs(bIWAS+j1q)ta5V;L28!>-?lr+\[8^u(\j$"nk(PQ!ht"2%a6`AO>s>$^SR`OPN,\;>LtIJA#iVsqaC.Em+juNB6/k:h^YF<>Y_s_R9G9?UR1k9'G&nkEiI2:8E^@4Ie`Pd7LP0\=&Hem!7T;_G>TjE+4:9C/D3K#f.^n:N'#>rr`G9C74NM$BNuL&mR&46Fk<4psf!=9d*%^_0LjY#)'G+(A$34EDp@:Nc3`3Kirc9Y-4tZ6W?bL'0e?R3S%FS%`)kA+i-^QiqL&2iCG*`L@M-M]&PrMDYT[H.g]'6B`h8P:.<>efX*,le-9>>>5nD1-@R(_X%>J)V6-%YmDQY3d'>$hZdC`6aI3@Qp.<Bn)YE0doL]EQKVo*.o`&f3RmOLWE:?W:!@Kf%5J4p@_m!el+M/^rU6k;*8Ga>cH[/1R5\2^..f8D)1oaQ2B;mr=uXh+\-e4'ikgj+i1%/>5&9qU%HQE`oV*<A1R\a1]R4%IA.QSZ*1_NaEcb+C<'_Q00H#/%q4W>TU&]mbSg=pD+?JWEN<=ZpYq/j'<n<MEPV8\ZE?=2h`gAM0aBd!SY@n`o4raFdBZh']W>UpE?`-;-2ITp9hhs&V\:kDhZAakqH?6T*i$SZ4pJ&1[p@ZV^m$4c>Yt9gb;:'^`S3E)j-m;NP_\P^7GDr1XDkqd,_K!B%5O&J_,ifM1=71`u6e39GL9)nN$@Ij7rPFH@&N>_R.ij?:g<<jqW2%R^F\*9%Vj]DGF#nRMrhI,r]kFbj$$iXLV&N'[fZl,ffJ.3a+JR2oMt!72]EO0S[%sq:Zf>h>\J<o3riG;+PjTSf%dkQL`@$FY/.Zn>A.E6a/hd,ifDi+59(SF"0b`MB6]-_\f2KM)md%`[D.CUgt!X1k@F2OK5(f]kSN6$m0Qp_rQ1So:u+!":/br+eYjWp#fj*NF_B>LAM>b+]qcIePj>*<=s'TZ#1,u#n@>IBe5C$m'L>IZrGCorEc.kgq[MY4q"6p1T8.(#Vnpe&KhqC="R/jFsEE;=HZE4]Vn\G>d&]?0@gI?O"f`6I,r?*Y[mo(KYPnA*`R0<,;ggXd"BL@H>$_J1AsG'<YQ;`PXtph8*_F/mo8%WEZ;`?)#GS2-hecLIo04Jm=EX8(9Q@J>6pqe%^*.a0]fu`jN:oo<XslATQpImTOh8M-riuChD04JadgY,Eh\PC(MeF)m!0c*J5X5(mXscDUL9\!_:UM.Bm2qcP4nI#P@';b$CETtR%<?A(0$@S#27`\Cq(7F<c]qpThR,N3hE%Kcl4&t"97W,GPBBJrhJG\K]*6JJ>^hcRI^a+X_(WBe=m^t]IhIF;8=n=F@&6n.]hTF7*Q7(0gP5,3I(>H,5lIVe:MC:e+QdS>b)ZoM3ZViSS6"^b\8.Q7=qA`Q(T]J5PFF&^MW/V?BSMmC`uF!)V&XYB+PJ!L6j"1FY@t_`s:K>)$G0GL2O3,^>!;kE/-7+(_#Zi8.DsT1W,N1M<>$!72uQdK@i8EF_Ju!S]Q7n-5m'C6_^&SDkX&eI%'KhG?j<]A3S7^*Hn-VrHQs!CG;+mR5]4][Xjc-qr>OCR/3GGii/a4^Gt@HPH!%$gdk[@Mj.`>2XH((7>KJ6;G/)G"]/],Z(>5n;c;L'a]:n*1id>-/-ob;@dM@=A`*ACC-3bo]du[6&7,75Th3+S9!u(ui^mcg]9/a*KAfEZJJ'u/_J9)cW_?q\blfhcGGG1(nm1<:VZr4':YDnf]/+VWY,"iP]U4tP+-4e65">+Hm.9Vl69OQ<0[3q<RaUeuK,L+&MR5Nu;c^?meFYEBO"+UdbNV$]D+.K*CNR1YCU5,@+G/R6A(sds7n+`r<nP"B3.CAb);me(M-Z<t+4HF6q^lbRa1p'OJE\E^B)!dIUMbDK,3>E4LG\n4],on$d:0.dddnLl#R#QW[4pTdCI%X[JfXdt.jotV~>endstream
+Gau`V?$G<s&q/*0kXUF$$@UW+G_-K/c=%hWameA4k-UtFkocrgC<>i3lh=HG_fB38Ee4O:YS2G-eZHElW`nF:)aBAYN&/Jf]4YLNi%W2_pCGL</YCl!b\li%5$_7u05r/.=`t@20"r?eraWq0,%na/>"!8hY[q?LiF:b"5BNt\N'cYp<p7/Hb6l',^:M+dnUm=8P1(trE4`^u<o=-`1kQ\&^MFZ'47GqLA+krG'i.sVfEY^P67TFLD3t3#nl0=XZ[=!T96U?Vm_9sHXg#'Q!H[e#(U3Wu_Lt/N-MnsWK;BFn][.!PGI]r(ZF^LfO$_TZQkfB.<jMkEiMd@Dj#k)eebJ(>LQHn>?j!t/UW>m?'*Ta?r(&j.T<!W$Og?Xci<YIFAj88UbFTgSF_oB]r$Zl*SQd5sCh1hZhg<_"&]j.6#7^dr+TX":cI.EAb]8-XnWqCn:H*OXY0FV-O;uS7WEH_D\hsCs]SM(#LjQ3YOXE9M#F6@=`H-C7oG2Ork$(-b-N:<qMCu#ES"F0-Ar^F<3!@G7gD_`ja-$7PSq[%mB43G\,Y)6(&Mhq;rPjJYe>'VsRYtf#EX<80VW<(O'%o7n/RF4jn=D/=RBo-IJ%D5X/B.@R<TZ:IcE[W6hf`Yb#VPg)/l)0S0^\opm@A/^k,sTB6M"1?.>[%7>=/]\ZW(dt"=`mDq,.quIWLl4h)pdl2Rt)SI&9#l`:b2CLlk?dAOg^0<LV4>D5"BL$%-RsSfoQQW1<q3+<@N+3L2H[T9oqmoM"c*H9'k!iSsP+m[Z)iYBd[a*N+`,q^L,s2T=i0(@tF?<.S.s>gFjDF=4<DPt!0TV?"P4jY`GK%blTq/#SRjDOj1S`R92uJGpDeHmeKFjY%ab9mLFaWW=fXQo(X=#;.,j-?Z1f9E[m36Lq)gN050YDL]?(?(M=*i4g>?i/F>B(U5CaUbqsJ!K<[EY;?tUA.]-#Jb)8p;#"B,aPr^H2!gS4#ZP[h7&%INUf'o;r=.e_Yd%HV,39^_>RQ`l\lA2A6qY:?>b\9^J!k,1Ps-'JpC0!,Gt.;k'f=g(="F,#j+rAOYln`E%TUA9.19(1r[2h;Eh(RnPH*GQ+9g.s$@$g@!ra-i1F^9MYuO5,FPH!ho#Dl2!tt+_HSknI>s]9j;>ZML4`=TQ+$%KY5$#0t3btu$]mX-un2@;n;n3L1QZ":Nd92m-CR%fh2l2JY?dkFuVEC1^+=:XpX#ckW85$@err/_]B,WuMDlD\5&4Zg==A_;%ULo!KA_TeQQMTl(+MF]N?:tsr1WB0Y1n$hsehdm"$9'-ee4>tGlK7/l^j!;L`;O*%HgC/m,SQ6cO,Y$`gR2SO0ec;96((g"E]L;I'6<MR=M.\2Bo1*PNeQM[9'd8hRb]5%C.c7:1;eWL1j9oG413\i&S7hXXAVL89Y(Q3er&TDN*?gUAhK4'R$r&#r_8=(X?.oY?-#\RC4ZNaU%`j[&&[X-7h[0N'K#1e%'N'NQ=gb0<T*KdLqdG%&UAur4-_P$]-fE:HnG>tpMhn9e,5A0=jEr''+EpmL%=Wc]PN<USul_b^j)Buk/M-_1Fhq>Ho=Jq(:7;B=iRl).F_b`Z/N^a5tGKZh:-]Bnn:r:SKJE=.ai:\&Ma3POKM<odf%4k]LdJB)MI0ZdpPG8;_nSA87:!8FW>r9bU"I.2+:`6f6o,cUSr&XAB#8g"8Z")>qlLPHhes:H_dABUfd`0C@^-$LLEO@6!)E8o)S;R9e2[#=ka0\-)pkHO1jY*a7^se^QTdlM$hG<OK_.7'K-,![kMHTrcKTr$)An.XWoop.O_lG7o5=b+Ys:^H"5Xoj^=DX0rPHf?ju+s'XTTi-.<KfUoem5Q8C62)rT#j%IK=pbUEV^q9e)%Z@O1Cn$_Ec7k.2/TkBcX_),etq`cs>4Db;=U'p:#^j].'X\"KIo""._&Y)(>!;/eBARXG5R,"D`GEGUR0U!7=Y="QKWf\]fh&&1dr^\j2(+%/&6`*JenhX2TjNQ/t:q@l_r%-:m*8$`[C]L;`N]dQp?4;F2`HlAo&#JCmT7ut"1FlT=F,K\IBZ%-AgsqAS;*9FlH\V3ce_A"`HgIO?f(Fb:;KU*c7_ZQ[!qIEi2^o/08-Cc7qTS)]a)T00B3-nM@NhCh4!'mi?aL1m&O^LD*&"afjc9P>LZ$4SpEm(5qY?T$"^SC5Y,g,-47Ba'k(]Y.UDY[<=.R0<#p,)+"E#+SZ!M5GkIRk`.(N:@%\tAQ;9l%;)F8SCH2/XapPu.l\FH-L_*Qu*Y'$\TSL;`b\E9&GP>7!']0\h[O<nOMTAV9]3)Ug9?=AdZUBbI$LA'^6;\A:<;9b*/:slL2Nn<q+eN#saO4.*ah5PeZ*nJ?Z`gW2b7:WVX4QGt8GD<q5s%F5).1Q6pQm6aTY(h?LEks>:N]o#H7rsTCf10:CB+u4[U/M[$f,`,J_SJ+;*,?6e_Upa`3tlYfn_`h2Un:`/BX"Dr^^/?MO6VWK6mttqdkB!Nl"XCR[LIs@;$T_00d4d8ViYI6/u^4ci4SrApE+mSo<%*\VZICPYM,>\m>P>sQ#q,kdn--b-E?M)84Rn+jhEbS=CX#sYM08_@,HAs`ohuj%)n?8\<mku]J<KbUd++g<_a7aES<o>V9#lUK5-bB6LPjQOJ(LlR.?H.Q;Ph7-VWB9N$#^g"$B1$d1eV)1$s'F/V,-/rX\B#N:-o5r`29'](+((R!T8_.bOX\H@U36%pN<PTD+.l+K2oPL(W#V!IC1Nm,J&:Xs@B~>endstream
 endobj
 155 0 obj
 <<
@@ -1382,189 +1383,189 @@ xref
 0 181
 0000000000 65535 f 
 0000000061 00000 n 
-0000000145 00000 n 
-0000000252 00000 n 
-0000000459 00000 n 
-0000000666 00000 n 
-0000000835 00000 n 
-0000001004 00000 n 
-0000001173 00000 n 
-0000001342 00000 n 
-0000001510 00000 n 
-0000001678 00000 n 
-0000001847 00000 n 
-0000002016 00000 n 
-0000002185 00000 n 
-0000002353 00000 n 
-0000002638 00000 n 
-0000002807 00000 n 
-0000002977 00000 n 
-0000003146 00000 n 
-0000003316 00000 n 
-0000003486 00000 n 
-0000003656 00000 n 
-0000003762 00000 n 
-0000004024 00000 n 
-0000004193 00000 n 
-0000004363 00000 n 
-0000004597 00000 n 
-0000004767 00000 n 
-0000004936 00000 n 
-0000005105 00000 n 
-0000005274 00000 n 
-0000005442 00000 n 
-0000005611 00000 n 
-0000005781 00000 n 
-0000006050 00000 n 
-0000006220 00000 n 
-0000006390 00000 n 
-0000006559 00000 n 
-0000006800 00000 n 
-0000006969 00000 n 
-0000007138 00000 n 
-0000007372 00000 n 
-0000007541 00000 n 
-0000007710 00000 n 
-0000007880 00000 n 
-0000008050 00000 n 
-0000008298 00000 n 
-0000008467 00000 n 
-0000008636 00000 n 
-0000008805 00000 n 
-0000008974 00000 n 
-0000009143 00000 n 
-0000009398 00000 n 
-0000009567 00000 n 
-0000009736 00000 n 
-0000009970 00000 n 
-0000010140 00000 n 
-0000010310 00000 n 
-0000010479 00000 n 
-0000010649 00000 n 
-0000010818 00000 n 
-0000010987 00000 n 
-0000011249 00000 n 
-0000011457 00000 n 
-0000011626 00000 n 
-0000011794 00000 n 
-0000012028 00000 n 
-0000012198 00000 n 
-0000012368 00000 n 
-0000012537 00000 n 
-0000012706 00000 n 
-0000012876 00000 n 
-0000013045 00000 n 
-0000013307 00000 n 
-0000013476 00000 n 
-0000013645 00000 n 
-0000013814 00000 n 
-0000013984 00000 n 
-0000014154 00000 n 
-0000014409 00000 n 
-0000014579 00000 n 
-0000014748 00000 n 
-0000014917 00000 n 
-0000015086 00000 n 
-0000015255 00000 n 
-0000015425 00000 n 
-0000015594 00000 n 
-0000015763 00000 n 
-0000015933 00000 n 
-0000016216 00000 n 
-0000016385 00000 n 
-0000016612 00000 n 
-0000016781 00000 n 
-0000016951 00000 n 
-0000017120 00000 n 
-0000017290 00000 n 
-0000017460 00000 n 
-0000017715 00000 n 
-0000017923 00000 n 
-0000018092 00000 n 
-0000018262 00000 n 
-0000018433 00000 n 
-0000018603 00000 n 
-0000018773 00000 n 
-0000019033 00000 n 
-0000019242 00000 n 
-0000019412 00000 n 
-0000019583 00000 n 
-0000019752 00000 n 
-0000019922 00000 n 
-0000020092 00000 n 
-0000020261 00000 n 
-0000020431 00000 n 
-0000020600 00000 n 
-0000020770 00000 n 
-0000020940 00000 n 
-0000021241 00000 n 
-0000021411 00000 n 
-0000021581 00000 n 
-0000021751 00000 n 
-0000021922 00000 n 
-0000022175 00000 n 
-0000022344 00000 n 
-0000022573 00000 n 
-0000022742 00000 n 
-0000022913 00000 n 
-0000023150 00000 n 
-0000023320 00000 n 
-0000023490 00000 n 
-0000023661 00000 n 
-0000023906 00000 n 
-0000024077 00000 n 
-0000024247 00000 n 
-0000024484 00000 n 
-0000024693 00000 n 
-0000024902 00000 n 
-0000025697 00000 n 
-0000045586 00000 n 
-0000045847 00000 n 
-0000047183 00000 n 
-0000047996 00000 n 
-0000067502 00000 n 
-0000067774 00000 n 
-0000069121 00000 n 
-0000069891 00000 n 
-0000090419 00000 n 
-0000090690 00000 n 
-0000092039 00000 n 
-0000092111 00000 n 
-0000092439 00000 n 
-0000092719 00000 n 
-0000093766 00000 n 
-0000094955 00000 n 
-0000097757 00000 n 
-0000099992 00000 n 
-0000102102 00000 n 
-0000105115 00000 n 
-0000106792 00000 n 
-0000109295 00000 n 
-0000110575 00000 n 
-0000113082 00000 n 
-0000115332 00000 n 
-0000118016 00000 n 
-0000118722 00000 n 
-0000121071 00000 n 
-0000123321 00000 n 
-0000125516 00000 n 
-0000128003 00000 n 
-0000128781 00000 n 
-0000131550 00000 n 
-0000132273 00000 n 
-0000134990 00000 n 
-0000137874 00000 n 
-0000140182 00000 n 
-0000142019 00000 n 
-0000144852 00000 n 
-0000145596 00000 n 
-0000147469 00000 n 
-0000150252 00000 n 
-0000152446 00000 n 
+0000000144 00000 n 
+0000000251 00000 n 
+0000000458 00000 n 
+0000000665 00000 n 
+0000000770 00000 n 
+0000000939 00000 n 
+0000001164 00000 n 
+0000001333 00000 n 
+0000001502 00000 n 
+0000001672 00000 n 
+0000001841 00000 n 
+0000002009 00000 n 
+0000002178 00000 n 
+0000002347 00000 n 
+0000002516 00000 n 
+0000002684 00000 n 
+0000002853 00000 n 
+0000003023 00000 n 
+0000003192 00000 n 
+0000003362 00000 n 
+0000003532 00000 n 
+0000003702 00000 n 
+0000004028 00000 n 
+0000004197 00000 n 
+0000004367 00000 n 
+0000004601 00000 n 
+0000004771 00000 n 
+0000004940 00000 n 
+0000005109 00000 n 
+0000005278 00000 n 
+0000005446 00000 n 
+0000005615 00000 n 
+0000005785 00000 n 
+0000006054 00000 n 
+0000006224 00000 n 
+0000006394 00000 n 
+0000006563 00000 n 
+0000006804 00000 n 
+0000006973 00000 n 
+0000007142 00000 n 
+0000007376 00000 n 
+0000007545 00000 n 
+0000007714 00000 n 
+0000007884 00000 n 
+0000008054 00000 n 
+0000008302 00000 n 
+0000008471 00000 n 
+0000008640 00000 n 
+0000008809 00000 n 
+0000008978 00000 n 
+0000009147 00000 n 
+0000009402 00000 n 
+0000009571 00000 n 
+0000009740 00000 n 
+0000009974 00000 n 
+0000010144 00000 n 
+0000010314 00000 n 
+0000010483 00000 n 
+0000010653 00000 n 
+0000010822 00000 n 
+0000010991 00000 n 
+0000011253 00000 n 
+0000011461 00000 n 
+0000011630 00000 n 
+0000011798 00000 n 
+0000012032 00000 n 
+0000012202 00000 n 
+0000012372 00000 n 
+0000012541 00000 n 
+0000012710 00000 n 
+0000012880 00000 n 
+0000013049 00000 n 
+0000013311 00000 n 
+0000013480 00000 n 
+0000013649 00000 n 
+0000013818 00000 n 
+0000013988 00000 n 
+0000014158 00000 n 
+0000014413 00000 n 
+0000014583 00000 n 
+0000014752 00000 n 
+0000014921 00000 n 
+0000015090 00000 n 
+0000015259 00000 n 
+0000015429 00000 n 
+0000015598 00000 n 
+0000015767 00000 n 
+0000015937 00000 n 
+0000016220 00000 n 
+0000016389 00000 n 
+0000016616 00000 n 
+0000016785 00000 n 
+0000016955 00000 n 
+0000017124 00000 n 
+0000017294 00000 n 
+0000017464 00000 n 
+0000017719 00000 n 
+0000017927 00000 n 
+0000018096 00000 n 
+0000018266 00000 n 
+0000018437 00000 n 
+0000018607 00000 n 
+0000018777 00000 n 
+0000019037 00000 n 
+0000019246 00000 n 
+0000019416 00000 n 
+0000019587 00000 n 
+0000019756 00000 n 
+0000019926 00000 n 
+0000020096 00000 n 
+0000020265 00000 n 
+0000020435 00000 n 
+0000020604 00000 n 
+0000020774 00000 n 
+0000020944 00000 n 
+0000021245 00000 n 
+0000021415 00000 n 
+0000021585 00000 n 
+0000021755 00000 n 
+0000021926 00000 n 
+0000022179 00000 n 
+0000022348 00000 n 
+0000022577 00000 n 
+0000022746 00000 n 
+0000022917 00000 n 
+0000023154 00000 n 
+0000023324 00000 n 
+0000023494 00000 n 
+0000023665 00000 n 
+0000023910 00000 n 
+0000024081 00000 n 
+0000024251 00000 n 
+0000024488 00000 n 
+0000024697 00000 n 
+0000024906 00000 n 
+0000025701 00000 n 
+0000045590 00000 n 
+0000045851 00000 n 
+0000047187 00000 n 
+0000048000 00000 n 
+0000067506 00000 n 
+0000067778 00000 n 
+0000069125 00000 n 
+0000069895 00000 n 
+0000090423 00000 n 
+0000090694 00000 n 
+0000092043 00000 n 
+0000092115 00000 n 
+0000092443 00000 n 
+0000092722 00000 n 
+0000093769 00000 n 
+0000094958 00000 n 
+0000097576 00000 n 
+0000100425 00000 n 
+0000102535 00000 n 
+0000105548 00000 n 
+0000107225 00000 n 
+0000109728 00000 n 
+0000111008 00000 n 
+0000113515 00000 n 
+0000115765 00000 n 
+0000118449 00000 n 
+0000119155 00000 n 
+0000121504 00000 n 
+0000123754 00000 n 
+0000125949 00000 n 
+0000128436 00000 n 
+0000129214 00000 n 
+0000131983 00000 n 
+0000132706 00000 n 
+0000135423 00000 n 
+0000138307 00000 n 
+0000140615 00000 n 
+0000142452 00000 n 
+0000145285 00000 n 
+0000146029 00000 n 
+0000147902 00000 n 
+0000150685 00000 n 
+0000152879 00000 n 
 trailer
 <<
 /ID 
-[<4f2aeca36237b95b7795994f30cdc183><4f2aeca36237b95b7795994f30cdc183>]
+[<72090376542086a3936b24cfe0563386><72090376542086a3936b24cfe0563386>]
 % ReportLab generated PDF document -- digest (opensource)
 
 /Info 149 0 R
@@ -1572,5 +1573,5 @@ trailer
 /Size 181
 >>
 startxref
-153087
+153520
 %%EOF

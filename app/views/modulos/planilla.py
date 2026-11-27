@@ -11,6 +11,7 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont
 
 from app.controllers.restaurante_controller import RestauranteController
+from app.utils.plataforma import abrir_archivo
 from app.utils.calculo_planilla import (
     cargar_config, cargar_isr_tramos, calcular_costo_completo,
 )
@@ -1592,7 +1593,7 @@ class TabResumen(QWidget):
                     self, "Exportado",
                     f"Archivo guardado:\n{filepath}\n\n¿Abrir ahora?",
                     QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-                os.startfile(filepath)
+                abrir_archivo(filepath)
         except Exception as e:
             QMessageBox.critical(self, "Error al exportar Excel", str(e))
 
@@ -1614,7 +1615,7 @@ class TabResumen(QWidget):
                     self, "Exportado",
                     f"Archivo guardado:\n{filepath}\n\n¿Abrir ahora?",
                     QMessageBox.Yes | QMessageBox.No) == QMessageBox.Yes:
-                os.startfile(filepath)
+                abrir_archivo(filepath)
         except Exception as e:
             QMessageBox.critical(self, "Error al exportar PDF", str(e))
 

@@ -4,16 +4,12 @@ import sys
 from PyQt5.QtCore import QEvent, QObject, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QMessageBox, QPushButton
+from app.utils.plataforma import ruta_recurso  # noqa: F401 (la usan otros módulos)
 
 _ICON_SIZE = QSize(16, 16)
 _ICON_DIR = "assets/icons"
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 def _icon(name):

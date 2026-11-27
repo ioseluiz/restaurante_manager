@@ -20,6 +20,7 @@ from PyQt5.QtGui import QIcon, QPainter, QBrush, QPen, QPainterPath, QPixmap, QC
 from app.styles import COLORS
 from app.controllers.restaurante_controller import RestauranteController
 from app.database.config import agregar_reciente, get_recientes
+from app.utils.plataforma import ruta_recurso
 
 _ABRIR_OTRA = "__abrir_otra__"
 
@@ -39,11 +40,6 @@ def _apply_dwm_colors(hwnd):
         pass
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 class CircularImageLabel(QLabel):

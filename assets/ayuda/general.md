@@ -15,6 +15,15 @@ El **menú lateral** da acceso a los módulos. El botón de la parte superior de
 
 Los módulos están conectados: lo que registra en uno alimenta a otros. Por eso conviene cargar los datos en orden.
 
+## En Mac
+
+El programa funciona igual en macOS. Diferencias:
+
+- Los atajos con **Ctrl** se usan con **Cmd** (por ejemplo **Cmd + F1** para el índice de ayuda). Para **F1** puede hacer falta mantener **fn**.
+- **Acerca de Italos Manager** está en el menú con el nombre de la aplicación (arriba a la izquierda).
+- La base de datos y la configuración quedan en la carpeta oculta `.restaurante_manager` de su usuario. En el Finder, **Cmd + Mayús + .** muestra las carpetas ocultas.
+- La primera vez que se abre, macOS puede bloquearla porque aún no está firmada por Apple: **clic derecho sobre Italos Manager → Abrir**.
+
 ## Varios restaurantes
 
 Cada restaurante (o sucursal) tiene **su propia base de datos** con sus propios usuarios. El nombre del restaurante abierto se ve siempre en el título de la ventana, debajo del logo del menú lateral y en la barra de estado.

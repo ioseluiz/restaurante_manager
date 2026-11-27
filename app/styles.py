@@ -20,7 +20,7 @@ COLORS = {
 GLOBAL_STYLES = f"""
     /* --- GENERAL --- */
     QWidget {{
-        font-family: 'Segoe UI', 'Roboto', sans-serif;
+        font-family: 'Segoe UI', '.AppleSystemUIFont', 'Helvetica Neue', 'Roboto', sans-serif;
         font-size: 14px;
         color: {COLORS["text"]};
     }}

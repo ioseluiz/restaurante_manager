@@ -49,6 +49,7 @@ from app.views.modulos.grafico_precios import GraficoPreciosView
 from app.views.modulos.planilla import PlanillaView
 from app.views.modulos.rentabilidad_view import RentabilidadView
 from app.views.modulos.costo_platos import CostoPlatosView
+from app.utils.plataforma import ruta_recurso
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -102,11 +103,6 @@ _NAV_BTN_COLLAPSED = """
 """
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 class MainWindow(QMainWindow):
@@ -193,6 +189,7 @@ class MainWindow(QMainWindow):
         act_acerca = QAction("Acerca de Italos Manager…", self)
         act_acerca.setStatusTip("Versión de la aplicación y base de datos en uso")
         act_acerca.triggered.connect(self.mostrar_acerca_de)
+        act_acerca.setMenuRole(QAction.AboutRole)  # macOS: va al menú de la aplicación
         menu_ayuda.addAction(act_acerca)
 
     def _llenar_menu_cambiar(self):
