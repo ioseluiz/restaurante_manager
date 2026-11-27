@@ -13,6 +13,9 @@
 3. Usuarios de la base de prueba: `admin/admin123`, `gerente/gerente123`, `empleado/empleado123`.
 4. La base trae: 6 insumos con presentación, sub-receta, 2 platos, la compra #1 **pendiente**, las ventas del
    10/05/2026 **sin procesar**, 2 empleados con una quincena, egresos de mayo y el diario de ventas del 10/05.
+   También trae **junio 2026 completo** (5 870 platos en 30 días, diario de caja, dos quincenas y egresos del mes)
+   para ver costos, rentabilidad y el Panel con volumen realista. Para sumarlo a una base creada antes:
+   `python scripts/crear_bd_prueba.py C:/temp/prueba_e2e.db --agregar-junio`.
 5. Marcar cada paso: ✅ correcto · ❌ distinto (anotar lo que se ve) · ⏭ no aplica.
 
 Al terminar, restablecer la base original con **Configurar BD**.
@@ -72,6 +75,7 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | D9b | Parámetros → Base de gastos indirectos | Opciones «Gastos reales del mes (consolidados)» y «Gastos fijos del presupuesto del mes (planilla real)» | |
 | D9c | Parámetros → % de platos para llevar = 40 → Guardar; Reabrir Día 10/05 y volver a Actualizar Inventario | Envase baja de 50 a 46 (10 P1 × 40 %); la soda no cambia | |
 | D10 | Exportar (Excel / CSV) | El archivo abre y trae los mismos valores de la tabla | |
+| D12 | Costo de Platos → junio 2026 | Indirectos $1.05 por plato = (gastos 4 260 + planilla 1 892.47) ÷ 5 870 platos (ventas diarias). P1 local: total 2.14 · food cost 35.6 % · sugerido 3.05 | |
 | D11 | Análisis de Precios → Arroz | Muestra la evolución del precio (incluye el cambio de B3) | |
 
 ## E. Ventas
@@ -137,8 +141,9 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | J1 | Mayo 2026 | Ventas 201.00 · Costo real 220.00 · Costo teórico 32.10 · Merma 187.90 · Ref. con extras 42.10 (en gris) | |
 | J2 | Gastos | Planilla 900 · Otros 50 · Cheques 1 100 · Yappy 150 · Tarjetas 60 · total 2 260 | |
 | J3 | Utilidad | Bruta −19.00 · Neta −2 279.00 | |
-| J4 | Comparativo anual 2026 | Solo mayo con datos; total igual a mayo | |
+| J4 | Comparativo anual 2026 | Mayo y junio con datos; junio: ventas 33 795 · costo real 10 000 · gastos 6 060 · utilidad neta 17 735 | |
 | J5 | Compras por categoría (referencia) | Carnes 60 · Víveres 38 · Sin categoría 22 | |
+| J6 | Panel de Control → ◀ hasta Mayo 2026 | Ventas del Mes $201.00 · Utilidad −2 279.00 · Top: Arroz con pollo 20, Pollo con arroz 10 · barra de mayo destacada; «Mes actual» vuelve al de hoy y ▶ queda inactivo | |
 
 ## K. Planilla
 
