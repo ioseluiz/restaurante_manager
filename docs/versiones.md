@@ -2,7 +2,7 @@
 
 ## Dónde se ve la versión
 
-- **Título de la ventana:** «Sistema de Gestión de Restaurante — v1.3.1».
+- **Título de la ventana:** «Italos (prueba) · Centro — Italos Manager v1.4.0» (restaurante · sucursal — producto y versión).
 - **Barra de estado** (abajo a la derecha).
 - **Ayuda → Acerca de Italos Manager…**, que además muestra la base de datos en uso.
 
