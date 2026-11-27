@@ -30,7 +30,7 @@ git push origin v1.3.0-beta.1
 ```
 
 3. El CI compila en paralelo los instaladores de **Windows** (`ItalosManager_Setup.exe`, en `windows-latest`) y de
-   **macOS Apple Silicon** (`ItalosManager_mac_arm64.dmg`, en `macos-14`, después de correr las pruebas y la prueba de
+   **macOS Apple Silicon** (`ItalosManager_mac_arm64.dmg`, en `macos-15`, después de correr las pruebas y la prueba de
    humo del `.app`), y crea el release en GitHub con los dos:
    - tag **con sufijo** (`v1.3.0-beta.1`, `v1.3.0-rc.1`) → release marcado como **pre-release**;
    - tag **sin sufijo** (`v1.3.0`) → release **oficial**.
