@@ -16,8 +16,8 @@ El menú lateral da acceso a los siguientes módulos:
 
 ### 🍲 Menú, recetas y costos
 *   **Gestión de Menú:** platos con código (el del POS) y precio, con importación desde CSV.
-*   **Recetas (Fichas):** insumos y cantidades de cada plato.
-*   **Costo de Platos:** costo de producir cada plato (ingredientes, acompañamientos, bebida, empaque e indirectos), recetas por tanda, sub-recetas, precio sugerido por canal e importación del Excel de costeo del cliente.
+*   **Recetas (Fichas):** consulta de la receta de cada plato (por porción o por tanda, sub-recetas y lo que descuenta del inventario por plato); se editan en Costo de Platos.
+*   **Costo de Platos:** costo de producir cada plato (ingredientes, acompañamientos, bebida, empaque e indirectos), recetas por tanda, sub-recetas, precio sugerido por canal e **importación de recetas** desde una plantilla estándar (con convertidor de las fichas del cliente, modos «solo nuevas» / «actualizar», insumos por código o nombre y reporte de insumos faltantes importable) o desde el Excel de costeo del cliente. Los insumos tienen **código** propio y **gramos por ml** para convertir recetas medidas en volumen.
 *   **Análisis de Precios:** evolución de los precios de compra de los insumos.
 
 ### 📈 Ventas, presupuestos y finanzas

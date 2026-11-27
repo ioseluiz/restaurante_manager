@@ -69,12 +69,13 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | # | Paso | Resultado esperado | ✓ |
 |---|---|---|---|
 | D1 | Gestión de Menú | P1 $6.00 y P2 $5.50 (y los componentes si se muestran) | |
-| D2 | Recetas (Fichas) → P1 | Pollo 200, Arroz 150 (la salsa está como sub-receta en Costo de Platos) | |
+| D2 | Recetas (Fichas) → doble clic en P1 | Solo consulta: Pollo 200, Arroz 150 y la sub-receta Salsa 50 g; abajo, lo que descuenta por plato (incluye tomate y aceite de la salsa). P2 aparece «Por tanda» con cantidad por porción. Como admin/gerente se ve «Editar en Costo de Platos…»; como empleado no. «Mostrar sub-recetas y tandas» agrega la Salsa | |
 | D3 | Costo de Platos → Costo por plato, canal local | P1 1.09 · P2 1.56 | |
 | D4 | Canal para llevar | P1 1.29 (con envase) · P2 1.56 | |
 | D5 | Doble clic en P1 → desglose | Pollo 0.80 · Arroz 0.18 · Salsa 0.11; sin advertencias | |
 | D6 | Precio sugerido P1 | Local 1.56 (30 %) · Para llevar 2.58 (50 %) | |
 | D7 | Food cost P1 local | 18.2 %, margen $4.91 | |
+| D7b | Costo por plato: desmarcar **Incluir bebida** (canal Local) y **Incluir empaque** (canal Llevar) | P2 local pasa de 1.56 a 1.06 y P1 llevar de 1.29 a 1.09; la bebida/empaque se ven en gris («No incluido en el costo»); el desglose dice «no incluido»; al reabrir el módulo las casillas siguen desmarcadas. Volver a marcarlas | |
 | D8 | Parámetros → fuente «Promedio» → Actualizar | P1 ingredientes 1.08 (arroz a 0.00116). Volver a «Vigente» | |
 | D9 | Indirectos de mayo 2026 (tras procesar las ventas, paso E3) | $66.87 por plato (2 006.23 / 30) | |
 | D9b | Parámetros → Base de gastos indirectos | Opciones «Gastos reales del mes (consolidados)» y «Gastos fijos del presupuesto del mes (planilla real)» | |
@@ -82,6 +83,11 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | D10 | Exportar (Excel / CSV) | El archivo abre y trae los mismos valores de la tabla | |
 | D12 | Costo de Platos → junio 2026 | Indirectos $1.05 por plato = (gastos 4 260 + planilla 1 892.47) ÷ 5 870 platos (ventas diarias). P1 local: total 2.14 · food cost 35.6 % · sugerido 3.05 | |
 | D11 | Análisis de Precios → Arroz | Muestra la evolución del precio (incluye el cambio de B3) | |
+| D13 | Catálogo de Insumos → editar Arroz: Código «#g001», Gramos por ml 0.85 → Guardar | Columna Código muestra «G001». Poner «G001» a otro insumo → aviso «Código repetido» | |
+| D14 | Costo de Platos → Recetas de costeo → **Importar recetas… → Descargar plantilla vacía…** | Excel con hojas Instrucciones, Recetas, Ingredientes, Platos, Unidades, Insumos (el catálogo con G001) | |
+| D15 | **Convertir fichas del cliente…** con «BAÑO MARIA 1 recetas de ITALOS ATRIO.xlsx» | Plantilla prellenada con hoja Revisión: 23 recetas (15 estándar, 8 a revisar), rendimientos vacíos en amarillo, porciones eco (#78 190 g) | |
+| D16 | En la plantilla, poner rendimiento 4000 g a «Arroz de combinacion» → **Simular** | Las demás quedan PENDIENTES; Arroz de combinación BLOQUEADA con sus insumos faltantes; «Guardar reporte…» trae la hoja Insumos faltantes | |
+| D17 | Plantilla propia con una receta de Arroz (G001, 1000 g, rendimiento 2000 g, plato 90 de 200 g) → **Importar** (Solo nuevas) | Respaldo creado; plato 90 creado con precio 0, costo por porción = 100 g de arroz. Repetir en «Solo nuevas» → omitida; en «Actualizar» → actualizada | |
 
 ## E. Ventas
 

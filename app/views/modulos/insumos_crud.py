@@ -26,6 +26,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 from app.views.widgets import SearchableComboBox
+from app.utils.codigo_insumo import normalizar_codigo_insumo
 from PyQt5.QtWidgets import QSizePolicy
 import datetime
 import matplotlib
@@ -132,10 +133,10 @@ class TabInsumos(QWidget):
         # --- FILTROS DE BÚSQUEDA ---
         filter_layout = QHBoxLayout()
         config_filtros = [
-            (0, "Filtrar ID"),
-            (1, "Filtrar Nombre"),
-            (3, "Filtrar Categoría"),
-            (4, "Filtrar Presentación"),
+            (1, "Filtrar Código"),
+            (2, "Filtrar Nombre"),
+            (4, "Filtrar Categoría"),
+            (5, "Filtrar Presentación"),
         ]
 
         for col_idx, placeholder in config_filtros:
@@ -150,10 +151,11 @@ class TabInsumos(QWidget):
 
         # Tabla
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
+        self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
             [
                 "ID",
+                "Código",
                 "Nombre",
                 "Unidad Base",
                 "Categoría",
@@ -186,7 +188,7 @@ class TabInsumos(QWidget):
 
         # Se agrega validación para saber si tiene presentación de compra definida
         query = """
-            SELECT i.id, i.nombre, u.nombre, c.nombre,
+            SELECT i.id, i.codigo, i.nombre, u.nombre, c.nombre,
                    CASE WHEN (SELECT COUNT(p.id) FROM presentaciones_compra p WHERE p.insumo_id = i.id) > 0 
                         THEN 'Definida' ELSE 'Sin definir' END as estado_presentacion
             FROM insumos i
@@ -200,23 +202,18 @@ class TabInsumos(QWidget):
             self.table.insertRow(r_idx)
 
             self.table.setItem(r_idx, 0, NumericItem(str(row[0])))
-            self.table.setItem(
-                r_idx, 1, QTableWidgetItem(str(row[1]) if row[1] else "-")
-            )
-            self.table.setItem(
-                r_idx, 2, QTableWidgetItem(str(row[2]) if row[2] else "-")
-            )
-            self.table.setItem(
-                r_idx, 3, QTableWidgetItem(str(row[3]) if row[3] else "-")
-            )
+            for col in (1, 2, 3, 4):
+                self.table.setItem(
+                    r_idx, col, QTableWidgetItem(str(row[col]) if row[col] else "-")
+                )
 
             # Estado Presentación
-            self.table.setItem(r_idx, 4, QTableWidgetItem(str(row[4])))
+            self.table.setItem(r_idx, 5, QTableWidgetItem(str(row[5])))
 
         # Ajuste inicial de columnas
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().resizeSection(
-            1, 200
+            2, 200
         )  # Dar buen espacio al nombre inicial
 
         self.table.setSortingEnabled(True)
@@ -287,8 +284,21 @@ class InsumoDialog(QDialog):
         layout = QFormLayout()
 
         self.txt_nombre = QLineEdit()
+        self.txt_codigo = QLineEdit()
+        self.txt_codigo.setPlaceholderText("Opcional. Ej.: V002, IC005 (el de las fichas de recetas)")
+        self.txt_codigo.setToolTip("Código propio del insumo. Las importaciones de recetas lo buscan primero "
+                                   "por código y luego por nombre. Se guarda en mayúsculas y sin «#».")
         self.cmb_unidad = QComboBox()
         self.cmb_categoria = QComboBox()
+        self.sp_g_ml = QDoubleSpinBox()
+        self.sp_g_ml.setDecimals(3)
+        self.sp_g_ml.setRange(0, 10)
+        self.sp_g_ml.setSingleStep(0.05)
+        self.sp_g_ml.setSpecialValueText("Sin definir")
+        self.sp_g_ml.setToolTip(
+            "Cuántos gramos pesa 1 ml de este insumo tal como se mide en cocina (con taza o cucharón).\n"
+            "Ej.: agua 1.0, aceite 0.92, cebolla picada ≈ 0.5. Permite importar recetas medidas en ml\n"
+            "para un insumo que se lleva en gramos (o al revés).")
 
         # Cargar Combos BD
         unidades = self.db.fetch_all(
@@ -303,8 +313,10 @@ class InsumoDialog(QDialog):
             self.cmb_categoria.addItem(c[1], c[0])
 
         layout.addRow("Nombre Insumo:", self.txt_nombre)
+        layout.addRow("Código:", self.txt_codigo)
         layout.addRow("Unidad de Inventario:", self.cmb_unidad)
         layout.addRow("Categoría:", self.cmb_categoria)
+        layout.addRow("Gramos por ml:", self.sp_g_ml)
 
         self.btn_codigos = QPushButton("Códigos de barras / QR…")
         self.btn_codigos.clicked.connect(self._abrir_codigos)
@@ -335,11 +347,13 @@ class InsumoDialog(QDialog):
         dlg.exec_()
 
     def cargar_datos_edicion(self):
-        query = "SELECT nombre, unidad_base_id, categoria_id FROM insumos WHERE id=?"
+        query = "SELECT nombre, unidad_base_id, categoria_id, codigo, gramos_por_ml FROM insumos WHERE id=?"
         rows = self.db.fetch_all(query, (self.insumo_id,))
         if rows:
             row = rows[0]
             self.txt_nombre.setText(row[0])
+            self.txt_codigo.setText(row[3] or "")
+            self.sp_g_ml.setValue(row[4] or 0)
 
             idx_u = self.cmb_unidad.findData(row[1])
             if idx_u >= 0:
@@ -353,26 +367,34 @@ class InsumoDialog(QDialog):
         nom = self.txt_nombre.text().strip()
         uid = self.cmb_unidad.currentData()
         cid = self.cmb_categoria.currentData()
+        codigo = normalizar_codigo_insumo(self.txt_codigo.text()) or None
+        g_ml = self.sp_g_ml.value() or None
 
         if not nom or not uid:
             return QMessageBox.warning(
                 self, "Error", "Nombre y Unidad son obligatorios"
             )
+        if codigo:
+            otro = self.db.fetch_one("SELECT nombre FROM insumos WHERE codigo = ? AND id IS NOT ?",
+                                     (codigo, self.insumo_id))
+            if otro:
+                return QMessageBox.warning(
+                    self, "Código repetido", f"El código {codigo} ya lo tiene el insumo «{otro[0]}».")
 
         try:
             if self.insumo_id:
                 query = """
-                    UPDATE insumos 
-                    SET nombre=?, unidad_base_id=?, categoria_id=?
+                    UPDATE insumos
+                    SET nombre=?, unidad_base_id=?, categoria_id=?, codigo=?, gramos_por_ml=?
                     WHERE id=?
                 """
-                self.db.execute_query(query, (nom, uid, cid, self.insumo_id))
+                self.db.execute_query(query, (nom, uid, cid, codigo, g_ml, self.insumo_id))
             else:
                 query = """
-                    INSERT INTO insumos (nombre, unidad_base_id, categoria_id)
-                    VALUES (?,?,?)
+                    INSERT INTO insumos (nombre, unidad_base_id, categoria_id, codigo, gramos_por_ml)
+                    VALUES (?,?,?,?,?)
                 """
-                self.db.execute_query(query, (nom, uid, cid))
+                self.db.execute_query(query, (nom, uid, cid, codigo, g_ml))
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

@@ -125,3 +125,35 @@ def test_indirectos_base_presupuesto_usa_gastos_presupuestados_y_planilla_real(d
     pool = CosteoController(db).pool_indirectos(E.MES, E.ANIO)
     assert pool["total_gastos"] == approx(1000)
     assert pool["planilla"] == approx(PLANILLA_MAYO)
+
+
+def test_bebida_y_empaque_opcionales(db, esc):
+    """El cliente elige si la bebida y el empaque entran en el costo; se informan igual como referencia."""
+    c = CosteoController(db)
+    # P2 lleva soda 0.50 (bebida): sin ella el costo es solo la porción de la tanda
+    sin_bebida = c.costo_plato(esc.p2, "LOCAL", incluir_bebida=False)
+    assert sin_bebida["total"] == approx(1.06) and sin_bebida["bebida"] == approx(0.50)
+    assert not sin_bebida["incluye_bebida"] and sin_bebida["precio_sugerido"] == approx(1.06 / 0.70)
+    assert [ln["incluido"] for ln in sin_bebida["lineas"] if ln["tipo"] == "BEBIDA"] == [False]
+    # P1 para llevar: sin empaque baja exactamente el envase (0.20)
+    sin_empaque = c.costo_plato(esc.p1, "LLEVAR", incluir_empaque=False)
+    assert sin_empaque["total"] == approx(1.09) and sin_empaque["empaque"] == approx(0.20)
+    assert sin_empaque["precio_sugerido"] == approx(1.09 / 0.50)
+    # Por defecto, todo incluido (como antes)
+    assert c.costo_plato(esc.p2, "LOCAL")["incluye_bebida"] is True
+
+
+def test_las_opciones_no_cambian_rentabilidad_ni_inventario(db, esc, sin_dialogos):
+    from app.controllers.kardex_controller import KardexController
+    from app.controllers.rentabilidad_controller import RentabilidadController
+
+    E.dia_ventas(db, E.FECHA_VENTA, [(esc.p1, 10), (esc.p2, 20)])
+    antes = RentabilidadController(db).pyl_mensual(E.ANIO, E.MES)["costo_teorico_con_extras"]
+    for clave in ("incluir_bebida", "incluir_empaque"):
+        db.execute_query("UPDATE costeo_config SET valor='0' WHERE clave=?", (clave,))
+    assert RentabilidadController(db).pyl_mensual(E.ANIO, E.MES)["costo_teorico_con_extras"] == approx(antes)
+    db.execute_query("UPDATE costeo_config SET valor='50' WHERE clave='pct_platos_llevar'")
+    reg = db.fetch_one("SELECT id FROM registro_ventas_diarias")[0]
+    KardexController(db).procesar_ventas_diarias(reg)
+    # 10 P1 × 50 % para llevar = 5 envases descontados aunque el empaque no entre en el costo
+    assert db.fetch_one("SELECT stock_actual FROM insumos WHERE id=?", (esc.envase,))[0] == approx(-5)

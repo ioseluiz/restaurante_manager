@@ -134,12 +134,14 @@ Si la unidad de la línea de receta difiere de la unidad base, se convierte (tab
 ### 3.2 Costo de una porción
 
 `ingredientes = costo de la receta (tanda o porción) × factor por porción`
-`total = ingredientes + acompañamientos + bebida + empaque (según canal) + indirecto por plato`
+`total = ingredientes + acompañamientos + bebida* + empaque* (según canal) + indirecto por plato*`
+
+\* Opcionales: casillas «Incluir bebida», «Incluir empaque» e «Incluir indirectos» de Costo por plato (`costeo_config.incluir_bebida` / `incluir_empaque`, por defecto incluidos). Excluidos, se informan pero no suman; no afectan el descuento de empaques del Kardex, los presupuestos ni el costo teórico de Rentabilidad.
 
 *Ejemplo:*
 - Salsa: `(1 200 × 0.0015 + 100 × 0.004) / 1 000 = 0.0022 $/g`
 - P1 ingredientes: `200 × 0.004 + 150 × 0.0012 + 50 × 0.0022 = 0.80 + 0.18 + 0.11 = 1.09`. Local 1.09 · Para llevar `1.09 + 0.20 = 1.29`.
-- P2: `(1 500 × 0.0012 + 2 000 × 0.004 + 200 × 0.004) × 0.1 = 10.60 × 0.1 = 1.06`, más la soda 0.50 = **1.56**.
+- P2: `(1 500 × 0.0012 + 2 000 × 0.004 + 200 × 0.004) × 0.1 = 10.60 × 0.1 = 1.06`, más la soda 0.50 = **1.56** (sin bebida: 1.06). P1 para llevar sin empaque: 1.09.
 - Con `PROMEDIO` (arroz a 0.00116): P1 ingredientes = 1.084.
 
 ### 3.3 Precio sugerido y margen
