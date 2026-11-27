@@ -49,7 +49,7 @@ class _BarChart(FigureCanvas):
         self.fig.tight_layout(pad=1.0)
         self.draw()
 
-    def refresh(self, labels, values):
+    def refresh(self, labels, values, destacar=None):
         self.ax.clear()
         if not values or all(v == 0 for v in values):
             self._empty()
@@ -59,7 +59,9 @@ class _BarChart(FigureCanvas):
         self.fig.set_facecolor("white")
 
         x = list(range(len(labels)))
-        bars = self.ax.bar(x, values, color=_RED, width=0.55, zorder=2,
+        # El mes elegido en el panel va en rojo; los demás, atenuados
+        colores = [_RED if destacar is None or i == destacar else "#e3a5ad" for i in x]
+        bars = self.ax.bar(x, values, color=colores, width=0.55, zorder=2,
                            edgecolor="white", linewidth=0.5)
 
         max_val = max(values) if values else 1
@@ -136,6 +138,8 @@ class DashboardView(QWidget):
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
+        hoy = datetime.date.today()
+        self._mes = (hoy.year, hoy.month)  # mes que muestran las tarjetas, el top y el gráfico
         self._build_ui()
 
     # ------------------------------------------------------------------
@@ -251,7 +255,7 @@ class DashboardView(QWidget):
 
         self.tbl_stock   = self._build_table("Alerta de Stock — 5 más bajos",
                                              ["Insumo", "Stock"])
-        self.tbl_platos  = self._build_table("Top 5 Platos Más Vendidos",
+        self.tbl_platos  = self._build_table("Top 5 Platos del Mes",
                                              ["Plato", "Cantidad"])
         tables_col.addWidget(self.tbl_stock["frame"])
         tables_col.addWidget(self.tbl_platos["frame"])
@@ -292,7 +296,30 @@ class DashboardView(QWidget):
         hl.addWidget(lbl_fecha)
         hl.addStretch()
 
-        lbl_badge = QLabel(f"{mes_nombre.upper()}  {hoy.year}")
+        from PyQt5.QtWidgets import QPushButton
+        _nav = (
+            f"QPushButton {{ border: 1px solid #ddd; border-radius: 5px; padding: 3px 10px;"
+            f"  font-size: 12px; background: white; color: {_DARK}; }}"
+            f"QPushButton:hover:enabled {{ background: #fff0f1; }}"
+            f"QPushButton:disabled {{ color: #ccc; }}"
+        )
+        self.btn_mes_ant = QPushButton("◀")
+        self.btn_mes_sig = QPushButton("▶")
+        self.btn_mes_actual = QPushButton("Mes actual")
+        self.btn_mes_ant.setToolTip("Mes anterior")
+        self.btn_mes_sig.setToolTip("Mes siguiente")
+        for btn in (self.btn_mes_ant, self.btn_mes_sig, self.btn_mes_actual):
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(28)
+            btn.setProperty("skip-auto-icon", True)
+            btn.setStyleSheet(_nav)
+        self.btn_mes_ant.clicked.connect(lambda: self._mover_mes(-1))
+        self.btn_mes_sig.clicked.connect(lambda: self._mover_mes(1))
+        self.btn_mes_actual.clicked.connect(self._ir_mes_actual)
+
+        lbl_badge = QLabel()
+        lbl_badge.setAlignment(Qt.AlignCenter)
+        lbl_badge.setMinimumWidth(150)
         lbl_badge.setStyleSheet(f"""
             background-color: {_RED};
             color: white;
@@ -301,7 +328,11 @@ class DashboardView(QWidget):
             border-radius: 6px;
             padding: 4px 14px;
         """)
+        self.lbl_badge = lbl_badge
+        hl.addWidget(self.btn_mes_actual)
+        hl.addWidget(self.btn_mes_ant)
         hl.addWidget(lbl_badge)
+        hl.addWidget(self.btn_mes_sig)
         return frame
 
     def _make_section_frame(self):
@@ -343,9 +374,9 @@ class DashboardView(QWidget):
     # Data loading
     # ------------------------------------------------------------------
     def cargar_datos(self):
+        """Inventario, día anterior y stock son del momento actual; el resto, del mes elegido."""
         hoy = datetime.date.today()
         ayer_str = (hoy - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        mes_str  = hoy.strftime("%Y-%m")
 
         cur = self.db.cursor
 
@@ -355,20 +386,6 @@ class DashboardView(QWidget):
         )
         valor_inv = cur.fetchone()[0] or 0.0
         self.card_inventario.lbl_value.setText(f"$ {valor_inv:,.2f}")
-
-        # --- Utilidad del mes en curso (Estado de Resultados) ---
-        try:
-            from app.controllers.rentabilidad_controller import RentabilidadController
-            pyl = RentabilidadController(self.db).pyl_mensual(hoy.year, hoy.month)
-            utilidad = pyl["utilidad_neta"]
-            self.card_utilidad.lbl_value.setText(f"$ {utilidad:,.2f}")
-            color = _GREEN if utilidad >= 0 else _RED
-            self.card_utilidad.lbl_value.setStyleSheet(
-                f"color: {color}; font-size: 22px; font-weight: bold;"
-            )
-            self.card_utilidad.lbl_sub.setText(f"margen {pyl['margen_neto']:.1f}% sobre ventas")
-        except Exception:
-            self.card_utilidad.lbl_value.setText("—")
 
         # --- Ventas día anterior ---
         cur.execute(
@@ -380,18 +397,6 @@ class DashboardView(QWidget):
         self.card_ayer.lbl_sub.setText(
             f"Ayer — {_DIAS_ES[(hoy - datetime.timedelta(days=1)).weekday()]} {ayer_str}"
         )
-
-        # --- Ventas del mes en curso ---
-        cur.execute(
-            "SELECT COALESCE(SUM(total_ventas), 0.0) FROM diario_ventas "
-            "WHERE strftime('%Y-%m', fecha) = ?",
-            (mes_str,),
-        )
-        ventas_mes = cur.fetchone()[0] or 0.0
-        self.card_mes.lbl_value.setText(f"$ {ventas_mes:,.2f}")
-
-        # --- Gráfico ---
-        self._load_chart()
 
         # --- Stock más bajo ---
         cur.execute(
@@ -408,16 +413,82 @@ class DashboardView(QWidget):
                 it.setForeground(QColor(_RED))
             tbl_s.setItem(r, 1, it)
 
-        # --- Top platos vendidos ---
+        self._cargar_mes()
+
+    # ------------------------------------------------------------------
+    # Mes elegido
+    # ------------------------------------------------------------------
+    def _mover_mes(self, delta):
+        anio, mes = self._mes
+        mes += delta
+        if mes < 1:
+            anio, mes = anio - 1, 12
+        elif mes > 12:
+            anio, mes = anio + 1, 1
+        hoy = datetime.date.today()
+        if (anio, mes) > (hoy.year, hoy.month):
+            return
+        self._mes = (anio, mes)
+        self._cargar_mes()
+
+    def _ir_mes_actual(self):
+        hoy = datetime.date.today()
+        self._mes = (hoy.year, hoy.month)
+        self._cargar_mes()
+
+    def _cargar_mes(self):
+        anio, mes = self._mes
+        hoy = datetime.date.today()
+        es_actual = (anio, mes) == (hoy.year, hoy.month)
+        mes_str = f"{anio:04d}-{mes:02d}"
+        nombre_mes = f"{_MESES_ES[mes - 1]} {anio}"
+
+        self.lbl_badge.setText(nombre_mes.upper())
+        self.btn_mes_sig.setEnabled(not es_actual)
+        self.btn_mes_actual.setEnabled(not es_actual)
+
+        cur = self.db.cursor
+
+        # --- Utilidad del mes (Estado de Resultados) ---
+        try:
+            from app.controllers.rentabilidad_controller import RentabilidadController
+            pyl = RentabilidadController(self.db).pyl_mensual(anio, mes)
+            utilidad = pyl["utilidad_neta"]
+            self.card_utilidad.lbl_value.setText(f"$ {utilidad:,.2f}")
+            color = _GREEN if utilidad >= 0 else _RED
+            self.card_utilidad.lbl_value.setStyleSheet(
+                f"color: {color}; font-size: 22px; font-weight: bold;"
+            )
+            self.card_utilidad.lbl_sub.setText(f"margen {pyl['margen_neto']:.1f}% sobre ventas")
+        except Exception:
+            self.card_utilidad.lbl_value.setText("—")
+
+        # --- Ventas del mes ---
+        cur.execute(
+            "SELECT COALESCE(SUM(total_ventas), 0.0) FROM diario_ventas "
+            "WHERE strftime('%Y-%m', fecha) = ?",
+            (mes_str,),
+        )
+        ventas_mes = cur.fetchone()[0] or 0.0
+        self.card_mes.lbl_value.setText(f"$ {ventas_mes:,.2f}")
+        self.card_mes.lbl_sub.setText("mes en curso" if es_actual else nombre_mes)
+
+        # --- Gráfico ---
+        self._load_chart()
+
+        # --- Top platos vendidos en el mes ---
         cur.execute(
             """
             SELECT m.nombre, SUM(d.cantidad) AS total_vendido
             FROM detalle_ventas_diarias d
+            JOIN registro_ventas_diarias r ON d.registro_diario_id = r.id
             JOIN menu_items m ON d.menu_item_id = m.id
+            WHERE strftime('%Y-%m', r.fecha) = ?
             GROUP BY m.id
             ORDER BY total_vendido DESC
             LIMIT 5
-            """
+            """,
+            (mes_str,),
         )
         tbl_p = self.tbl_platos["table"]
         tbl_p.setRowCount(0)
@@ -507,23 +578,25 @@ class DashboardView(QWidget):
 
         # Build a continuous month range: earliest data → current month
         today = datetime.date.today()
-        earliest = min(data.keys())
+        earliest = min(min(data.keys()), f"{self._mes[0]:04d}-{self._mes[1]:02d}")
         ey, em = map(int, earliest.split("-"))
         cy, cm = today.year, today.month
 
-        labels, values = [], []
+        labels, values, keys = [], [], []
         y, m = ey, em
         while (y, m) <= (cy, cm):
             key = f"{y:04d}-{m:02d}"
+            keys.append((y, m))
             labels.append(f"{_MESES_ABR[m - 1]}\n'{y % 100:02d}")
             values.append(data.get(key, 0.0))
             m += 1
             if m > 12:
                 m, y = 1, y + 1
 
-        # Keep the last 18 months when the range is very long
-        if len(labels) > 18:
-            labels = labels[-18:]
-            values = values[-18:]
+        # Show 18 months at most: the last ones, or up to the chosen month if it is older
+        idx = keys.index(self._mes)
+        fin = len(labels) if idx >= len(labels) - 18 else idx + 1
+        ini = max(0, fin - 18)
+        labels, values = labels[ini:fin], values[ini:fin]
 
-        self.bar_chart.refresh(labels, values)
+        self.bar_chart.refresh(labels, values, destacar=idx - ini)

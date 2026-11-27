@@ -25,7 +25,7 @@ El menú lateral da acceso a los siguientes módulos:
 *   **Presupuestos:** proyección de compras mensuales a partir de los reportes de ventas y las recetas, bloques de **planilla** y **gastos fijos**, y control de ejecución (presupuestado vs. real).
 *   **Consolidados:** Diario de Ventas (cierre diario), Chequera, Tarjetas de Crédito, Pagos en Efectivo (con desglose por categoría), Pagos con Yappy y Resumen General mensual.
 *   **Rentabilidad:** estado de resultados mensual y anual (ventas, costo de ventas real y teórico, gastos y utilidad).
-*   **Panel de Control:** resumen del negocio (valor del inventario, ventas y utilidad del mes).
+*   **Panel de Control:** resumen del negocio (valor del inventario, ventas y utilidad del mes), con navegación a meses anteriores.
 
 ### 👥 Personal
 *   **Planilla:** empleados, períodos de pago con horas y recargos, vales, resumen con reglas de Panamá (seguro social, seguro educativo, riesgo profesional, ISR) y provisiones laborales. Su costo completo es el que usan los presupuestos y el costo de platos.
