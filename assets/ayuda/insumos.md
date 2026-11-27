@@ -15,6 +15,8 @@ Cargue primero las **[Unidades de Medida](ayuda:unidades)**.
 
 1. Pestaña 1 → **Nuevo Insumo**.
 2. Escriba el **nombre**, elija la **unidad de inventario** (unidad base) y la **categoría**. Use la unidad más pequeña con la que se mide en las recetas (por ejemplo, gramos para la carne).
+   - **Código** (opcional): el código propio del insumo, por ejemplo el de las fichas de recetas (V002, IC005…). Se guarda en mayúsculas y sin «#», y no se puede repetir. La importación de recetas busca primero por código.
+   - **Gramos por ml** (opcional): cuánto pesa 1 ml del insumo tal como se mide en cocina con taza o cucharón (agua 1, aceite 0.92, cebolla picada ≈ 0.5). Permite importar recetas que miden en ml un insumo que se lleva en gramos.
 3. Guarde. **Editar Seleccionado** y **Eliminar** actúan sobre la fila elegida. Si el insumo ya se usó (por ejemplo en compras), el sistema puede negarse a eliminarlo.
 
 ## Definir cómo se compra (presentación)

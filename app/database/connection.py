@@ -738,6 +738,19 @@ class DatabaseManager:
         except sqlite3.OperationalError:
             pass
 
+        # Código propio del insumo (#V002, #IC005… en las fichas del cliente; se guarda sin «#», en
+        # mayúsculas) y gramos que pesa 1 ml tal como se mide en cocina (cebolla picada ≈ 0.5): permite
+        # convertir recetas medidas con taza/cucharón a la unidad del insumo.
+        for ddl in ("ALTER TABLE insumos ADD COLUMN codigo TEXT",
+                    "ALTER TABLE insumos ADD COLUMN gramos_por_ml REAL"):
+            try:
+                self.cursor.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
+        self.cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_insumos_codigo ON insumos(codigo) "
+            "WHERE codigo IS NOT NULL AND codigo <> ''")
+
         try:
             self.cursor.execute(
                 "ALTER TABLE detalle_presupuestos ADD COLUMN unidad_nombre TEXT"
@@ -1231,6 +1244,11 @@ class DatabaseManager:
             """CREATE TABLE IF NOT EXISTS costeo_config (
                 clave TEXT PRIMARY KEY,
                 valor TEXT NOT NULL)""",
+            # Identidad del restaurante de esta base (nombre, logo, RUC...): viaja con el archivo .db
+            """CREATE TABLE IF NOT EXISTS restaurante_config (
+                clave TEXT PRIMARY KEY,
+                valor TEXT,
+                blob  BLOB)""",
         ]:
             try:
                 self.cursor.execute(ddl)
@@ -1245,6 +1263,8 @@ class DatabaseManager:
             ("base_indirectos", "REAL"),          # REAL | PRESUPUESTO
             ("fuente_costo_insumo", "VIGENTE"),   # VIGENTE | PROMEDIO
             ("pct_platos_llevar", "0"),            # % de platos para llevar: descuenta/presupuesta empaques
+            ("incluir_bebida", "1"),               # la bebida del plato entra en su costo (opcional)
+            ("incluir_empaque", "1"),              # el empaque (canal Llevar) entra en el costo (opcional)
         ]:
             try:
                 self.cursor.execute(

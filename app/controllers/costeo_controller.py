@@ -258,12 +258,19 @@ class CosteoController:
             out["advertencias"].extend(f"{nombre}: {a}" for a in c["advertencias"])
         return out
 
-    def costo_plato(self, menu_item_id, canal="LOCAL", indirecto=0.0):
-        """Desglose completo del costo de producir UN plato en el canal indicado."""
+    def costo_plato(self, menu_item_id, canal="LOCAL", indirecto=0.0, incluir_bebida=True, incluir_empaque=True):
+        """Desglose completo del costo de producir UN plato en el canal indicado.
+
+        La bebida y el empaque son opcionales (el cliente elige si entran en el costo): si se excluyen, se
+        informan igual en «bebida» / «empaque» como referencia, pero no suman al total ni al precio sugerido.
+        Solo afecta el costeo: el Kardex y los presupuestos siguen descontando/comprando empaques."""
         it = self._item(menu_item_id)
         ing = self.costo_ingredientes(menu_item_id)
         ext = self.costo_extras(menu_item_id, canal)
-        total = ing["total"] + sum(ext[t] for t in TIPOS_EXTRA) + float(indirecto or 0)
+        incluidos = {"ACOMPANAMIENTO": True, "BEBIDA": bool(incluir_bebida), "EMPAQUE": bool(incluir_empaque)}
+        for ln in ext["lineas"]:
+            ln["incluido"] = incluidos[ln["tipo"]]
+        total = ing["total"] + sum(ext[t] for t in TIPOS_EXTRA if incluidos[t]) + float(indirecto or 0)
         precio = it[3] if it else 0.0
         m, fc, mp = margen(precio, total)
         pct_key = "pct_ganancia_pedidosya" if canal == "LLEVAR" else "pct_ganancia_local"
@@ -272,6 +279,7 @@ class CosteoController:
             "categoria": it[4] if it else None, "canal": canal,
             "ingredientes": ing["total"], "acompanamientos": ext["ACOMPANAMIENTO"],
             "bebida": ext["BEBIDA"], "empaque": ext["EMPAQUE"], "indirecto": float(indirecto or 0),
+            "incluye_bebida": incluidos["BEBIDA"], "incluye_empaque": incluidos["EMPAQUE"],
             "total": total, "precio_venta": precio, "margen": m, "food_cost_pct": fc, "margen_pct": mp,
             "precio_sugerido": precio_sugerido(total, self.config_float(pct_key)),
             "lineas": ing["lineas"] + ext["lineas"],

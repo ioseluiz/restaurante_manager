@@ -12,9 +12,13 @@ from PyQt5.QtWidgets import (
     QFormLayout,
     QHeaderView,
     QMessageBox,
-    QCheckBox
+    QCheckBox,
+    QGroupBox,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+
+from app.controllers.restaurante_controller import RestauranteController
+from app.views.restaurante_dialog import RestauranteDialog, pixmap_logo
 
 class SucursalDialog(QDialog):
     def __init__(self, db_manager, sucursal_id=None, parent=None):
@@ -105,14 +109,41 @@ class SucursalDialog(QDialog):
 
 
 class SucursalesCRUD(QWidget):
+    # Se emite al cambiar el nombre, el logo o la sucursal de esta instalación (la ventana se actualiza)
+    identidad_cambiada = pyqtSignal()
+
     def __init__(self, db_manager):
         super().__init__()
         self.db = db_manager
+        self._rol = ""
         self.init_ui()
+
+    def set_rol(self, rol):
+        """Solo el administrador edita los datos del restaurante; el gerente los ve."""
+        self._rol = rol
+        self.btn_restaurante.setVisible(rol == "admin")
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
+
+        # --- Este restaurante (identidad guardada en la base de datos) ---
+        grupo = QGroupBox("Este restaurante")
+        fila = QHBoxLayout(grupo)
+        self.lbl_logo = QLabel()
+        self.lbl_logo.setFixedSize(176, 54)
+        self.lbl_logo.setAlignment(Qt.AlignCenter)
+        fila.addWidget(self.lbl_logo)
+        self.lbl_identidad = QLabel()
+        self.lbl_identidad.setWordWrap(True)
+        self.lbl_identidad.setTextFormat(Qt.RichText)
+        fila.addWidget(self.lbl_identidad, 1)
+        self.btn_restaurante = QPushButton("Datos del restaurante…")
+        self.btn_restaurante.setCursor(Qt.PointingHandCursor)
+        self.btn_restaurante.setVisible(False)
+        self.btn_restaurante.clicked.connect(self.editar_restaurante)
+        fila.addWidget(self.btn_restaurante, 0, Qt.AlignTop)
+        layout.addWidget(grupo)
 
         header_layout = QHBoxLayout()
         title = QLabel("<h2>Gestión de Sucursales</h2>")
@@ -150,7 +181,26 @@ class SucursalesCRUD(QWidget):
 
         self.setLayout(layout)
 
+    def cargar_identidad(self):
+        ident = RestauranteController(self.db).identidad()
+        self.lbl_logo.setPixmap(pixmap_logo(ident["logo"], 168, 46))
+        lineas = [f"<b style='font-size:15px'>{ident['nombre']}</b>"]
+        lineas.append(f"Sucursal de esta instalación: <b>{ident['sucursal']}</b>" if ident["sucursal"]
+                      else "<span style='color:#b8801f'>Sin sucursal de esta instalación marcada</span>")
+        for etiqueta, clave in (("RUC", "ruc"), ("Dirección", "direccion"), ("Teléfono", "telefono")):
+            if ident[clave]:
+                lineas.append(f"{etiqueta}: {ident[clave]}")
+        if not ident["configurado"]:
+            lineas.append("<span style='color:#b8801f'>Nombre sin configurar: se muestra «Italos».</span>")
+        self.lbl_identidad.setText("<br>".join(lineas))
+
+    def editar_restaurante(self):
+        if RestauranteDialog(self.db, self).exec_():
+            self.cargar_datos()
+            self.identidad_cambiada.emit()
+
     def cargar_datos(self):
+        self.cargar_identidad()
         self.db.cursor.execute("SELECT id, nombre, direccion, telefono, es_principal FROM sucursales ORDER BY nombre")
         rows = self.db.cursor.fetchall()
         self.table.setRowCount(0)
@@ -169,6 +219,7 @@ class SucursalesCRUD(QWidget):
         dlg = SucursalDialog(self.db, parent=self)
         if dlg.exec_():
             self.cargar_datos()
+            self.identidad_cambiada.emit()
 
     def abrir_editar(self):
         row = self.table.currentRow()
@@ -180,6 +231,7 @@ class SucursalesCRUD(QWidget):
         dlg = SucursalDialog(self.db, sucursal_id, parent=self)
         if dlg.exec_():
             self.cargar_datos()
+            self.identidad_cambiada.emit()
 
     def eliminar(self):
         row = self.table.currentRow()
@@ -205,3 +257,4 @@ class SucursalesCRUD(QWidget):
             self.db.cursor.execute("DELETE FROM sucursales WHERE id=?", (sucursal_id,))
             self.db.conn.commit()
             self.cargar_datos()
+            self.identidad_cambiada.emit()

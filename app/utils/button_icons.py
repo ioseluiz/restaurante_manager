@@ -4,16 +4,12 @@ import sys
 from PyQt5.QtCore import QEvent, QObject, QSize
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QDialog, QMessageBox, QPushButton
+from app.utils.plataforma import ruta_recurso  # noqa: F401 (la usan otros módulos)
 
 _ICON_SIZE = QSize(16, 16)
 _ICON_DIR = "assets/icons"
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 def _icon(name):
@@ -138,4 +134,47 @@ class ButtonIconFilter(QObject):
         ):
             obj.setProperty("auto-icons-applied", True)
             auto_icon_buttons(obj)
+            ajustar_a_pantalla(obj)
         return super().eventFilter(obj, event)
+
+
+def ajustar_a_pantalla(ventana):
+    """Achica la ventana si es más grande que el área libre de su pantalla y la mete dentro de ella."""
+    from PyQt5.QtWidgets import QApplication
+
+    pantalla = ventana.screen() if hasattr(ventana, "screen") else None
+    pantalla = pantalla or QApplication.primaryScreen()
+    if pantalla is None:
+        return
+    libre = pantalla.availableGeometry()
+    marco = ventana.frameGeometry().size() - ventana.size()  # barra de título y bordes
+    max_w, max_h = libre.width() - marco.width(), libre.height() - marco.height()
+    if ventana.width() > max_w or ventana.height() > max_h:
+        ventana.resize(min(ventana.width(), max_w), min(ventana.height(), max_h))
+    geo = ventana.frameGeometry()
+    x = min(max(geo.x(), libre.x()), libre.right() - geo.width() + 1)
+    y = min(max(geo.y(), libre.y()), libre.bottom() - geo.height() + 1)
+    if (x, y) != (geo.x(), geo.y()):
+        ventana.move(max(x, libre.x()), max(y, libre.y()))
+
+
+def icono_flecha(direccion, color, tam=28):
+    """Chevron nítido (‹ si direccion < 0, › si no); gris claro cuando el botón está deshabilitado.
+
+    Se usa en lugar de los caracteres ◀ ▶, que con Segoe UI salen diminutos y torcidos."""
+    from PyQt5.QtCore import QPointF, Qt
+    from PyQt5.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+
+    icono = QIcon()
+    for modo, tono in ((QIcon.Normal, color), (QIcon.Disabled, "#cccccc")):
+        px = QPixmap(tam, tam)
+        px.fill(Qt.transparent)
+        p = QPainter(px)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor(tono), tam * 0.13, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        a, z = tam * 0.36, tam * 0.64
+        x1, x2 = (z, a) if direccion < 0 else (a, z)
+        p.drawPolyline(QPointF(x1, tam * 0.2), QPointF(x2, tam * 0.5), QPointF(x1, tam * 0.8))
+        p.end()
+        icono.addPixmap(px, modo)
+    return icono

@@ -28,7 +28,7 @@ def _align(h="center", v="center", wrap=True):
     return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
 
 
-def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
+def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas, restaurante=None):
     """
     Generate a physical inventory count Excel file and return the file path.
 
@@ -56,7 +56,8 @@ def generar_excel_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas)
     # ── Row 1: Restaurant name ────────────────────────────────────────────────
     ws.merge_cells(f"A{r}:E{r}")
     c = ws[f"A{r}"]
-    c.value = "Restaurante Italos"
+    # restaurante: líneas de RestauranteController.encabezado_reporte() (nombre · sucursal, RUC...)
+    c.value = " — ".join(restaurante) if restaurante else "Restaurante Italos"
     c.font  = _font(color=_RED, bold=True, size=15)
     c.alignment = _align()
     ws.row_dimensions[r].height = 26

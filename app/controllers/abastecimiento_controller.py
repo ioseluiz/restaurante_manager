@@ -14,6 +14,7 @@ Anular un traslado repone el stock con un movimiento REVERSO_TRASLADO (no se bor
 """
 
 from app.controllers.kardex_controller import KardexController
+from app.controllers.restaurante_controller import RestauranteController
 
 TIPO_SALIDA = "TRASLADO_SALIDA"
 TIPO_ENTRADA = "TRASLADO_ENTRADA"
@@ -29,8 +30,7 @@ class AbastecimientoController:
     # ---------------------------------------------------------------- sucursal local
     def sucursal_local(self):
         """(id, nombre) de la sucursal de esta instalación, o None si no está configurada."""
-        row = self.db.fetch_one("SELECT id, nombre FROM sucursales WHERE es_principal = 1 ORDER BY id LIMIT 1")
-        return (row[0], row[1]) if row else None
+        return RestauranteController(self.db).sucursal_local()
 
     def efecto(self, origen_id, destino_id):
         """'SALIDA' / 'ENTRADA' sobre esta instalación, o None si el traslado no la involucra."""

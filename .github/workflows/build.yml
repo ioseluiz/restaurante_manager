@@ -10,9 +10,26 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: windows-latest
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      VERSION: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - name: Determinar version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" =~ ^refs/tags/(.+)$ ]]; then
+            version="${BASH_REMATCH[1]}"
+          else
+            version="dev-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_OUTPUT"
+          echo "Version determinada: $version"
 
+  build-windows:
+    needs: version
+    runs-on: windows-latest
     steps:
       - name: Checkout repositorio
         uses: actions/checkout@v4
@@ -25,21 +42,8 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements-build.txt
 
-      - name: Determinar version
-        id: version
-        shell: pwsh
-        run: |
-          if ($env:GITHUB_REF -match '^refs/tags/(.+)$') {
-            $version = $Matches[1]
-          } else {
-            $sha = $env:GITHUB_SHA.Substring(0, 7)
-            $version = "dev-$env:GITHUB_RUN_NUMBER-$sha"
-          }
-          "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          Write-Host "Version determinada: $version"
-
       - name: Estampar la version dentro de la aplicacion
-        run: python scripts/estampar_version.py "${{ steps.version.outputs.VERSION }}"
+        run: python scripts/estampar_version.py "${{ needs.version.outputs.VERSION }}"
 
       - name: Compilar ejecutable con PyInstaller
         run: pyinstaller main.spec
@@ -51,23 +55,77 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH += ";C:\Program Files (x86)\Inno Setup 6"
-          iscc installer.iss "/DMyAppVersion=${{ steps.version.outputs.VERSION }}"
+          iscc installer.iss "/DMyAppVersion=${{ needs.version.outputs.VERSION }}"
 
       - name: Subir artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: RestauranteManager-${{ steps.version.outputs.VERSION }}
+          name: windows
           path: installer_output/ItalosManager_Setup.exe
           retention-days: 30
+
+  build-macos:
+    needs: version
+    runs-on: macos-15   # Apple Silicon (arm64)
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-build.txt pytest
+
+      - name: Estampar la version dentro de la aplicacion
+        run: python scripts/estampar_version.py "${{ needs.version.outputs.VERSION }}"
+
+      - name: Pruebas en macOS
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest tests -q
+
+      - name: Compilar Italos Manager.app con PyInstaller
+        run: pyinstaller --noconfirm main.spec
+
+      - name: Prueba de humo del ejecutable empaquetado
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: '"dist/Italos Manager.app/Contents/MacOS/RestauranteManager" --smoke'
+
+      - name: Crear instalador DMG
+        run: scripts/crear_dmg.sh
+
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: installer_output/ItalosManager_mac_arm64.dmg
+          retention-days: 30
+
+  publicar:
+    needs: [version, build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar instaladores
+        uses: actions/download-artifact@v4
+        with:
+          path: instaladores
+          merge-multiple: true
 
       - name: Publicar Release (en tag; pre-release si la version lleva sufijo)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer_output/ItalosManager_Setup.exe
+          files: |
+            instaladores/ItalosManager_Setup.exe
+            instaladores/ItalosManager_mac_arm64.dmg
           generate_release_notes: true
           # v1.3.0-beta.1, v1.3.0-rc.1... -> pre-release; v1.3.0 -> release oficial
-          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+          prerelease: ${{ contains(needs.version.outputs.VERSION, '-') }}
 
       - name: Actualizar pre-release latest-dev (en push a main)
         if: github.ref == 'refs/heads/main'
@@ -76,10 +134,15 @@ jobs:
           tag_name: latest-dev
           name: "Ultima version de desarrollo"
           prerelease: true
-          files: installer_output/ItalosManager_Setup.exe
+          files: |
+            instaladores/ItalosManager_Setup.exe
+            instaladores/ItalosManager_mac_arm64.dmg
           generate_release_notes: false
           body: |
             Build automatico desde la rama `main`.
 
-            **Version:** `${{ steps.version.outputs.VERSION }}`
+            **Version:** `${{ needs.version.outputs.VERSION }}`
             **Commit:** ${{ github.sha }}
+
+            - Windows: `ItalosManager_Setup.exe`
+            - macOS (Apple Silicon): `ItalosManager_mac_arm64.dmg` (sin firmar: la primera vez, clic derecho -> Abrir)

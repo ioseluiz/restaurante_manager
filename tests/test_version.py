@@ -60,6 +60,12 @@ def test_estampar_funciona_sobre_el_version_py_real(tmp_path):
 def test_el_workflow_publica_prerelease_para_tags_con_sufijo():
     with open(os.path.join(RAIZ, ".github", "workflows", "build.yml"), encoding="utf-8") as f:
         yml = f.read()
-    assert "prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}" in yml
-    # la versión debe determinarse y estamparse ANTES de compilar con PyInstaller
-    assert yml.index("Determinar version") < yml.index("Estampar la version") < yml.index("pyinstaller main.spec")
+    assert "prerelease: ${{ contains(needs.version.outputs.VERSION, '-') }}" in yml
+    # la versión se determina una vez y cada plataforma la estampa ANTES de compilar con PyInstaller
+    assert yml.index("Determinar version") < yml.index("build-windows:")
+    for job in ("build-windows:", "build-macos:"):
+        bloque = yml[yml.index(job):]
+        assert bloque.index("Estampar la version") < bloque.index("pyinstaller")
+    # el release y latest-dev llevan los instaladores de las dos plataformas
+    assert yml.count("instaladores/ItalosManager_Setup.exe") == 2
+    assert yml.count("instaladores/ItalosManager_mac_arm64.dmg") == 2

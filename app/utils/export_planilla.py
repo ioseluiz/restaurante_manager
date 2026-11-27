@@ -3,6 +3,12 @@ import os
 from datetime import date
 
 # ── Excel ─────────────────────────────────────────────────────────────────────
+def _titulo(meta):
+    """«REPORTE DE PLANILLA — Restaurante · Sucursal» (el restaurante viene de la base abierta)."""
+    rest = meta.get("restaurante")
+    return f"REPORTE DE PLANILLA — {rest}" if rest else "REPORTE DE PLANILLA"
+
+
 def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
     """
     meta       : dict  {periodo_nombre, fecha_inicio, fecha_fin, sucursal, generado}
@@ -46,7 +52,7 @@ def export_excel(meta, recargos_cfg, ded_cfg, rows, filepath):
 
     # --- Header block (rows 1-4) ---
     ws.merge_cells("A1:X1")
-    ws["A1"] = "REPORTE DE PLANILLA"
+    ws["A1"] = _titulo(meta)
     ws["A1"].font = Font(bold=True, size=16, color=RED_HEX)
     ws["A1"].alignment = Alignment(horizontal="center")
 
@@ -280,7 +286,7 @@ def export_pdf(meta, recargos_cfg, ded_cfg, rows, filepath):
     story = []
 
     # Header
-    story.append(Paragraph("REPORTE DE PLANILLA", title_style))
+    story.append(Paragraph(_titulo(meta), title_style))
     story.append(Paragraph(f"Período: {meta.get('periodo_nombre','')}", sub_style))
     story.append(Paragraph(
         f"Fechas: {meta.get('fecha_inicio','')} — {meta.get('fecha_fin','')}  &nbsp;&nbsp;|&nbsp;&nbsp; "

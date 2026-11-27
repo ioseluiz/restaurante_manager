@@ -2,7 +2,7 @@
 
 ## Dónde se ve la versión
 
-- **Título de la ventana:** «Sistema de Gestión de Restaurante — v1.3.1».
+- **Título de la ventana:** «Italos (prueba) · Centro — Italos Manager v1.4.0» (restaurante · sucursal — producto y versión).
 - **Barra de estado** (abajo a la derecha).
 - **Ayuda → Acerca de Italos Manager…**, que además muestra la base de datos en uso.
 
@@ -29,10 +29,18 @@ git tag v1.3.0-beta.1
 git push origin v1.3.0-beta.1
 ```
 
-3. El CI compila el ejecutable y el instalador (`ItalosManager_Setup.exe`) y crea el release en GitHub:
+3. El CI compila en paralelo los instaladores de **Windows** (`ItalosManager_Setup.exe`, en `windows-latest`) y de
+   **macOS Apple Silicon** (`ItalosManager_mac_arm64.dmg`, en `macos-15`, después de correr las pruebas y la prueba de
+   humo del `.app`), y crea el release en GitHub con los dos:
    - tag **con sufijo** (`v1.3.0-beta.1`, `v1.3.0-rc.1`) → release marcado como **pre-release**;
    - tag **sin sufijo** (`v1.3.0`) → release **oficial**.
-4. Un push a `main` además actualiza el pre-release `latest-dev` con el último build de desarrollo.
+4. Un push a `main` además actualiza el pre-release `latest-dev` con los dos instaladores del último build de desarrollo.
+5. Para compilar una rama sin publicar nada: **Actions → Build & Release → Run workflow** eligiendo la rama
+   (o `gh workflow run build.yml --ref <rama>`). Los instaladores quedan como artefactos de la corrida (30 días).
+
+El DMG de macOS **no está firmado** por Apple (no hay cuenta de Apple Developer): la primera apertura se hace con clic
+derecho → Abrir (ver README). Para firmarlo y notarizarlo más adelante hacen falta un certificado *Developer ID* y una
+contraseña de app como secrets del repositorio.
 
 ## Numeración sugerida
 

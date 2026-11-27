@@ -15,14 +15,18 @@ from PyQt5.QtWidgets import (
     QButtonGroup,
     QApplication,
     QAction,
+    QScrollArea,
 )
 from PyQt5.QtGui import QIcon, QPixmap, QKeySequence
 from PyQt5.QtCore import Qt, QSize, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
-from app.utils.button_icons import auto_icon_buttons
+from app.utils.button_icons import auto_icon_buttons, icono_flecha
 from app.utils import ayuda
 from app.version import etiqueta_version
 from app.views.ayuda_dialog import AyudaDialog
 from app.controllers.auth_controller import puede_ver
+from app.controllers.restaurante_controller import RestauranteController
+from app.database.config import agregar_reciente, get_recientes
+from app.views.restaurante_dialog import RestauranteDialog, pixmap_logo
 
 # --- IMPORTACIÓN DE VISTAS ---
 from app.views.modulos.insumos_crud import InsumosCRUD
@@ -45,6 +49,7 @@ from app.views.modulos.grafico_precios import GraficoPreciosView
 from app.views.modulos.planilla import PlanillaView
 from app.views.modulos.rentabilidad_view import RentabilidadView
 from app.views.modulos.costo_platos import CostoPlatosView
+from app.utils.plataforma import ruta_recurso
 
 SIDEBAR_W_EXPANDED = 220
 SIDEBAR_W_COLLAPSED = 56
@@ -98,11 +103,6 @@ _NAV_BTN_COLLAPSED = """
 """
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 class MainWindow(QMainWindow):
@@ -117,25 +117,60 @@ class MainWindow(QMainWindow):
         self.sidebar_collapsed = False
         self._nav_buttons = []  # list of {"btn": QPushButton, "text": str}
 
-        self.setWindowTitle(f"Sistema de Gestión de Restaurante — {etiqueta_version()}")
         self.setWindowIcon(QIcon(ruta_recurso("assets/icons/app.ico")))
 
         self.init_ui()
         self.setup_menubar()
         self.setup_statusbar()
+        self.aplicar_identidad()
         self._fit_to_screen()
 
+    # ------------------------------------------------------------------
+    # Identidad del restaurante (de la base de datos abierta)
+    # ------------------------------------------------------------------
+    def aplicar_identidad(self):
+        """Muestra en título, menú lateral y barra de estado qué restaurante es el que se está viendo."""
+        ctrl = RestauranteController(self.db)
+        ident = ctrl.identidad()
+        self.etiqueta_restaurante = ctrl.etiqueta(ident)
+        self.setWindowTitle(f"{self.etiqueta_restaurante} — Italos Manager {etiqueta_version()}")
+        self.lbl_sidebar_header.setPixmap(pixmap_logo(ident["logo"], 168, 46))
+        sucursal = f"<br><span style='font-size:11px'>{ident['sucursal']}</span>" if ident["sucursal"] else ""
+        self.lbl_restaurante.setText(f"<b>{ident['nombre']}</b>{sucursal}")
+        self.lbl_restaurante.setToolTip(self.etiqueta_restaurante)
+        self.sidebar_frame.setToolTip(self.etiqueta_restaurante if self.sidebar_collapsed else "")
+        self.actualizar_info_bd()
+        try:
+            agregar_reciente(self.db.db_path, self.etiqueta_restaurante)
+        except OSError:
+            pass  # la lista de recientes es una comodidad: no debe impedir trabajar
+
     def _fit_to_screen(self):
+        """Tamaño inicial según la pantalla: centrada en monitores amplios, maximizada en los chicos.
+
+        La ventana nunca exige más que la pantalla: el menú lateral y cada módulo tienen scroll propio
+        (antes el menú obligaba a ~1130 px de alto y se cortaba en laptops y monitores 16:9 con escala)."""
         screen = QApplication.primaryScreen().availableGeometry()
-        w = min(1200, int(screen.width() * 0.92))
-        h = min(800, int(screen.height() * 0.92))
+        w = min(1400, int(screen.width() * 0.94))
+        h = min(900, int(screen.height() * 0.94))
         self.resize(w, h)
         self.move(
             screen.x() + (screen.width() - w) // 2,
             screen.y() + (screen.height() - h) // 2,
         )
+        if screen.width() < 1400 or screen.height() < 860:
+            self.setWindowState(self.windowState() | Qt.WindowMaximized)
 
     def setup_menubar(self):
+        menu_rest = self.menuBar().addMenu("&Restaurante")
+        self.menu_cambiar = menu_rest.addMenu("Cambiar de restaurante")
+        self.menu_cambiar.aboutToShow.connect(self._llenar_menu_cambiar)
+        if self.auth.rol == "admin":
+            act_datos = QAction("Datos del restaurante…", self)
+            act_datos.setStatusTip("Nombre, sucursal de esta instalación, logo y datos para los reportes")
+            act_datos.triggered.connect(self.editar_restaurante)
+            menu_rest.addAction(act_datos)
+
         menu_ayuda = self.menuBar().addMenu("&Ayuda")
 
         act_modulo = QAction("Ayuda de este módulo", self)
@@ -154,7 +189,56 @@ class MainWindow(QMainWindow):
         act_acerca = QAction("Acerca de Italos Manager…", self)
         act_acerca.setStatusTip("Versión de la aplicación y base de datos en uso")
         act_acerca.triggered.connect(self.mostrar_acerca_de)
+        act_acerca.setMenuRole(QAction.AboutRole)  # macOS: va al menú de la aplicación
         menu_ayuda.addAction(act_acerca)
+
+    def _llenar_menu_cambiar(self):
+        self.menu_cambiar.clear()
+        actual = os.path.normcase(os.path.abspath(self.db.db_path))
+        for r in get_recientes():
+            act = self.menu_cambiar.addAction(r["nombre"])
+            act.setStatusTip(r["ruta"])
+            if os.path.normcase(r["ruta"]) == actual:
+                act.setCheckable(True)
+                act.setChecked(True)
+                act.setEnabled(False)
+            else:
+                act.triggered.connect(lambda _=False, ruta=r["ruta"]: self.cambiar_de_restaurante(ruta))
+        self.menu_cambiar.addSeparator()
+        otra = self.menu_cambiar.addAction("Abrir otra base de datos…")
+        otra.triggered.connect(lambda: self.cambiar_de_restaurante(None))
+
+    def cambiar_de_restaurante(self, ruta=None):
+        """Abre la base de otro restaurante. Cierra la sesión: los usuarios son de cada base."""
+        if ruta is None:
+            ruta, _ = QFileDialog.getOpenFileName(self, "Abrir base de datos de otro restaurante", "",
+                                                  "SQLite Files (*.db)")
+            if not ruta:
+                return
+        resp = QMessageBox.question(
+            self, "Cambiar de restaurante",
+            "Se cerrará la sesión y deberá ingresar con un usuario del otro restaurante.\n\n¿Continuar?",
+            QMessageBox.Yes | QMessageBox.No)
+        if resp != QMessageBox.Yes:
+            return
+        self._abrir_otra_bd(ruta)
+
+    def _abrir_otra_bd(self, ruta):
+        try:
+            self.db.switch_database(ruta)
+        except ValueError as e:
+            QMessageBox.warning(self, "No se cambió la base de datos",
+                                f"{e}\n\nSe sigue usando la base de datos anterior.")
+            return False
+        self.logout()  # vuelve al inicio de sesión de la base nueva
+        return True
+
+    def editar_restaurante(self):
+        if RestauranteDialog(self.db, self).exec_():
+            self.aplicar_identidad()
+            suc = self.modules.get("sucursales")
+            if suc:
+                suc["instance"].cargar_datos()
 
     def mostrar_acerca_de(self):
         ruta_bd = getattr(self.db, "db_path", "—")
@@ -163,6 +247,7 @@ class MainWindow(QMainWindow):
             "Acerca de Italos Manager",
             "<h3>Italos Manager</h3>"
             "Sistema de gestión de restaurante.<br><br>"
+            f"<b>Restaurante:</b> {getattr(self, 'etiqueta_restaurante', '—')}<br>"
             f"<b>Versión:</b> {etiqueta_version()}<br>"
             f"<b>Base de datos en uso:</b> {ruta_bd}<br><br>"
             "Indique esta versión cuando reporte un problema.",
@@ -216,8 +301,10 @@ class MainWindow(QMainWindow):
             username = "Desconocido"
 
         ruta_bd = getattr(self.db, "db_path", "Ruta Desconocida")
+        restaurante = getattr(self, "etiqueta_restaurante", "")
         self.statusBar().showMessage(
-            f"Usuario: {username}  |  Base de Datos Activa: {ruta_bd}"
+            (f"Restaurante: {restaurante}  |  " if restaurante else "")
+            + f"Usuario: {username}  |  Base de Datos Activa: {ruta_bd}"
         )
         if hasattr(self, "lbl_db_info"):
             self.lbl_db_info.setText(f"BD:\n{ruta_bd}")
@@ -236,8 +323,9 @@ class MainWindow(QMainWindow):
         # --- SIDEBAR ---
         self.sidebar_frame = QFrame()
         self.sidebar_frame.setFixedWidth(SIDEBAR_W_EXPANDED)
+        self.sidebar_frame.setObjectName("sidebar")
         self.sidebar_frame.setStyleSheet(
-            "background-color: #ffffff; border-right: 2px solid #f0e0e2;"
+            "QFrame#sidebar { background-color: #ffffff; border-right: 2px solid #f0e0e2; }"
         )
         sidebar_layout = QVBoxLayout(self.sidebar_frame)
         sidebar_layout.setContentsMargins(8, 12, 8, 12)
@@ -247,15 +335,13 @@ class MainWindow(QMainWindow):
         header_row = QHBoxLayout()
         header_row.setContentsMargins(0, 0, 0, 0)
 
-        self.lbl_sidebar_header = QLabel()
-        _logo_px = QPixmap(ruta_recurso("assets/imgs/italos_horizontal_transparente.png"))
-        if not _logo_px.isNull():
-            _logo_px = _logo_px.scaled(168, 46, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.lbl_sidebar_header.setPixmap(_logo_px)
+        self.lbl_sidebar_header = QLabel()  # logo del restaurante (aplicar_identidad)
         self.lbl_sidebar_header.setAlignment(Qt.AlignCenter)
         header_row.addWidget(self.lbl_sidebar_header)
 
-        self.btn_toggle_sidebar = QPushButton("◀")
+        self.btn_toggle_sidebar = QPushButton()
+        self.btn_toggle_sidebar.setIcon(icono_flecha(-1, "#a20f22"))
+        self.btn_toggle_sidebar.setIconSize(QSize(14, 14))
         self.btn_toggle_sidebar.setProperty("skip-auto-icon", True)
         self.btn_toggle_sidebar.setToolTip("Ocultar / Mostrar panel")
         self.btn_toggle_sidebar.setFixedSize(28, 28)
@@ -274,7 +360,38 @@ class MainWindow(QMainWindow):
         self.btn_toggle_sidebar.clicked.connect(self.toggle_sidebar)
         header_row.addWidget(self.btn_toggle_sidebar)
         sidebar_layout.addLayout(header_row)
-        sidebar_layout.addSpacing(10)
+
+        # Qué restaurante y sucursal se está viendo (de la base de datos abierta)
+        self.lbl_restaurante = QLabel()
+        self.lbl_restaurante.setAlignment(Qt.AlignCenter)
+        self.lbl_restaurante.setWordWrap(True)
+        self.lbl_restaurante.setTextFormat(Qt.RichText)
+        self.lbl_restaurante.setStyleSheet(
+            "color: #a20f22; font-size: 13px; background: #fff0f1; border: 1px solid #f0d0d4;"
+            "border-radius: 6px; padding: 4px 6px; margin-top: 4px;")
+        sidebar_layout.addWidget(self.lbl_restaurante)
+        sidebar_layout.addSpacing(6)
+
+        # Los botones del menú van en un área con scroll: en pantallas bajas el menú se desplaza en lugar
+        # de obligar a la ventana a ser más alta que la pantalla. Logo y «Cerrar Sesión» quedan fijos.
+        sidebar_fijo = sidebar_layout
+        nav_widget = QWidget()
+        nav_widget.setObjectName("sidebarNav")
+        nav_widget.setStyleSheet("QWidget#sidebarNav { background: transparent; }")
+        sidebar_layout = QVBoxLayout(nav_widget)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(2)
+        self.nav_scroll = QScrollArea()
+        self.nav_scroll.setWidgetResizable(True)
+        self.nav_scroll.setFrameShape(QFrame.NoFrame)
+        self.nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.nav_scroll.setStyleSheet(
+            "QScrollArea { background: transparent; }"
+            "QScrollBar:vertical { width: 6px; background: transparent; margin: 0; }"
+            "QScrollBar::handle:vertical { background: #e0c0c3; border-radius: 3px; min-height: 30px; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }"
+        )
+        self.nav_scroll.setWidget(nav_widget)
 
         # Nav buttons
         self.btn_inicio = self.create_nav_button(
@@ -402,6 +519,10 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.lbl_db_info)
         self.actualizar_info_bd()
 
+        sidebar_layout = sidebar_fijo
+        sidebar_layout.addWidget(self.nav_scroll, 1)
+        sidebar_layout.addSpacing(6)
+
         self.btn_logout = QPushButton("  Cerrar Sesión")
         self.btn_logout.setProperty("skip-auto-icon", True)
         self.btn_logout.setIcon(QIcon(ruta_recurso("assets/icons/nav_logout_white.svg")))
@@ -457,10 +578,12 @@ class MainWindow(QMainWindow):
         self._sidebar_anim_group.start()
 
         # Update toggle arrow immediately
-        self.btn_toggle_sidebar.setText("▶" if self.sidebar_collapsed else "◀")
+        self.btn_toggle_sidebar.setIcon(icono_flecha(1 if self.sidebar_collapsed else -1, "#a20f22"))
 
         # Show/hide text elements
         self.lbl_sidebar_header.setVisible(not self.sidebar_collapsed)
+        self.lbl_restaurante.setVisible(not self.sidebar_collapsed)
+        self.sidebar_frame.setToolTip(getattr(self, "etiqueta_restaurante", "") if self.sidebar_collapsed else "")
         self.lbl_config.setVisible(not self.sidebar_collapsed)
         self.lbl_db_info.setVisible(not self.sidebar_collapsed)
 
@@ -522,18 +645,8 @@ class MainWindow(QMainWindow):
                 self, "Seleccionar o Crear Base de Datos", "", "SQLite Files (*.db)"
             )
             if path:
-                try:
-                    self.db.switch_database(path)
-                except ValueError as e:
-                    QMessageBox.warning(
-                        self, "No se cambió la base de datos",
-                        f"{e}\n\nSe sigue usando la base de datos anterior.")
-                    return
-                self.actualizar_info_bd()
-                QMessageBox.information(self, "Éxito", f"Conectado exitosamente a:\n{path}")
-                self.modules = {}
-                self.show_dashboard()
-                self.btn_inicio.setChecked(True)
+                # Los usuarios son de cada base: se vuelve al inicio de sesión de la base nueva
+                self._abrir_otra_bd(path)
 
         elif msg.clickedButton() == btn_backup:
             folder = QFileDialog.getExistingDirectory(
@@ -553,8 +666,18 @@ class MainWindow(QMainWindow):
             return
         if name not in self.modules:
             instance = widget_class(self.db) if needs_db else widget_class()
+            if hasattr(instance, "set_rol"):
+                instance.set_rol(self.auth.rol)
+            if hasattr(instance, "identidad_cambiada"):
+                instance.identidad_cambiada.connect(self.aplicar_identidad)
             auto_icon_buttons(instance)
-            index = self.stacked_widget.addWidget(instance)
+            # Cada módulo va en un área con scroll: si no cabe (laptop, escala de Windows alta) se desplaza
+            # en lugar de agrandar la ventana más allá de la pantalla
+            marco = QScrollArea()
+            marco.setWidgetResizable(True)
+            marco.setFrameShape(QFrame.NoFrame)
+            marco.setWidget(instance)
+            index = self.stacked_widget.addWidget(marco)
             self.modules[name] = {"instance": instance, "index": index, "title": title}
 
         module_data = self.modules[name]

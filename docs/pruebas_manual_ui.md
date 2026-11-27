@@ -13,6 +13,9 @@
 3. Usuarios de la base de prueba: `admin/admin123`, `gerente/gerente123`, `empleado/empleado123`.
 4. La base trae: 6 insumos con presentación, sub-receta, 2 platos, la compra #1 **pendiente**, las ventas del
    10/05/2026 **sin procesar**, 2 empleados con una quincena, egresos de mayo y el diario de ventas del 10/05.
+   También trae **junio 2026 completo** (5 870 platos en 30 días, diario de caja, dos quincenas y egresos del mes)
+   para ver costos, rentabilidad y el Panel con volumen realista. Para sumarlo a una base creada antes:
+   `python scripts/crear_bd_prueba.py C:/temp/prueba_e2e.db --agregar-junio`.
 5. Marcar cada paso: ✅ correcto · ❌ distinto (anotar lo que se ve) · ⏭ no aplica.
 
 Al terminar, restablecer la base original con **Configurar BD**.
@@ -27,6 +30,8 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | A2 | Login con clave incorrecta | Rechaza el acceso | |
 | A3 | Ver el título, la barra de estado y **Ayuda → Acerca de** | Misma versión (`app/version.py`) en los tres | |
 | A4 | Abrir cada módulo y pulsar **F1** | Abre la guía de ese módulo; **Ctrl+F1** abre el índice | |
+| A5 | Login de la base de prueba | Título «Italos (prueba)», sucursal «Centro»; la lista **Restaurante** incluye la base de prueba | |
+| A6 | Ventana principal | Título «Italos (prueba) · Centro — Italos Manager v…»; recuadro con el nombre bajo el logo; barra de estado «Restaurante: Italos (prueba) · Centro» | |
 
 ## B. Catálogo, unidades y sucursales
 
@@ -38,6 +43,9 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | B3b | Crear «Saco 25 kg» de Arroz a $25 y marcarlo **Presentación preferida** | Columna Preferida ★ solo en el de 25 kg; Costo de Platos P1 baja a 1.06 (150 g × 0.0010). Volver a marcar el de 10 kg | |
 | B4 | Unidades de Medida | g, ml, und; crear y borrar una de prueba | |
 | B5 | Sucursales | Centro marcada como «esta sucursal», Norte sin marcar | |
+| B6 | Sucursales → **Datos del restaurante…**: cambiar nombre a «Roma», sucursal «Norte», cargar un logo PNG → Guardar | Título, menú lateral, barra de estado y recuadro muestran «Roma · Norte» y el logo nuevo; en la tabla, Norte pasa a «Sí». Volver a «Italos (prueba)» · Centro y **Usar el de Italos** | |
+| B7 | Exportar el Excel de una toma de inventario | Primera fila con «Italos (prueba) · Centro» | |
+| B8 | Entrar como `gerente` → Sucursales | Ve el recuadro del restaurante sin el botón **Datos del restaurante…**; el menú Restaurante no tiene esa opción | |
 
 ## C. Compras e inventario
 
@@ -61,18 +69,25 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | # | Paso | Resultado esperado | ✓ |
 |---|---|---|---|
 | D1 | Gestión de Menú | P1 $6.00 y P2 $5.50 (y los componentes si se muestran) | |
-| D2 | Recetas (Fichas) → P1 | Pollo 200, Arroz 150 (la salsa está como sub-receta en Costo de Platos) | |
+| D2 | Recetas (Fichas) → doble clic en P1 | Solo consulta: Pollo 200, Arroz 150 y la sub-receta Salsa 50 g; abajo, lo que descuenta por plato (incluye tomate y aceite de la salsa). P2 aparece «Por tanda» con cantidad por porción. Como admin/gerente se ve «Editar en Costo de Platos…»; como empleado no. «Mostrar sub-recetas y tandas» agrega la Salsa | |
 | D3 | Costo de Platos → Costo por plato, canal local | P1 1.09 · P2 1.56 | |
 | D4 | Canal para llevar | P1 1.29 (con envase) · P2 1.56 | |
 | D5 | Doble clic en P1 → desglose | Pollo 0.80 · Arroz 0.18 · Salsa 0.11; sin advertencias | |
 | D6 | Precio sugerido P1 | Local 1.56 (30 %) · Para llevar 2.58 (50 %) | |
 | D7 | Food cost P1 local | 18.2 %, margen $4.91 | |
+| D7b | Costo por plato: desmarcar **Incluir bebida** (canal Local) y **Incluir empaque** (canal Llevar) | P2 local pasa de 1.56 a 1.06 y P1 llevar de 1.29 a 1.09; la bebida/empaque se ven en gris («No incluido en el costo»); el desglose dice «no incluido»; al reabrir el módulo las casillas siguen desmarcadas. Volver a marcarlas | |
 | D8 | Parámetros → fuente «Promedio» → Actualizar | P1 ingredientes 1.08 (arroz a 0.00116). Volver a «Vigente» | |
 | D9 | Indirectos de mayo 2026 (tras procesar las ventas, paso E3) | $66.87 por plato (2 006.23 / 30) | |
 | D9b | Parámetros → Base de gastos indirectos | Opciones «Gastos reales del mes (consolidados)» y «Gastos fijos del presupuesto del mes (planilla real)» | |
 | D9c | Parámetros → % de platos para llevar = 40 → Guardar; Reabrir Día 10/05 y volver a Actualizar Inventario | Envase baja de 50 a 46 (10 P1 × 40 %); la soda no cambia | |
 | D10 | Exportar (Excel / CSV) | El archivo abre y trae los mismos valores de la tabla | |
+| D12 | Costo de Platos → junio 2026 | Indirectos $1.05 por plato = (gastos 4 260 + planilla 1 892.47) ÷ 5 870 platos (ventas diarias). P1 local: total 2.14 · food cost 35.6 % · sugerido 3.05 | |
 | D11 | Análisis de Precios → Arroz | Muestra la evolución del precio (incluye el cambio de B3) | |
+| D13 | Catálogo de Insumos → editar Arroz: Código «#g001», Gramos por ml 0.85 → Guardar | Columna Código muestra «G001». Poner «G001» a otro insumo → aviso «Código repetido» | |
+| D14 | Costo de Platos → Recetas de costeo → **Importar recetas… → Descargar plantilla vacía…** | Excel con hojas Instrucciones, Recetas, Ingredientes, Platos, Unidades, Insumos (el catálogo con G001) | |
+| D15 | **Convertir fichas del cliente…** con «BAÑO MARIA 1 recetas de ITALOS ATRIO.xlsx» | Plantilla prellenada con hoja Revisión: 23 recetas (15 estándar, 8 a revisar), rendimientos vacíos en amarillo, porciones eco (#78 190 g) | |
+| D16 | En la plantilla, poner rendimiento 4000 g a «Arroz de combinacion» → **Simular** | Las demás quedan PENDIENTES; Arroz de combinación BLOQUEADA con sus insumos faltantes; «Guardar reporte…» trae la hoja Insumos faltantes | |
+| D17 | Plantilla propia con una receta de Arroz (G001, 1000 g, rendimiento 2000 g, plato 90 de 200 g) → **Importar** (Solo nuevas) | Respaldo creado; plato 90 creado con precio 0, costo por porción = 100 g de arroz. Repetir en «Solo nuevas» → omitida; en «Actualizar» → actualizada | |
 
 ## E. Ventas
 
@@ -137,8 +152,9 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | J1 | Mayo 2026 | Ventas 201.00 · Costo real 220.00 · Costo teórico 32.10 · Merma 187.90 · Ref. con extras 42.10 (en gris) | |
 | J2 | Gastos | Planilla 900 · Otros 50 · Cheques 1 100 · Yappy 150 · Tarjetas 60 · total 2 260 | |
 | J3 | Utilidad | Bruta −19.00 · Neta −2 279.00 | |
-| J4 | Comparativo anual 2026 | Solo mayo con datos; total igual a mayo | |
+| J4 | Comparativo anual 2026 | Mayo y junio con datos; junio: ventas 33 795 · costo real 10 000 · gastos 6 060 · utilidad neta 17 735 | |
 | J5 | Compras por categoría (referencia) | Carnes 60 · Víveres 38 · Sin categoría 22 | |
+| J6 | Panel de Control → ◀ hasta Mayo 2026 | Ventas del Mes $201.00 · Utilidad −2 279.00 · Top: Arroz con pollo 20, Pollo con arroz 10 · barra de mayo destacada; «Mes actual» vuelve al de hoy y ▶ queda inactivo | |
 
 ## K. Planilla
 
@@ -166,6 +182,8 @@ Al terminar, restablecer la base original con **Configurar BD**.
 |---|---|---|---|
 | M1 | Crear copia de respaldo | Archivo .db nuevo que abre con los mismos datos | |
 | M2 | Elegir un archivo que no es base de datos | Rechazo con el motivo; la base en uso no cambia | |
+| M3 | **Restaurante → Cambiar de restaurante → Abrir otra base de datos…** → una base nueva (`C:/temp/otra.db`) | Confirma, cierra la sesión y abre el login de la base nueva (título «Italos»). Al entrar como admin aparece el asistente **Configurar este restaurante**; con **Más tarde** sigue como «Italos» | |
+| M4 | Desde el login, lista **Restaurante** → elegir la base de prueba | El título cambia a «Italos (prueba)»; ingresar con `admin` de esa base | |
 
 ---
 

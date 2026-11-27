@@ -62,3 +62,38 @@ def test_gerente_ve_finanzas_pero_no_usuarios(db, esc, sin_dialogos):
         assert "usuarios" not in win.modules
     finally:
         win.close()
+
+
+def test_la_ventana_cabe_en_pantallas_chicas(ventana):
+    """Laptop de 14" o monitor 16:9 con escala: la ventana no puede exigir más que ~1280×650 px.
+
+    El menú lateral y cada módulo tienen scroll propio; antes el menú obligaba a ~1130 px de alto."""
+    from PyQt5.QtWidgets import QScrollArea
+
+    for modulo in MODULOS:
+        getattr(ventana, f"show_{modulo}")()
+    minimo = ventana.minimumSizeHint()
+    assert minimo.height() <= 650 and minimo.width() <= 1000, minimo
+    marco = ventana.stacked_widget.currentWidget()
+    assert isinstance(marco, QScrollArea) and marco.widget() is ventana.modules[ventana._modulo_actual]["instance"]
+
+
+def test_dialogo_mas_grande_que_la_pantalla_se_achica(qapp):
+    from PyQt5.QtWidgets import QDialog
+
+    from app.utils.button_icons import ajustar_a_pantalla
+
+    libre = qapp.primaryScreen().availableGeometry()
+    d = QDialog()
+    d.resize(libre.width() + 500, libre.height() + 500)
+    d.move(libre.x() - 300, libre.y() - 300)
+    ajustar_a_pantalla(d)
+    assert d.width() <= libre.width() and d.height() <= libre.height()
+    assert d.frameGeometry().x() >= libre.x() and d.frameGeometry().y() >= libre.y()
+
+
+def test_login_compacto_en_pantallas_bajas(db, sin_dialogos, monkeypatch):
+    from app.views import login_window as lw
+
+    monkeypatch.setattr(lw, "alto_libre_pantalla", lambda: 574)  # 1366×768 al 125 %
+    assert lw.LoginWindow(AuthController(db)).height() <= 540

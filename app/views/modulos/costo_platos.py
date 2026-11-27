@@ -184,11 +184,24 @@ class CostoPlatosView(QWidget):
         self.chk_indirectos = QCheckBox("Incluir indirectos")
         self.chk_indirectos.setChecked(True)
         self.chk_indirectos.stateChanged.connect(self.cargar_datos)
+        # Bebida y empaque son opcionales en el costo (se recuerdan en costeo_config). No cambian el
+        # inventario ni los presupuestos: los empaques se siguen descontando con el % de platos para llevar.
+        self.chk_bebida = QCheckBox("Incluir bebida")
+        self.chk_bebida.setToolTip("Suma al costo la bebida asociada a cada plato (extras de tipo Bebida)")
+        self.chk_empaque = QCheckBox("Incluir empaque")
+        self.chk_empaque.setToolTip("Suma al costo el empaque del plato (canal Llevar). No cambia el descuento de "
+                                    "empaques del inventario ni los presupuestos.")
+        self.chk_bebida.setChecked(self.ctrl.config("incluir_bebida", "1") != "0")
+        self.chk_empaque.setChecked(self.ctrl.config("incluir_empaque", "1") != "0")
+        self.chk_bebida.toggled.connect(lambda v: self._guardar_opcion("incluir_bebida", v))
+        self.chk_empaque.toggled.connect(lambda v: self._guardar_opcion("incluir_empaque", v))
         self.chk_solo_receta = QCheckBox("Solo con receta")
         self.chk_solo_receta.stateChanged.connect(self._aplicar_filtro_costos)
         filtros.addWidget(self.txt_filtro, 1)
         filtros.addWidget(self.cmb_cat)
         filtros.addWidget(self.chk_indirectos)
+        filtros.addWidget(self.chk_bebida)
+        filtros.addWidget(self.chk_empaque)
         filtros.addWidget(self.chk_solo_receta)
         lay.addLayout(filtros)
 
@@ -216,6 +229,16 @@ class CostoPlatosView(QWidget):
         lay.addLayout(acciones)
         return w
 
+    def _guardar_opcion(self, clave, valor):
+        self.db.execute_query(
+            "INSERT INTO costeo_config (clave, valor) VALUES (?, ?) "
+            "ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor", (clave, "1" if valor else "0"))
+        self.ctrl.limpiar_cache()
+        self._cargar_costos()
+
+    def _opciones(self):
+        return {"incluir_bebida": self.chk_bebida.isChecked(), "incluir_empaque": self.chk_empaque.isChecked()}
+
     def _periodo(self):
         return self.cmb_mes.currentIndex() + 1, self.spn_anio.value()
 
@@ -242,7 +265,7 @@ class CostoPlatosView(QWidget):
         t.setSortingEnabled(False)
         t.setRowCount(0)
         for (mid,) in self.ctrl.listar_platos():
-            c = self.ctrl.costo_plato(mid, canal, indirecto)
+            c = self.ctrl.costo_plato(mid, canal, indirecto, **self._opciones())
             c["con_receta"] = "Sin receta" not in c["advertencias"]
             self._filas.append(c)
             r = t.rowCount()
@@ -254,7 +277,13 @@ class CostoPlatosView(QWidget):
             t.setItem(r, 2, nombre)
             for col, key in ((3, "ingredientes"), (4, "acompanamientos"), (5, "bebida"),
                              (6, "empaque"), (7, "indirecto"), (8, "total")):
-                t.setItem(r, col, _NumItem(c[key], _money(c[key])))
+                it = _NumItem(c[key], _money(c[key]))
+                excluido = (key == "bebida" and not c["incluye_bebida"]) or \
+                           (key == "empaque" and not c["incluye_empaque"])
+                if excluido and c[key]:
+                    it.setForeground(QColor("#aaaaaa"))
+                    it.setToolTip("No incluido en el costo")
+                t.setItem(r, col, it)
             pv = _NumItem(c["precio_venta"], _money(c["precio_venta"]))
             sug = c["precio_sugerido"]
             if c["con_receta"] and sug is not None and c["precio_venta"]:
@@ -308,7 +337,7 @@ class CostoPlatosView(QWidget):
         c_prev = next((f for f in self._filas if f["menu_item_id"] == mid), None)
         if c_prev:
             indirecto = c_prev["indirecto"]
-        c = self.ctrl.costo_plato(mid, self.cmb_canal.currentData(), indirecto)
+        c = self.ctrl.costo_plato(mid, self.cmb_canal.currentData(), indirecto, **self._opciones())
         DesgloseDialog(c, self.ctrl.factor_por_porcion(mid), self).exec_()
 
     def _exportar(self):
@@ -324,6 +353,10 @@ class CostoPlatosView(QWidget):
         cab = ["Categoría", "Código", "Plato", "Ingredientes", "Acompañamientos", "Bebida",
                "Empaque", "Indirectos", "Costo total", "Precio venta", "Food cost %",
                "Margen $", "Precio sugerido", "Alertas"]
+        si_no = lambda v: "Sí" if v else "No"  # noqa: E731
+        nota = [f"Incluye: bebida {si_no(self.chk_bebida.isChecked())} · empaque "
+                f"{si_no(self.chk_empaque.isChecked())} · indirectos {si_no(self.chk_indirectos.isChecked())} · "
+                f"canal {self.cmb_canal.currentText()}"]
         filas = []
         for c in self._filas:
             filas.append([
@@ -339,6 +372,7 @@ class CostoPlatosView(QWidget):
             if ruta.lower().endswith(".csv"):
                 with open(ruta, "w", newline="", encoding="utf-8-sig") as f:
                     w = csv.writer(f)
+                    w.writerow(nota)
                     w.writerow(cab)
                     w.writerows(filas)
             else:
@@ -347,8 +381,9 @@ class CostoPlatosView(QWidget):
                 wb = Workbook()
                 ws = wb.active
                 ws.title = "Costo de platos"
+                ws.append(nota)
                 ws.append(cab)
-                for cel in ws[1]:
+                for cel in ws[2]:
                     cel.font = Font(bold=True)
                 for fila in filas:
                     ws.append(fila)
@@ -397,7 +432,7 @@ class CostoPlatosView(QWidget):
         b_del.setProperty("class", "btn-danger")
         b_del.setCursor(Qt.PointingHandCursor)
         b_del.clicked.connect(self._eliminar_componente)
-        b_imp = QPushButton("Importar desde Excel…")
+        b_imp = QPushButton("Importar recetas…")
         b_imp.setCursor(Qt.PointingHandCursor)
         b_imp.clicked.connect(self._importar_excel)
         acc.addWidget(b_edit)
@@ -460,7 +495,9 @@ class CostoPlatosView(QWidget):
         self._cargar_recetas()
 
     def _importar_excel(self):
-        ImportarExcelDialog(self.db, self).exec_()
+        from app.views.importar_recetas_dialog import ImportarRecetasDialog
+
+        ImportarRecetasDialog(self.db, self).exec_()
         self.ctrl.limpiar_cache()
         self._cargar_recetas()
 
@@ -620,7 +657,8 @@ class DesgloseDialog(QDialog):
         resumen = (
             f"<h3>{c['nombre']} <small style='color:#7f8c8d'>({c['codigo']})</small></h3>"
             f"Ingredientes {_money(c['ingredientes'])} · Acompañamientos {_money(c['acompanamientos'])} · "
-            f"Bebida {_money(c['bebida'])} · Empaque {_money(c['empaque'])} · "
+            f"Bebida {_money(c['bebida'])}{'' if c.get('incluye_bebida', True) else ' (no incluida)'} · "
+            f"Empaque {_money(c['empaque'])}{'' if c.get('incluye_empaque', True) else ' (no incluido)'} · "
             f"Indirectos {_money(c['indirecto'])}<br>"
             f"<b>Costo total: {_money(c['total'])}</b> · Precio venta {_money(c['precio_venta'])} · "
             f"Precio sugerido {_money(c['precio_sugerido'])}")
@@ -635,7 +673,8 @@ class DesgloseDialog(QDialog):
             r = t.rowCount()
             t.insertRow(r)
             t.setItem(r, 0, QTableWidgetItem(ln["tipo"].capitalize()))
-            t.setItem(r, 1, QTableWidgetItem(ln["nombre"]))
+            nombre = ln["nombre"] + ("" if ln.get("incluido", True) else "  (no incluido)")
+            t.setItem(r, 1, QTableWidgetItem(nombre))
             t.setItem(r, 2, _NumItem(ln["cantidad"], f"{ln['cantidad']:g}"))
             cu = ln.get("costo_unitario")
             t.setItem(r, 3, _NumItem(cu, "" if cu is None else _money4(cu)))
@@ -1066,10 +1105,12 @@ class ImportarExcelDialog(QDialog):
         self.chk_reemplazar = QCheckBox("Reemplazar las recetas que ya existen en la app (por defecto se omiten)")
         for c in (self.chk_crear, self.chk_costos, self.chk_reemplazar):
             lay.addWidget(c)
-        lay.addWidget(QLabel(
+        nota = QLabel(
             "<i>Recomendado: 1) Simular y revisar el reporte, 2) corregir el Excel o los nombres, 3) Importar. "
             "Una receta con insumos sin resolver nunca se importa a medias. Antes de importar se hace una copia "
-            "de respaldo de la base de datos.</i>"))
+            "de respaldo de la base de datos.</i>")
+        nota.setWordWrap(True)  # sin esto la línea exigía ~1450 px de ancho (no cabía en una laptop)
+        lay.addWidget(nota)
 
         botones = QHBoxLayout()
         self.btn_sim = QPushButton("Simular (no guarda)")
@@ -1086,7 +1127,7 @@ class ImportarExcelDialog(QDialog):
 
         self.txt_reporte = QTextEdit()
         self.txt_reporte.setReadOnly(True)
-        self.txt_reporte.setStyleSheet("font-family: Consolas, monospace;")
+        self.txt_reporte.setStyleSheet("font-family: Consolas, Menlo, monospace;")
         lay.addWidget(self.txt_reporte, 1)
         b_cerrar = QPushButton("Cerrar")
         b_cerrar.clicked.connect(self.accept)

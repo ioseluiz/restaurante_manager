@@ -2,6 +2,7 @@ import sys
 import os
 import ctypes
 from PyQt5.QtWidgets import (
+    QApplication,
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -10,11 +11,18 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QMessageBox,
     QFrame,
+    QComboBox,
+    QFileDialog,
 )
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtGui import QIcon, QPainter, QBrush, QPen, QPainterPath, QPixmap, QColor
 
 from app.styles import COLORS
+from app.controllers.restaurante_controller import RestauranteController
+from app.database.config import agregar_reciente, get_recientes
+from app.utils.plataforma import ruta_recurso
+
+_ABRIR_OTRA = "__abrir_otra__"
 
 # #a20f22 en formato COLORREF Windows (0x00BBGGRR): R=0xA2, G=0x0F, B=0x22
 _RED_COLORREF = ctypes.c_uint(0x220FA2)
@@ -32,11 +40,6 @@ def _apply_dwm_colors(hwnd):
         pass
 
 
-def ruta_recurso(ruta_relativa):
-    # Detecta si la aplicacion esta congelada por PyInstaller
-    if hasattr(sys, '_MEIPASS'):
-        return os.path.join(sys._MEIPASS, ruta_relativa)
-    return os.path.join(os.path.abspath("."), ruta_relativa)
 
 
 class CircularImageLabel(QLabel):
@@ -80,33 +83,55 @@ class CircularImageLabel(QLabel):
         painter.drawEllipse(QRectF(half, half, s - bw, s - bw))
 
 
+def alto_libre_pantalla():
+    pantalla = QApplication.primaryScreen()
+    return pantalla.availableGeometry().height() if pantalla else 900
+
+
 class LoginWindow(QDialog):
     def __init__(self, auth_controller):
         super().__init__()
         self.auth = auth_controller
-        self.setWindowTitle("Login - Restaurante Italos")
         self.setWindowIcon(QIcon(ruta_recurso("assets/icons/app.ico")))
-        self.setFixedSize(420, 560)
+        # Pantallas bajas (laptops, escala de Windows alta): imagen y márgenes más chicos
+        self._compacto = alto_libre_pantalla() < 760
         self.init_ui()
+        self.mostrar_restaurante()
+        # El alto se ajusta al contenido (antes era fijo y el contenido no cabía)
+        self.setFixedSize(420, self.layout().sizeHint().height())
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(50, 35, 50, 35)
-        layout.setSpacing(12)
+        layout.setContentsMargins(50, 16 if self._compacto else 30, 50, 16 if self._compacto else 30)
+        layout.setSpacing(6 if self._compacto else 12)
 
         img_label = CircularImageLabel(
             ruta_recurso("assets/imgs/restaurant.png"),
+            size=80 if self._compacto else 150,
             border_color="#a20f22",
             bg_color="#000000",
         )
         layout.addWidget(img_label, alignment=Qt.AlignCenter)
 
-        title = QLabel("Restaurante Italos")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(
-            f"font-size: 22px; font-weight: bold; color: {COLORS['text']}; margin: 8px 0 16px 0;"
+        # Nombre del restaurante de la base abierta (mostrar_restaurante)
+        self.lbl_titulo = QLabel()
+        self.lbl_titulo.setAlignment(Qt.AlignCenter)
+        self.lbl_titulo.setWordWrap(True)
+        self.lbl_titulo.setStyleSheet(
+            f"font-size: 22px; font-weight: bold; color: {COLORS['text']}; margin: 8px 0 0 0;"
         )
-        layout.addWidget(title)
+        layout.addWidget(self.lbl_titulo)
+        self.lbl_sucursal = QLabel()
+        self.lbl_sucursal.setAlignment(Qt.AlignCenter)
+        self.lbl_sucursal.setStyleSheet("font-size: 13px; color: #a20f22; margin: 0 0 10px 0;")
+        layout.addWidget(self.lbl_sucursal)
+
+        layout.addWidget(QLabel("Restaurante:"))
+        self.cmb_restaurante = QComboBox()
+        self.cmb_restaurante.setToolTip("Restaurantes abiertos antes en este equipo. Cada uno tiene su propia "
+                                        "base de datos y sus propios usuarios.")
+        self.cmb_restaurante.activated.connect(self._elegir_restaurante)
+        layout.addWidget(self.cmb_restaurante)
 
         layout.addWidget(QLabel("Usuario:"))
         self.txt_user = QLineEdit()
@@ -162,6 +187,45 @@ class LoginWindow(QDialog):
         layout.addLayout(footer_row)
 
         self.setLayout(layout)
+
+    def mostrar_restaurante(self):
+        """Título, sucursal y selector según la base de datos abierta."""
+        db = self.auth.db
+        ctrl = RestauranteController(db)
+        ident = ctrl.identidad()
+        etiqueta = ctrl.etiqueta(ident)
+        self.setWindowTitle(f"Iniciar sesión — {etiqueta}")
+        self.lbl_titulo.setText(ident["nombre"])
+        self.lbl_sucursal.setText(ident["sucursal"])
+        self.lbl_sucursal.setVisible(bool(ident["sucursal"]))
+        try:
+            agregar_reciente(db.db_path, etiqueta)
+        except OSError:
+            pass
+        self.cmb_restaurante.blockSignals(True)
+        self.cmb_restaurante.clear()
+        for r in get_recientes():
+            self.cmb_restaurante.addItem(r["nombre"], r["ruta"])
+            self.cmb_restaurante.setItemData(self.cmb_restaurante.count() - 1, r["ruta"], Qt.ToolTipRole)
+        if self.cmb_restaurante.count() == 0:  # sin config escribible: al menos la base abierta
+            self.cmb_restaurante.addItem(etiqueta, db.db_path)
+        self.cmb_restaurante.addItem("Abrir otra base de datos…", _ABRIR_OTRA)
+        self.cmb_restaurante.setCurrentIndex(0)
+        self.cmb_restaurante.blockSignals(False)
+
+    def _elegir_restaurante(self, indice):
+        ruta = self.cmb_restaurante.itemData(indice)
+        if ruta == _ABRIR_OTRA:
+            ruta, _ = QFileDialog.getOpenFileName(self, "Abrir base de datos de otro restaurante", "",
+                                                  "SQLite Files (*.db)")
+        if ruta and os.path.normcase(os.path.abspath(ruta)) != os.path.normcase(os.path.abspath(self.auth.db.db_path)):
+            try:
+                self.auth.db.switch_database(ruta)
+            except ValueError as e:
+                QMessageBox.warning(self, "No se cambió la base de datos",
+                                    f"{e}\n\nSe sigue usando la base de datos anterior.")
+        self.mostrar_restaurante()
+        self.txt_user.setFocus()
 
     def showEvent(self, event):
         super().showEvent(event)

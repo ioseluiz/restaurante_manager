@@ -10,7 +10,7 @@ Responde: **¿cuánto cuesta producir cada plato y a qué precio debería vender
 
 ## Cómo se calcula el costo
 
-**Costo total = ingredientes + acompañamientos + bebida + empaque + indirectos**
+**Costo total = ingredientes + acompañamientos + bebida (opcional) + empaque (opcional) + indirectos (opcional)**
 
 - **Ingredientes:** receta × costo de cada insumo. Una receta puede ser **por porción** o **por tanda** (ver abajo).
 - **Acompañamientos, bebida y empaque:** los que asocie a cada plato; el empaque solo cuenta en el canal *Llevar*. Son para **costear el plato**: la caja registra acompañamientos y bebidas como líneas propias (TAZA DE ARROZ, SODA…), que descuentan su propio inventario. Los empaques no pasan por la caja y se descuentan con el *% de platos para llevar* (Parámetros).
@@ -23,7 +23,8 @@ Responde: **¿cuánto cuesta producir cada plato y a qué precio debería vender
 2. La tabla muestra cada plato. El precio de venta sale en **rojo** si está por debajo del sugerido y en verde si lo supera.
 3. **Doble clic** en un plato abre el **desglose por línea**.
 4. Las alertas **⚠** avisan de insumos sin costo, cantidades vacías o platos sin receta (pase el mouse para ver el detalle).
-5. **Exportar** genera un Excel o CSV.
+5. **Incluir indirectos**, **Incluir bebida** e **Incluir empaque** deciden qué entra en el costo total, el food cost, el margen y el precio sugerido. La bebida y el empaque son opcionales porque no siempre forman parte del plato: desmarcados, su valor se sigue viendo en gris (como referencia) pero no se suma. La elección se recuerda. **No cambia el inventario ni los presupuestos**: los empaques se siguen descontando y comprando con el *% de platos para llevar*. El desglose marca lo «no incluido» y la exportación indica en su primera fila qué se incluyó.
+6. **Exportar** genera un Excel o CSV.
 
 ## Recetas de costeo
 
@@ -34,15 +35,27 @@ Responde: **¿cuánto cuesta producir cada plato y a qué precio debería vender
 - Las cantidades se guardan en la **unidad base** del insumo; si elige otra unidad se convierte al guardar.
 - Al definir rendimiento y sub-recetas, también los consideran los [Presupuestos](ayuda:presupuestos) y la [Rentabilidad](ayuda:rentabilidad) (con los insumos de las sub-recetas incluidos).
 
-## Importar desde el Excel del cliente
+## Importar recetas desde archivo
 
-**Recetas de costeo → Importar desde Excel…**
+**Recetas de costeo → Importar recetas…**
 
-1. Elija el archivo y pulse **Simular (no guarda)**. Lea el reporte.
-2. Corrija lo que se marque (nombres de insumos, códigos repetidos, recetas sin cantidades) y repita.
-3. Pulse **Importar**. Se hace antes una **copia de respaldo** de la base de datos.
+**1. Preparar el archivo**
+- **Descargar plantilla vacía…**: Excel con las hojas *Recetas* (una fila por tanda: código, nombre, tipo PLATO o SUB-RECETA, **rendimiento de la tanda** y su unidad), *Ingredientes* (cantidades de la tanda; el insumo por **código** o por nombre, o una sub-receta por su código numérico), *Platos* (cada plato del menú con su **código del POS** y su **porción**), y de referencia *Insumos* y *Unidades*. La hoja *Instrucciones* lo explica.
+- **Convertir fichas del cliente…**: si las recetas vienen en fichas (una receta por hoja, como «BAÑO MARIA 1 recetas»), genera la plantilla **prellenada** con una hoja **Revisión** de lo que falta (el rendimiento de cada tanda, unidades dudosas, ingredientes sin nombre…). Las filas amarillas tienen observaciones. El archivo del cliente no se modifica.
 
-Opciones: *crear insumos que no existan* (con el costo que trae el Excel), *completar costos faltantes* y *reemplazar recetas existentes* (por defecto se omiten). Una receta con insumos sin resolver **nunca se importa a medias**. El reporte lista los platos nuevos con precio 0 para que los complete en [Menú](ayuda:menu).
+**2. Importar**
+1. Elija la plantilla y el modo: **Solo recetas nuevas** (no toca las recetas que ya existen) o **Actualizar existentes** (reemplaza las recetas que vienen en el archivo).
+2. **Simular (no guarda)** y lea el reporte. **Importar** hace antes una **copia de respaldo**. **Nunca se borra** nada que no esté en el archivo.
+
+**Reglas**
+- **Sin rendimiento de la tanda** la receta queda **pendiente** y no se importa.
+- Los insumos se buscan por **código** y luego por **nombre** (sin importar tildes, mayúsculas, plurales ni el orden de las palabras). Si el código es de un insumo y el nombre de otro, se avisa y se usa el del código.
+- **Si falta un insumo, la receta no se importa** (nunca a medias). **Guardar reporte…** genera un Excel con la hoja **Insumos faltantes**: complete la unidad base (y los gramos por ml si hace falta) y use **Importar insumos faltantes…** para crearlos. Después póngales presentación y precio en el [Catálogo](ayuda:insumos) y vuelva a importar las recetas.
+- Las cantidades se convierten a la unidad del insumo (lb → g, l → ml…). Si la receta mide en **ml** un insumo que se lleva en gramos (cebolla picada, ajo…), el insumo necesita **Gramos por ml** en el Catálogo; si no lo tiene, la receta se bloquea y el reporte lo indica.
+- Una receta con **un solo plato** queda en ese plato (rendimiento + porción). Con **varios platos** (normal y *eco*, o «con arroz»), la tanda se guarda como sub-receta «R‹código› … (tanda)» y cada plato lleva su porción de ella.
+- Los platos se buscan por su código del POS; si no existen se crean con **precio 0** y se avisa para que lo complete en [Menú](ayuda:menu).
+
+**Formato anterior (COSTEO DE PLATOS)…** abre el importador del Excel de costeo del cliente (hoja «PLATOS CODIGOS Y RECETAS»), con sus opciones de crear insumos y completar costos.
 
 ## Parámetros
 

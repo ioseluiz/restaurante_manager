@@ -16,8 +16,8 @@ El menú lateral da acceso a los siguientes módulos:
 
 ### 🍲 Menú, recetas y costos
 *   **Gestión de Menú:** platos con código (el del POS) y precio, con importación desde CSV.
-*   **Recetas (Fichas):** insumos y cantidades de cada plato.
-*   **Costo de Platos:** costo de producir cada plato (ingredientes, acompañamientos, bebida, empaque e indirectos), recetas por tanda, sub-recetas, precio sugerido por canal e importación del Excel de costeo del cliente.
+*   **Recetas (Fichas):** consulta de la receta de cada plato (por porción o por tanda, sub-recetas y lo que descuenta del inventario por plato); se editan en Costo de Platos.
+*   **Costo de Platos:** costo de producir cada plato (ingredientes, acompañamientos, bebida, empaque e indirectos), recetas por tanda, sub-recetas, precio sugerido por canal e **importación de recetas** desde una plantilla estándar (con convertidor de las fichas del cliente, modos «solo nuevas» / «actualizar», insumos por código o nombre y reporte de insumos faltantes importable) o desde el Excel de costeo del cliente. Los insumos tienen **código** propio y **gramos por ml** para convertir recetas medidas en volumen.
 *   **Análisis de Precios:** evolución de los precios de compra de los insumos.
 
 ### 📈 Ventas, presupuestos y finanzas
@@ -25,7 +25,7 @@ El menú lateral da acceso a los siguientes módulos:
 *   **Presupuestos:** proyección de compras mensuales a partir de los reportes de ventas y las recetas, bloques de **planilla** y **gastos fijos**, y control de ejecución (presupuestado vs. real).
 *   **Consolidados:** Diario de Ventas (cierre diario), Chequera, Tarjetas de Crédito, Pagos en Efectivo (con desglose por categoría), Pagos con Yappy y Resumen General mensual.
 *   **Rentabilidad:** estado de resultados mensual y anual (ventas, costo de ventas real y teórico, gastos y utilidad).
-*   **Panel de Control:** resumen del negocio (valor del inventario, ventas y utilidad del mes).
+*   **Panel de Control:** resumen del negocio (valor del inventario, ventas y utilidad del mes), con navegación a meses anteriores.
 
 ### 👥 Personal
 *   **Planilla:** empleados, períodos de pago con horas y recargos, vales, resumen con reglas de Panamá (seguro social, seguro educativo, riesgo profesional, ISR) y provisiones laborales. Su costo completo es el que usan los presupuestos y el costo de platos.
@@ -33,6 +33,7 @@ El menú lateral da acceso a los siguientes módulos:
 ### 🔐 Seguridad, configuración y ayuda
 *   **Usuarios:** roles `admin` (todo), `gerente` (todo menos usuarios y configuración de la base de datos) y `empleado` (solo la operación diaria: sin Panel, Presupuestos, Consolidados, Rentabilidad, Costo de Platos, Análisis de Precios, Planilla ni Sucursales). Contraseñas cifradas con sal (PBKDF2).
 *   **Configurar BD** (administrador): cambiar la base de datos en uso y crear copias de respaldo.
+*   **Varios restaurantes:** cada instalación usa su propia base de datos, y la identidad del restaurante (nombre, sucursal de esta instalación, logo propio opcional, RUC, dirección y teléfono) se guarda **dentro de la base**. La interfaz la muestra en el título, el menú lateral, la barra de estado, el login y los encabezados de reportes. El login y el menú **Restaurante** permiten cambiar entre los restaurantes recientes del equipo (guardados en `config.json`); cambiar de restaurante cierra la sesión porque los usuarios son de cada base. Una base sin nombre muestra «Italos» y, al entrar un administrador, se abre un asistente para configurarla.
 *   **Ayuda en pantalla:** menú **Ayuda** (o **F1**) con la guía de cada módulo.
 
 > **Inventario:** el stock cambia por compras recibidas, **ventas diarias** (al pulsar «Actualizar Inventario (Kardex)» se descuentan los insumos según las recetas, con recetas por tanda y sub-recetas; «Reabrir Día» lo revierte), abastecimientos internos (envío baja, recepción sube) y ajustes por toma de inventario.
@@ -57,7 +58,17 @@ restaurante_manager/
 └── requirements.txt       # Dependencias
 ```
 
-## 🚀 Instalación y Configuración
+## 📥 Instalar la aplicación (usuarios)
+
+Los instaladores están en la página de **Releases** del repositorio (la versión de desarrollo, en `latest-dev`):
+
+*   **Windows:** `ItalosManager_Setup.exe` → ejecutarlo y seguir el asistente.
+*   **macOS (Apple Silicon, M1 o posterior; macOS 11 o superior):** `ItalosManager_mac_arm64.dmg` → abrirlo y arrastrar **Italos Manager** a **Aplicaciones**.
+    *   **Primera apertura:** la app todavía **no está firmada por Apple**, así que macOS la bloquea la primera vez. Abra *Aplicaciones*, haga **clic derecho (o Control + clic) sobre Italos Manager → Abrir** y confirme con **Abrir**. Si macOS solo ofrece «Trasladar a la papelera», vaya a **Ajustes del Sistema → Privacidad y seguridad** y pulse **Abrir igualmente** junto al aviso de Italos Manager. Solo hace falta la primera vez.
+    *   Alternativa desde Terminal: `xattr -dr com.apple.quarantine "/Applications/Italos Manager.app"`.
+    *   La base y la configuración quedan en `~/.restaurante_manager` (carpeta oculta de su usuario), igual que en Windows.
+
+## 🚀 Instalación y Configuración (desarrollo)
 
 ### 1. Prerrequisitos
 *   **Python 3.10 o superior** (el instalador se compila con 3.11).
@@ -98,6 +109,14 @@ python main.py
 **Credenciales por defecto:**
 *   **Usuario:** `admin`
 *   **Contraseña:** `admin123` (Se recomienda cambiarla tras el primer acceso).
+
+## 📦 Compilar los instaladores
+
+*   **Windows:** `pyinstaller main.spec` y luego Inno Setup con `installer.iss` (lo hace el CI).
+*   **macOS (en una Mac con Apple Silicon):** `pip install -r requirements-build.txt` y `./compilar_mac.sh` → `dist/Italos Manager.app` e `installer_output/ItalosManager_mac_arm64.dmg`.
+*   Ambos usan el mismo `main.spec`. El ícono de macOS (`assets/icons/app.icns`) se genera desde `app.ico` con `python scripts/generar_icns.py`.
+*   `python main.py --smoke` (o el ejecutable con `--smoke`) abre todos los módulos sobre una base temporal y termina con código 0 si todo carga: el CI lo usa para comprobar el ejecutable empaquetado.
+*   Lo propio de cada sistema operativo (abrir archivos, recursos, apariencia) está en `app/utils/plataforma.py`.
 
 ## 🩺 Solución de problemas
 

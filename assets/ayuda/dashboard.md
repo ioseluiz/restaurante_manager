@@ -6,12 +6,19 @@ Es la pantalla de inicio: un **resumen del negocio** de un vistazo. Solo consult
 
 | Tarjeta | De dónde sale |
 |---|---|
-| **Valor del Inventario** | Stock actual × costo de cada insumo |
-| **Ventas Día Anterior** | Diario de Ventas (módulo [Consolidados](ayuda:consolidados)) |
-| **Ventas del Mes** | Diario de Ventas del mes en curso |
-| **Utilidad del Mes** | Ventas − costo − gastos del mes |
+| **Valor del Inventario** | Stock actual × costo de cada insumo (siempre el de hoy) |
+| **Ventas Día Anterior** | Diario de Ventas de ayer (módulo [Consolidados](ayuda:consolidados)) |
+| **Ventas del Mes** | Diario de Ventas del mes elegido |
+| **Utilidad del Mes** | Ventas − costo − gastos del mes elegido |
 
-Debajo hay un **gráfico de ventas mensuales** (basado en el Diario de Ventas) y **tablas de resumen**.
+Debajo hay un **gráfico de ventas mensuales** (Diario de Ventas o Reportes del POS), la **alerta de stock** (los 5
+insumos más bajos, hoy) y el **top 5 de platos** vendidos en el mes elegido.
+
+## Ver meses anteriores
+
+Arriba a la derecha está el mes que se muestra. Con **◀** y **▶** se pasa al mes anterior o al siguiente, y
+**Mes actual** vuelve al de hoy. Cambian las ventas y la utilidad del mes, el top de platos y la barra destacada del
+gráfico. No se puede avanzar más allá del mes en curso.
 
 ## Antes de empezar
 

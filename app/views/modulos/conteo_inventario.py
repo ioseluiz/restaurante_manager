@@ -1,5 +1,4 @@
 import os
-import subprocess
 import sys
 
 from PyQt5.QtCore import Qt, QDate
@@ -31,6 +30,8 @@ from PyQt5.QtWidgets import (
 
 from app.controllers.codigos_controller import CodigosController
 from app.reports.conteo_excel import generar_excel_conteo
+from app.controllers.restaurante_controller import RestauranteController
+from app.utils.plataforma import abrir_archivo
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -71,12 +72,7 @@ def _registrar_ajuste_kardex(db, insumo_id, diferencia, conteo_id, motivo):
 
 def _open_file(path):
     try:
-        if sys.platform == "win32":
-            os.startfile(path)
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", path])
-        else:
-            subprocess.Popen(["xdg-open", path])
+        abrir_archivo(path)
     except Exception:
         pass
 
@@ -298,7 +294,8 @@ class NuevoConteoDialog(QDialog):
             })
 
         try:
-            excel_path = generar_excel_conteo(conteo_id, fecha, desc, cat_nombre, filas_excel)
+            excel_path = generar_excel_conteo(conteo_id, fecha, desc, cat_nombre, filas_excel,
+                                              restaurante=RestauranteController(self.db).encabezado_reporte())
             _open_file(excel_path)
             QMessageBox.information(
                 self,
@@ -727,7 +724,8 @@ class ConteoActivoDialog(QDialog):
                 "presentaciones": [p[0] for p in presentaciones],
             })
         try:
-            path = generar_excel_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_excel)
+            path = generar_excel_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_excel,
+                                        restaurante=RestauranteController(self.db).encabezado_reporte())
             _open_file(path)
         except Exception as e:
             QMessageBox.warning(self, "Error Excel", str(e))
