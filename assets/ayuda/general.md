@@ -11,14 +11,22 @@ La ventana de ayuda puede quedar abierta mientras trabaja.
 
 ## Cómo se organiza el programa
 
-El **menú lateral** da acceso a los módulos. El botón de la parte superior del menú lo contrae para ganar espacio. Cada módulo se abre en el área principal; muchos tienen **pestañas** con pasos numerados.
+El **menú lateral** da acceso a los módulos. El botón de la parte superior del menú lo contrae para ganar espacio. En pantallas pequeñas (laptops o Windows con escala alta) el menú lateral y el contenido de cada módulo se desplazan con la rueda del mouse o la barra de desplazamiento, y la ventana abre maximizada. Cada módulo se abre en el área principal; muchos tienen **pestañas** con pasos numerados.
 
 Los módulos están conectados: lo que registra en uno alimenta a otros. Por eso conviene cargar los datos en orden.
+
+## Varios restaurantes
+
+Cada restaurante (o sucursal) tiene **su propia base de datos** con sus propios usuarios. El nombre del restaurante abierto se ve siempre en el título de la ventana, debajo del logo del menú lateral y en la barra de estado.
+
+- **Al iniciar sesión**, la lista **Restaurante** muestra los restaurantes abiertos antes en este equipo. Elija uno (o **Abrir otra base de datos…**) y luego ingrese con un usuario **de ese** restaurante.
+- **Con la sesión abierta**, use el menú **Restaurante → Cambiar de restaurante**: se cierra la sesión y vuelve al inicio de sesión del restaurante elegido.
+- El nombre, la sucursal y el logo se configuran en **[Sucursales](ayuda:sucursales) → Datos del restaurante…** (administrador).
 
 ## Puesta en marcha recomendada
 
 1. **[Unidades de Medida](ayuda:unidades)**: g, kg, lb, ml, l, unidad…
-2. **[Sucursales](ayuda:sucursales)** (marque la de esta instalación si hay más de un local; cada sucursal usa su propio programa e inventario) y **[Usuarios](ayuda:usuarios)**.
+2. **[Sucursales](ayuda:sucursales)**: nombre y logo del restaurante y la sucursal de esta instalación (cada sucursal usa su propio programa e inventario), y **[Usuarios](ayuda:usuarios)**.
 3. **[Catálogo de Insumos](ayuda:insumos)**: categorías, insumos y sus presentaciones de compra con precio.
 4. **[Menú](ayuda:menu)**: platos y precios de venta (con el mismo código que usa el POS).
 5. **[Recetas](ayuda:recetas)**: qué insumos lleva cada plato.

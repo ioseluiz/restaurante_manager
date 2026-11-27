@@ -5,7 +5,7 @@
     python scripts/crear_bd_prueba.py C:/ruta/otra.db --agregar-junio   # solo suma junio a una base existente
 
 Carga el mismo escenario que las pruebas E2E (tests/e2e/escenario_e2e.py) más un usuario por rol
-(gerente/gerente123, empleado/empleado123). Deja la compra PENDIENTE y las ventas sin procesar: esos
+(gerente/gerente123, empleado/empleado123), con el restaurante «Italos (prueba) · Centro». Deja la compra PENDIENTE y las ventas sin procesar: esos
 pasos se hacen desde la app siguiendo docs/pruebas_manual_ui.md. No toca la configuración de la app;
 para usarla, abra «Configurar BD» y elija el archivo.
 
@@ -23,9 +23,11 @@ sys.path.insert(0, os.path.join(RAIZ, "tests", "e2e"))
 
 from app.controllers.auth_controller import hash_password  # noqa: E402
 from app.database.connection import DatabaseManager  # noqa: E402
+from app.controllers.restaurante_controller import RestauranteController  # noqa: E402
 from app.utils.diario_ventas_calc import total_ventas_diario  # noqa: E402
 import escenario_e2e  # noqa: E402
 
+NOMBRE_PRUEBA = "Italos (prueba)"  # la sucursal de esta instalación es «Centro» (del escenario)
 # Platos por día de la semana (lunes = 0): (P1, P2). Promedio ≈ 198 platos/día
 VENTAS_POR_DIA = {0: (90, 85), 1: (90, 85), 2: (95, 90), 3: (95, 90), 4: (110, 105), 5: (125, 115), 6: (105, 100)}
 # Reparto del cobro diario por medio de pago
@@ -111,6 +113,8 @@ def main(destino, solo_junio=False):
     for usuario, clave, rol in (("gerente", "gerente123", "gerente"), ("empleado", "empleado123", "empleado")):
         db.execute_query("INSERT INTO usuarios (username, password_hash, rol) VALUES (?,?,?)",
                          (usuario, hash_password(clave), rol))
+    # Nombre distinto de una base real, para que la UI muestre claramente que es la de prueba
+    RestauranteController(db).guardar(NOMBRE_PRUEBA)
     agregar_junio(db)
     db.conn.close()
     print(f"Base de prueba creada: {destino}")

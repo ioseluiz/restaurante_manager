@@ -8,6 +8,7 @@ from app.views.db_recovery import abrir_base_de_datos
 from app.controllers.auth_controller import AuthController
 from app.views.login_window import LoginWindow
 from app.views.main_window import MainWindow
+from app.views.restaurante_dialog import asistente_si_falta
 
 # IMPORTAMOS LOS ESTILOS
 from app.styles import GLOBAL_STYLES
@@ -48,6 +49,8 @@ def main():
 
         # Si el login es exitoso
         if login.exec_() == QDialog.Accepted:
+            # Base sin nombre de restaurante: el administrador lo configura (o lo deja para más tarde)
+            asistente_si_falta(db, auth.rol)
             window = MainWindow(db, auth)
             window.show()
 

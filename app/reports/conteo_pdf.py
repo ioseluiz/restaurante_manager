@@ -16,7 +16,7 @@ _BORDER = colors.HexColor("#cccccc")
 _PRES_TEXT = colors.HexColor("#555555")
 
 
-def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
+def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas, restaurante=None):
     """
     Generate a physical inventory count PDF and return the file path.
 
@@ -67,7 +67,11 @@ def generar_pdf_conteo(conteo_id, fecha, descripcion, categoria_nombre, filas):
 
     story = []
 
-    story.append(Paragraph("Restaurante Italos", title_style))
+    # restaurante: líneas de RestauranteController.encabezado_reporte() (nombre · sucursal, RUC...)
+    restaurante = restaurante or ["Restaurante Italos"]
+    story.append(Paragraph(restaurante[0], title_style))
+    for linea in restaurante[1:]:
+        story.append(Paragraph(linea, meta_style))
     story.append(Paragraph("Formato de Toma de Inventario Físico", subtitle_style))
     story.append(Spacer(1, 0.2 * cm))
 

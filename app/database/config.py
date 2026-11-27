@@ -16,19 +16,55 @@ DEFAULT_DB = os.path.join(APP_DIR, "restaurante.db")
 CABECERA_SQLITE = b"SQLite format 3\x00"
 
 
+MAX_RECIENTES = 10
+
+
+def _leer_config():
+    """Contenido de config.json como dict ({} si no existe o es ilegible)."""
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _escribir_config(datos):
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(datos, f, ensure_ascii=False, indent=1)
+
+
 def get_db_path():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f:
-                return json.load(f).get("db_path", DEFAULT_DB)
-        except (OSError, ValueError):
-            return DEFAULT_DB  # configuración ilegible: se cae a la base predeterminada
-    return DEFAULT_DB
+    # Configuración ausente o ilegible: se cae a la base predeterminada
+    return _leer_config().get("db_path") or DEFAULT_DB
 
 
 def save_db_path(path):
-    with open(CONFIG_FILE, "w") as f:
-        json.dump({"db_path": path}, f)
+    datos = _leer_config()  # conserva las demás claves (restaurantes recientes)
+    datos["db_path"] = path
+    _escribir_config(datos)
+
+
+def _misma_ruta(a, b):
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def get_recientes():
+    """Restaurantes abiertos en este equipo: [{"ruta", "nombre"}], el más reciente primero.
+
+    Omite las bases que ya no existen. El nombre es una copia guardada al abrir cada base, para no tener
+    que abrirlas todas al armar la lista."""
+    lista = _leer_config().get("recientes") or []
+    return [r for r in lista
+            if isinstance(r, dict) and r.get("ruta") and os.path.exists(r["ruta"])][:MAX_RECIENTES]
+
+
+def agregar_reciente(ruta, nombre):
+    """Pone la base al principio de la lista de recientes (o actualiza su nombre)."""
+    datos = _leer_config()
+    lista = [r for r in get_recientes() if not _misma_ruta(r["ruta"], ruta)]
+    datos["recientes"] = [{"ruta": os.path.abspath(ruta), "nombre": nombre}] + lista[:MAX_RECIENTES - 1]
+    _escribir_config(datos)
 
 
 def validar_base_datos(path):

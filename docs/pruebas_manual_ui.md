@@ -30,6 +30,8 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | A2 | Login con clave incorrecta | Rechaza el acceso | |
 | A3 | Ver el título, la barra de estado y **Ayuda → Acerca de** | Misma versión (`app/version.py`) en los tres | |
 | A4 | Abrir cada módulo y pulsar **F1** | Abre la guía de ese módulo; **Ctrl+F1** abre el índice | |
+| A5 | Login de la base de prueba | Título «Italos (prueba)», sucursal «Centro»; la lista **Restaurante** incluye la base de prueba | |
+| A6 | Ventana principal | Título «Italos (prueba) · Centro — Italos Manager v…»; recuadro con el nombre bajo el logo; barra de estado «Restaurante: Italos (prueba) · Centro» | |
 
 ## B. Catálogo, unidades y sucursales
 
@@ -41,6 +43,9 @@ Al terminar, restablecer la base original con **Configurar BD**.
 | B3b | Crear «Saco 25 kg» de Arroz a $25 y marcarlo **Presentación preferida** | Columna Preferida ★ solo en el de 25 kg; Costo de Platos P1 baja a 1.06 (150 g × 0.0010). Volver a marcar el de 10 kg | |
 | B4 | Unidades de Medida | g, ml, und; crear y borrar una de prueba | |
 | B5 | Sucursales | Centro marcada como «esta sucursal», Norte sin marcar | |
+| B6 | Sucursales → **Datos del restaurante…**: cambiar nombre a «Roma», sucursal «Norte», cargar un logo PNG → Guardar | Título, menú lateral, barra de estado y recuadro muestran «Roma · Norte» y el logo nuevo; en la tabla, Norte pasa a «Sí». Volver a «Italos (prueba)» · Centro y **Usar el de Italos** | |
+| B7 | Exportar el Excel de una toma de inventario | Primera fila con «Italos (prueba) · Centro» | |
+| B8 | Entrar como `gerente` → Sucursales | Ve el recuadro del restaurante sin el botón **Datos del restaurante…**; el menú Restaurante no tiene esa opción | |
 
 ## C. Compras e inventario
 
@@ -171,6 +176,8 @@ Al terminar, restablecer la base original con **Configurar BD**.
 |---|---|---|---|
 | M1 | Crear copia de respaldo | Archivo .db nuevo que abre con los mismos datos | |
 | M2 | Elegir un archivo que no es base de datos | Rechazo con el motivo; la base en uso no cambia | |
+| M3 | **Restaurante → Cambiar de restaurante → Abrir otra base de datos…** → una base nueva (`C:/temp/otra.db`) | Confirma, cierra la sesión y abre el login de la base nueva (título «Italos»). Al entrar como admin aparece el asistente **Configurar este restaurante**; con **Más tarde** sigue como «Italos» | |
+| M4 | Desde el login, lista **Restaurante** → elegir la base de prueba | El título cambia a «Italos (prueba)»; ingresar con `admin` de esa base | |
 
 ---
 

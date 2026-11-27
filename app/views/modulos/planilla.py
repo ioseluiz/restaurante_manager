@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont
 
+from app.controllers.restaurante_controller import RestauranteController
 from app.utils.calculo_planilla import (
     cargar_config, cargar_isr_tramos, calcular_costo_completo,
 )
@@ -1514,6 +1515,7 @@ class TabResumen(QWidget):
             "fecha_fin":      str(periodo_row[2]) if periodo_row else "",
             "sucursal":       suc_nombre,
             "generado":       str(_date.today()),
+            "restaurante":    RestauranteController(self.db).etiqueta(),
         }
         self._last_recargos_cfg = list(recargos_rows)
         self._last_ded_cfg      = list(ded_rows)

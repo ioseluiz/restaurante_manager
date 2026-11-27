@@ -10,8 +10,10 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView, QSizePolicy,
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QColor
+
+from app.utils.button_icons import icono_flecha
 
 _RED   = "#a20f22"
 _ORANGE = "#d0741d"
@@ -30,6 +32,7 @@ _MESES_ABR = ["Ene", "Feb", "Mar", "Abr", "May", "Jun",
 # ---------------------------------------------------------------------------
 # Embedded bar chart
 # ---------------------------------------------------------------------------
+
 class _BarChart(FigureCanvas):
     def __init__(self, parent=None):
         self.fig = Figure(figsize=(5, 2.8), dpi=96, facecolor="white")
@@ -303,8 +306,14 @@ class DashboardView(QWidget):
             f"QPushButton:hover:enabled {{ background: #fff0f1; }}"
             f"QPushButton:disabled {{ color: #ccc; }}"
         )
-        self.btn_mes_ant = QPushButton("◀")
-        self.btn_mes_sig = QPushButton("▶")
+        # Flechas dibujadas (los caracteres ◀ ▶ salían diminutos y torcidos con Segoe UI)
+        self.btn_mes_ant = QPushButton()
+        self.btn_mes_sig = QPushButton()
+        self.btn_mes_ant.setIcon(icono_flecha(-1, _DARK))
+        self.btn_mes_sig.setIcon(icono_flecha(1, _DARK))
+        for btn in (self.btn_mes_ant, self.btn_mes_sig):
+            btn.setIconSize(QSize(14, 14))
+            btn.setFixedWidth(34)
         self.btn_mes_actual = QPushButton("Mes actual")
         self.btn_mes_ant.setToolTip("Mes anterior")
         self.btn_mes_sig.setToolTip("Mes siguiente")

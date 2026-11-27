@@ -31,6 +31,7 @@ from PyQt5.QtWidgets import (
 
 from app.controllers.codigos_controller import CodigosController
 from app.reports.conteo_excel import generar_excel_conteo
+from app.controllers.restaurante_controller import RestauranteController
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -298,7 +299,8 @@ class NuevoConteoDialog(QDialog):
             })
 
         try:
-            excel_path = generar_excel_conteo(conteo_id, fecha, desc, cat_nombre, filas_excel)
+            excel_path = generar_excel_conteo(conteo_id, fecha, desc, cat_nombre, filas_excel,
+                                              restaurante=RestauranteController(self.db).encabezado_reporte())
             _open_file(excel_path)
             QMessageBox.information(
                 self,
@@ -727,7 +729,8 @@ class ConteoActivoDialog(QDialog):
                 "presentaciones": [p[0] for p in presentaciones],
             })
         try:
-            path = generar_excel_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_excel)
+            path = generar_excel_conteo(self.conteo_id, fecha, desc, cat_nombre, filas_excel,
+                                        restaurante=RestauranteController(self.db).encabezado_reporte())
             _open_file(path)
         except Exception as e:
             QMessageBox.warning(self, "Error Excel", str(e))

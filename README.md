@@ -33,6 +33,7 @@ El menú lateral da acceso a los siguientes módulos:
 ### 🔐 Seguridad, configuración y ayuda
 *   **Usuarios:** roles `admin` (todo), `gerente` (todo menos usuarios y configuración de la base de datos) y `empleado` (solo la operación diaria: sin Panel, Presupuestos, Consolidados, Rentabilidad, Costo de Platos, Análisis de Precios, Planilla ni Sucursales). Contraseñas cifradas con sal (PBKDF2).
 *   **Configurar BD** (administrador): cambiar la base de datos en uso y crear copias de respaldo.
+*   **Varios restaurantes:** cada instalación usa su propia base de datos, y la identidad del restaurante (nombre, sucursal de esta instalación, logo propio opcional, RUC, dirección y teléfono) se guarda **dentro de la base**. La interfaz la muestra en el título, el menú lateral, la barra de estado, el login y los encabezados de reportes. El login y el menú **Restaurante** permiten cambiar entre los restaurantes recientes del equipo (guardados en `config.json`); cambiar de restaurante cierra la sesión porque los usuarios son de cada base. Una base sin nombre muestra «Italos» y, al entrar un administrador, se abre un asistente para configurarla.
 *   **Ayuda en pantalla:** menú **Ayuda** (o **F1**) con la guía de cada módulo.
 
 > **Inventario:** el stock cambia por compras recibidas, **ventas diarias** (al pulsar «Actualizar Inventario (Kardex)» se descuentan los insumos según las recetas, con recetas por tanda y sub-recetas; «Reabrir Día» lo revierte), abastecimientos internos (envío baja, recepción sube) y ajustes por toma de inventario.

@@ -1066,10 +1066,12 @@ class ImportarExcelDialog(QDialog):
         self.chk_reemplazar = QCheckBox("Reemplazar las recetas que ya existen en la app (por defecto se omiten)")
         for c in (self.chk_crear, self.chk_costos, self.chk_reemplazar):
             lay.addWidget(c)
-        lay.addWidget(QLabel(
+        nota = QLabel(
             "<i>Recomendado: 1) Simular y revisar el reporte, 2) corregir el Excel o los nombres, 3) Importar. "
             "Una receta con insumos sin resolver nunca se importa a medias. Antes de importar se hace una copia "
-            "de respaldo de la base de datos.</i>"))
+            "de respaldo de la base de datos.</i>")
+        nota.setWordWrap(True)  # sin esto la línea exigía ~1450 px de ancho (no cabía en una laptop)
+        lay.addWidget(nota)
 
         botones = QHBoxLayout()
         self.btn_sim = QPushButton("Simular (no guarda)")

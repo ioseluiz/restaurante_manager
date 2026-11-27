@@ -1231,6 +1231,11 @@ class DatabaseManager:
             """CREATE TABLE IF NOT EXISTS costeo_config (
                 clave TEXT PRIMARY KEY,
                 valor TEXT NOT NULL)""",
+            # Identidad del restaurante de esta base (nombre, logo, RUC...): viaja con el archivo .db
+            """CREATE TABLE IF NOT EXISTS restaurante_config (
+                clave TEXT PRIMARY KEY,
+                valor TEXT,
+                blob  BLOB)""",
         ]:
             try:
                 self.cursor.execute(ddl)
